@@ -6,10 +6,15 @@
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="manifest" href="/site.webmanifest">
 <style>
-body, html {width: 100%; height: 100%; margin: 0; padding: 0}
-.first-row {position: absolute;top: 0; left: 0; right: 0; height: 10%;}
-.second-row {position: absolute; left: 0; right: 0; bottom: 0;height:80% }
-.second-row iframe {display: block; width: 100%; height: 100%; border: none;}
+	:root{--header-height:60px}
+	body, html {width: 100%; height: 100%; margin: 0; padding: 0; background: #000}
+	.first-row {position: relative; top: 0; left: 0; right: 0; height: var(--header-height); overflow: auto; background: rgba(0,0,0,0.6); color: #fff; padding: 8px}
+	/* iframe wrapper takes full viewport; iframe fills it */
+	#iframe-wrapper {position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0}
+	#guac-iframe {display: block; width: 100%; height: 100%; border: none;}
+	/* controls sit above the iframe */
+	#controls {position: fixed; right: 12px; top: 8px; z-index: 9999}
+	#controls button {margin-left:6px;padding:6px 8px;border-radius:4px;border:0;background:#1e88e5;color:#fff;cursor:pointer}
 </style>
 </head>
 <body>
@@ -19,11 +24,33 @@ body, html {width: 100%; height: 100%; margin: 0; padding: 0}
 	<p style="padding-left:10px;background:lightyellow">This is a PoC for Packet Tracer Remote Access<br />
         Shortcut key for clipboard and settings are "<b>Ctrl+Alt+Shift</b>"</p>
 </div>
-<div class="second-row">
-<iframe src="/guacamole/">
-  <p>Your browser does not support iframes.</p>
-</iframe>
+<div id="iframe-wrapper">
+	<div id="controls">
+		<button id="toggle-btn">Toggle Header</button>
+		<button id="fs-btn">Fullscreen</button>
+	</div>
+	<iframe id="guac-iframe" src="/guacamole/">
+		<p>Your browser does not support iframes.</p>
+	</iframe>
 </div>
+
+<script>
+	// Toggle visibility of header (first-row)
+	document.getElementById('toggle-btn').addEventListener('click', function(){
+		var h = document.querySelector('.first-row');
+		if(!h) return;
+		h.style.display = (h.style.display === 'none') ? 'block' : 'none';
+	});
+
+	// Request fullscreen for the iframe wrapper
+	document.getElementById('fs-btn').addEventListener('click', function(){
+		var el = document.getElementById('iframe-wrapper');
+		if (el.requestFullscreen) { el.requestFullscreen(); }
+		else if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); }
+		else if (el.mozRequestFullScreen) { el.mozRequestFullScreen(); }
+		else if (el.msRequestFullscreen) { el.msRequestFullscreen(); }
+	});
+</script>
 </body>
 </html>
 
