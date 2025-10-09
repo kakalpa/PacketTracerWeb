@@ -1,0 +1,10 @@
+# Ignore logs and build artifacts
+pt-install.log
+ptvnc-build.log
+*.log
+*.tmp
+__pycache__/
+.vscode/
+.DS_Store
+node_modules/
+*.deb
