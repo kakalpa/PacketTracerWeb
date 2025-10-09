@@ -1,4 +1,7 @@
-# PT (Packet Tracer) multi-container deployment
+# PT (Packet Tracer) multi-container deployment - Access Packet Tracer Via the Browser
+
+
+This Project is inspired by [[This Original Project](https://github.com/cnkang/ptremote)]
 
 This repository builds and runs multiple Cisco Packet Tracer instances inside Docker containers and exposes them through Guacamole + nginx.
 
@@ -19,16 +22,6 @@ If you prefer to run unattended and capture logs:
 ```bash
 printf 'YES\n' | sudo bash ./install.sh 2>&1 | tee ~/pt-install.log
 tail -n 200 ~/pt-install.log
-```
-
-Push to GitHub
-1. Create an empty repository on GitHub (via web UI or `gh repo create`).
-2. Run the helper script to add the remote and push the current repository (no credentials embedded):
-
-```bash
-./push_to_github.sh <git-remote-url>
-# Example (SSH): ./push_to_github.sh git@github.com:youruser/yourrepo.git
-# Example (HTTPS): ./push_to_github.sh https://github.com/youruser/yourrepo.git
 ```
 
 Performance tuning (PT instances are GUI apps inside containers; they can be heavy)
