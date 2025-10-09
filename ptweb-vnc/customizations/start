@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# disable DNS resolution for PT auth
+#echo > /etc/resolv.conf
+
+# Force using /bin/sh to avoid exec'ing the login shell (which may be /bin/bash).
+# Using su -s /bin/sh ensures a simple shell is used in constrained container environments.
+exec su -s /bin/sh -l ptuser -c /start-session

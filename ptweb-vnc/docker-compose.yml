@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: guacamole-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_RANDOM_ROOT_PASSWORD: 'yes'
+      MARIADB_DATABASE: 'guacamole_db'
+      MARIADB_USER: 'ptdbuser'
+      MARIADB_PASSWORD: 'ptdbpass'
+    volumes:
+      - ./db-dump.sql:/docker-entrypoint-initdb.d/db-dump.sql:ro
+
+  guacd:
+    image: guacamole/guacd
+    container_name: pt-guacd
+    restart: unless-stopped
+
+  guacamole:
+    image: guacamole/guacamole
+    container_name: pt-guacamole
+    restart: unless-stopped
+    depends_on:
+      - mariadb
+      - guacd
+    environment:
+      MYSQL_DATABASE: 'guacamole_db'
+      MYSQL_USER: 'ptdbuser'
+      MYSQL_PASSWORD: 'ptdbpass'
+      MYSQL_HOST: mariadb
+
+  nginx:
+    image: nginx:latest
+    container_name: pt-nginx1
+    restart: unless-stopped
+    depends_on:
+      - guacamole
+    ports:
+      - "8080:80"
+    volumes:
+      - ./pt-nginx/www:/usr/share/nginx/html:ro
+      - ./pt-nginx/conf:/etc/nginx/conf.d:ro
+
+networks:
+  default:
+    driver: bridge
