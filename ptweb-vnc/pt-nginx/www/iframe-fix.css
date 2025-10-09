@@ -1,0 +1,14 @@
+/* Attempt to scale the remote desktop inside the guacamole iframe so it fits fullscreen */
+html, body, #guacamole-container {
+  width: 100%;
+  height: 100%;
+  margin: 0; padding: 0; overflow: hidden;
+}
+
+/* Scale the remote desktop viewport down a bit when in fullscreen to avoid overflow */
+@media (min-width: 1280px) {
+  #guacamole-container {
+    transform-origin: top left;
+    transform: scale(0.95);
+  }
+}

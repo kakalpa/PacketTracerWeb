@@ -1,7 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+
+# Allow runtime configuration of VNC geometry and color depth for performance/tuning
+# VNC_GEOMETRY example: 1280x720, 1024x768, 1920x1080
+# VNC_DEPTH example: 8, 16, 24
 VNC_PASS=${VNC_PASS:-Cisco123}
+VNC_GEOMETRY=${VNC_GEOMETRY:-1280x720}
+VNC_DEPTH=${VNC_DEPTH:-16}
 
 rm -f /home/ptuser/.vnc/*.pid
 rm -f /home/ptuser/.vnc/*.log
@@ -20,8 +26,9 @@ if [ ! -f /home/ptuser/.vnc/passwd ]; then
     chmod 600 /home/ptuser/.vnc/passwd || true
 fi
 
-# Start VNC server
-/usr/bin/vncserver -geometry 1200x800 || {
+# Start VNC server with configurable geometry and color depth.
+# Use lower depth (8 or 16) to save memory and bandwidth.
+/usr/bin/vncserver -geometry "${VNC_GEOMETRY}" -depth "${VNC_DEPTH}" || {
     echo "vncserver failed to start" >&2
     exit 1
 }
