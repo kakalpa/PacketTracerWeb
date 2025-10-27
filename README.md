@@ -1,93 +1,98 @@
-# PT (Packet Tracer) multi-container deployment - Access Packet Tracer Via the Browser
+# Packet Tracer - Web-Based Multi-Instance Deployment
 
-This Project is inspired by [[This Original Project](https://github.com/cnkang/ptremote)]
+Run multiple Cisco Packet Tracer instances in Docker containers with web-based access via Guacamole.
 
-This repository builds and runs multiple Cisco Packet Tracer instances inside Docker containers and exposes them through Guacamole + nginx.
-
-## 🚀 Installation Introduction
-
-### What You'll Get
-- Multiple Packet Tracer instances running in Docker containers
-- Web-based access via Guacamole (no VNC client needed)
-- Automated one-command deployment
-- Offline/demo mode (no login required)
+## 🚀 Quick Start
 
 ### Prerequisites
-1. **Linux system** with Docker and Docker Compose installed
-2. **Cisco Packet Tracer .deb installer** (Linux x64, version 9+)
-3. **At least 4GB RAM** available
+- Linux system with Docker installed
+- Cisco Packet Tracer `.deb` installer (v9+)
+- 4GB+ RAM available
 
-### Quick Installation
-1. Place your Packet Tracer `.deb` file in the repository root
-2. Run: `bash deploy.sh`
-3. Open browser to: `http://localhost/guacamole/`
-4. Use default credentials: `guacadmin` / `guacadmin`
-5. Click Packet Tracer icon in the desktop to launch
+### Installation
+```bash
+# 1. Place Packet Tracer .deb file in repo root
+# 2. Run deployment
+bash deploy.sh
+
+# 3. Open browser
+http://localhost/guacamole/
+
+# 4. Login: guacadmin / guacadmin
+# 5. Click connection (pt01, pt02, etc.)
+# 6. Click Packet Tracer icon on desktop
+```
 
 ---
 
-## Contents
-- `ptweb-vnc/` - Docker build context for Packet Tracer containers and startup scripts
-- `deploy.sh` - Main deployment script (replaces old install.sh)
+## 📝 Available Scripts
 
-Performance tuning (PT instances are GUI apps inside containers; they can be heavy)
+| Script | Purpose |
+|--------|---------|
+| `deploy.sh` | Initial deployment (creates 2 instances) |
+| `add-instance.sh` | Add new instances dynamically |
+| `tune_ptvnc.sh` | Adjust CPU/memory per container |
+| `generate-dynamic-connections.sh` | Regenerate database connections |
 
-If PT instances feel slow, try the following (ordered by ease):
+---
 
-1) Increase container memory and CPU
+## 🎯 Usage Examples
 
-Edit `deploy.sh` and update the docker run line to allocate more resources. Look for the section with:
-
+### Deploy (2 instances)
 ```bash
-docker run -d --name ptvnc$i --restart unless-stopped --cpus=0.1 -m 1G --ulimit nproc=2048 --ulimit nofile=1024 ptvnc
+bash deploy.sh
+# Creates: pt01, pt02
 ```
 
-Change to:
-
+### Add Instances
 ```bash
-docker run -d --name ptvnc$i --restart unless-stopped --cpus=1 -m 2G --ulimit nproc=4096 --ulimit nofile=4096 ptvnc
+bash add-instance.sh      # Auto-adds next instance (pt03)
+bash add-instance.sh 5    # Scale to 5 instances (pt01-pt05)
+```
+Automatically restarts services and updates web interface.
+
+### Tune Performance
+```bash
+bash tune_ptvnc.sh 2G 1   # 2GB RAM, 1 CPU per container
+bash tune_ptvnc.sh 4G 2   # 4GB RAM, 2 CPUs per container
 ```
 
-2) Reduce number of parallel instances per host
-
-If you don't have enough RAM/CPU, reduce `numofPT` in `deploy.sh` (default set to 2). Run fewer containers per host or add more hosts.
-
-3) Add swap / zram to give hosts more virtual memory
-
-Example to create a 8G swap file (host):
-
+### Regenerate Connections (if needed)
 ```bash
-sudo fallocate -l 8G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+bash generate-dynamic-connections.sh 3
 ```
 
-4) Monitor and locate bottlenecks
+---
 
-Use these commands and check CPU/memory usage:
+## ⚡ Performance Tuning
 
+Packet Tracer instances consume significant resources. If slow:
+
+**Option 1: Increase resources (Recommended)**
 ```bash
-sudo docker stats --all
-top -o %MEM
-free -h
+bash tune_ptvnc.sh 2G 1    # 2GB RAM, 1 CPU per container
 ```
 
-Look for containers using a lot of CPU or memory. If the host CPU is saturated, assign more CPUs to critical containers or reduce instance count.
+**Option 2: Reduce instances**
+Edit `deploy.sh`, change `numofPT=2` to `numofPT=1` and redeploy.
 
-5) Consider horizontal scaling or dedicated hosts
-
-If you need many concurrent PT users, deploy on multiple hosts (or scale with Kubernetes) so each host holds a few PT instances.
-
-Troubleshooting
-- If a container fails due to a name conflict, remove the old container: `sudo docker rm -f <name>`
-- If you see `runuser: failed to execute /bin/bash: Resource temporarily unavailable`, make sure you've rebuilt the `ptweb-vnc` image after the `start-session` and Dockerfile changes. Rebuild with:
-
+**Option 3: Monitor usage**
 ```bash
-sudo env DOCKER_BUILDKIT=0 docker build ptweb-vnc -t ptvnc:fix
-sudo docker tag ptvnc:fix ptvnc
+docker stats --all
 ```
 
-License & notes
-- The Cisco Packet Tracer installer is not included; use an official copy and place it in the repo root. Using Packet Tracer signifies acceptance of Cisco EULA.
+---
+
+## 🐛 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Container name conflict | `docker rm -f <container_name>` |
+| Connections not showing | `bash generate-dynamic-connections.sh <count>` |
+| Slow performance | `bash tune_ptvnc.sh 2G 1` |
+
+---
+
+## 📄 License
+
+Cisco Packet Tracer installer not included. Place official copy in repo root. Using Packet Tracer implies acceptance of Cisco EULA.
