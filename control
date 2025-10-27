@@ -1,0 +1,9 @@
+Package: PacketTracer
+Version: 9.0
+Section: base
+Priority: optional
+Architecture: amd64
+Depends:sudo,dialog,xdg-utils,gtk-update-icon-cache,libgl1,libglx-mesa0,libpulse0,libnss3,libxss1,libasound2,libxslt1.1,libxkbcommon-x11-0,libxcb-xinerama0-dev,libxcb-cursor0,libfreetype6,libc6 (>= 2.31),libstdc++6 (>= 9.3.0)
+Maintainer: Packet Tracer Support <packettracersupport@external.cisco.com>
+Description: Cisco PacketTracer 9.0 installation package
+

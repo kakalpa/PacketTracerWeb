@@ -1,12 +1,20 @@
 #!/bin/sh
 
-xrdb $HOME/.Xresources
-xsetroot -solid grey
-#x-terminal-emulator -geometry 80x24+10+10 -ls -title "$VNCDESKTOP Desktop" &
-#x-window-manager &
-# Fix to make GNOME work
-export XKL_XMODMAP_DISABLE=1
-#/etc/X11/Xsession
-#/usr/bin/icewm-session
-/usr/bin/autocutsel -s CLIPBOARD -fork
-/usr/bin/xfce4-session
+# X11 startup for VNC in Docker containers
+# Start proper XFCE4 session management
+
+# Set up X authority file
+touch $HOME/.Xauthority
+chmod 600 $HOME/.Xauthority
+
+# Set up X resources and background
+xrdb $HOME/.Xresources 2>/dev/null || true
+xsetroot -solid grey 2>/dev/null || true
+
+# Enable clipboard for better UX
+/usr/bin/autocutsel -s CLIPBOARD -fork 2>/dev/null || true
+
+# Start XFCE4 session (provides desktop environment, panels, proper window management)
+# XFCE4 is installed and provides better X11 session management than bare xfwm4
+# If xfce4-session fails, fall back to xfwm4
+exec /usr/bin/xfce4-session 2>/dev/null || exec /usr/bin/xfwm4

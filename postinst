@@ -1,0 +1,66 @@
+#!/bin/bash
+sudo chmod +x /usr/local/bin/ubuntu-pt-icons.sh 
+sudo /usr/local/bin/ubuntu-pt-icons.sh install
+
+# sets the incoming PTDIR as a system environment variable
+# sets the Qt high resolution as a system environment variable
+# by modifying /etc/profile 
+PTDIR="/opt/pt"
+
+# create shortcut
+sudo ln -sf $PTDIR/packettracer /usr/local/bin/packettracer
+
+# give root privilege to updatepttp
+sudo chown root:root $PTDIR/bin/updatepttp
+sudo chmod 4755 $PTDIR/bin/updatepttp
+
+# check /etc/profile for existance of PT8HOME
+PROFILE="/etc/profile" 
+
+# error exit if file does not exist or unreadable
+if [ ! -f $PROFILE ]; then
+   exit 1
+elif [ ! -r $PROFILE ]; then
+   exit 2
+fi
+
+# read contents
+CONTENTS=""
+EXPORT_PT8_EXISTS=0
+PT8HOME_EXISTS=0
+PT8HOME_FOUND=0
+exec 3<&0
+exec 0<$PROFILE
+while IFS= read -r line
+do
+  
+  # replace existing entries
+  PT8HOME_FOUND=`expr match "$line" 'PT8HOME'`
+  if [ $PT8HOME_FOUND -gt 0 ]; then
+	line="PT8HOME=$PTDIR"
+        PT8HOME_EXISTS=1
+  fi
+
+  # check for export statement
+  if [ $EXPORT_PT8_EXISTS -eq 0 ]; then
+      EXPORT_PT8_EXISTS=`expr match "$line" 'export PT8HOME'`
+  fi
+
+  #append the line to the contents
+  CONTENTS="$CONTENTS\n$line"
+done
+exec 0<&3
+
+if [ $PT8HOME_EXISTS -eq 0 ]; then
+  CONTENTS="$CONTENTS\nPT8HOME=$PTDIR"
+fi
+
+if [ $EXPORT_PT8_EXISTS -eq 0 ]; then
+  CONTENTS="$CONTENTS\nexport PT8HOME"
+fi
+
+sudo echo -e "$CONTENTS" > /etc/profile
+
+exit 0 
+
+
