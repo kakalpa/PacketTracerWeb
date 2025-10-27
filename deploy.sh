@@ -31,6 +31,16 @@ fi
 
 echo "Using Packet Tracer file: $PTfile"
 
+# Build ptvnc Docker image if it doesn't exist
+echo -e "\e[32mStep 0. Building Docker images\e[0m"
+if ! docker image inspect ptvnc:latest &>/dev/null; then
+    echo "Building ptvnc image..."
+    docker build -t ptvnc ptweb-vnc/
+else
+    echo "ptvnc image already exists, skipping build"
+fi
+echo ""
+
 # Step 1: Start MariaDB
 echo -e "\e[32mStep 1. Start MariaDB\e[0m"
 docker run --name guacamole-mariadb --restart unless-stopped \

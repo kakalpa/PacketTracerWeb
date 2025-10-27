@@ -10,6 +10,12 @@ set -e
 PTfile="CiscoPacketTracer.deb"
 WORKDIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Check if ptvnc image exists, build if not
+if ! docker image inspect ptvnc:latest &>/dev/null; then
+    echo "Building ptvnc image..."
+    docker build -t ptvnc "${WORKDIR}/ptweb-vnc/"
+fi
+
 # Get number of instances to add (default: 1)
 instances_to_add=${1:-1}
 
