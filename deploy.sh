@@ -44,6 +44,8 @@ sleep 10
 
 # Step 2: Start ptvnc containers
 echo -e "\e[32mStep 2. Start Packet Tracer VNC containers\e[0m"
+mkdir -p "$(pwd)/shared"
+chmod 777 "$(pwd)/shared"
 for ((i=1; i<=$numofPT; i++)); do
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
@@ -51,11 +53,32 @@ for ((i=1; i<=$numofPT; i++)); do
       --dns=127.0.0.1 \
       -v "$(pwd)/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
+      --mount type=bind,source="$(pwd)"/shared,target=/shared \
       -e PT_DEB_PATH=/PacketTracer.deb \
       ptvnc
     sleep $i
 done
-sleep 5
+
+# Create desktop symlinks for easy access to /shared
+echo -e "\e[32mCreating /shared symlinks and Packet Tracer shortcuts on Desktop\e[0m"
+for ((i=1; i<=$numofPT; i++)); do
+    docker exec ptvnc$i mkdir -p /home/ptuser/Desktop 2>/dev/null || true
+    docker exec ptvnc$i ln -sf /shared /home/ptuser/Desktop/shared 2>/dev/null || true
+    # Create Packet Tracer shortcut
+    docker exec ptvnc$i bash -c "printf '%s\n' \
+      '[Desktop Entry]' \
+      'Version=1.0' \
+      'Type=Application' \
+      'Name=Packet Tracer' \
+      'Comment=Cisco Packet Tracer Network Simulation Tool' \
+      'Exec=/opt/pt/bin/PacketTracer' \
+      'Icon=application-x-cisco-packet-tracer' \
+      'StartupNotify=true' \
+      'Terminal=false' \
+      'Categories=Education;Science;Network;' \
+      > /home/ptuser/Desktop/PacketTracer.desktop && chmod +x /home/ptuser/Desktop/PacketTracer.desktop" 2>/dev/null || true
+done
+sleep 2
 
 # Step 3: Import Database
 echo -e "\e[32mStep 3. Import Guacamole Database\e[0m"
@@ -82,9 +105,12 @@ docker run --name pt-guacamole --restart always \
 
 # Step 5: Start Nginx
 echo -e "\e[32mStep 5. Start Nginx web server\e[0m"
+mkdir -p "$(pwd)/shared"
+chmod 777 "$(pwd)/shared"
 docker run --restart always --name pt-nginx1 \
   --mount type=bind,source="$(pwd)"/ptweb-vnc/pt-nginx/www,target=/usr/share/nginx/html,readonly \
   --mount type=bind,source="$(pwd)"/ptweb-vnc/pt-nginx/conf,target=/etc/nginx/conf.d,readonly \
+  --mount type=bind,source="$(pwd)"/shared,target=/shared,readonly \
   --link pt-guacamole:guacamole \
   -p 80:${nginxport} \
   -d nginx

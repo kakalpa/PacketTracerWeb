@@ -42,6 +42,7 @@ services:
     volumes:
       - ./pt-nginx/www:/usr/share/nginx/html:ro
       - ./pt-nginx/conf:/etc/nginx/conf.d:ro
+      - ./shared:/shared:ro
 
 networks:
   default:

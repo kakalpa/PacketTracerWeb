@@ -53,6 +53,23 @@ RUN chown -R ptuser /home/ptuser
 # Create /opt/pt directory for Packet Tracer installation
 RUN mkdir -p /opt/pt && chmod 755 /opt/pt
 
+# Create Desktop directory and add Packet Tracer shortcut
+RUN mkdir -p /home/ptuser/Desktop && \
+    printf '%s\n' \
+      '[Desktop Entry]' \
+      'Version=1.0' \
+      'Type=Application' \
+      'Name=Packet Tracer' \
+      'Comment=Cisco Packet Tracer Network Simulation Tool' \
+      'Exec=/opt/pt/bin/PacketTracer' \
+      'Icon=application-x-cisco-packet-tracer' \
+      'StartupNotify=true' \
+      'Terminal=false' \
+      'Categories=Education;Science;Network;' \
+      > /home/ptuser/Desktop/PacketTracer.desktop && \
+    chmod +x /home/ptuser/Desktop/PacketTracer.desktop && \
+    chown ptuser:ptuser /home/ptuser/Desktop/PacketTracer.desktop
+
 ENTRYPOINT ["/start"]
 
 
