@@ -61,23 +61,10 @@ for ((i=1; i<=$numofPT; i++)); do
 done
 
 # Create desktop symlinks for easy access to /shared
-echo -e "\e[32mCreating /shared symlinks and Packet Tracer shortcuts on Desktop\e[0m"
+echo -e "\e[32mCreating /shared symlinks on Desktop\e[0m"
 for ((i=1; i<=$numofPT; i++)); do
     docker exec ptvnc$i mkdir -p /home/ptuser/Desktop 2>/dev/null || true
     docker exec ptvnc$i ln -sf /shared /home/ptuser/Desktop/shared 2>/dev/null || true
-    # Create Packet Tracer shortcut
-    docker exec ptvnc$i bash -c "printf '%s\n' \
-      '[Desktop Entry]' \
-      'Version=1.0' \
-      'Type=Application' \
-      'Name=Packet Tracer' \
-      'Comment=Cisco Packet Tracer Network Simulation Tool' \
-      'Exec=/opt/pt/bin/PacketTracer' \
-      'Icon=application-x-cisco-packet-tracer' \
-      'StartupNotify=true' \
-      'Terminal=false' \
-      'Categories=Education;Science;Network;' \
-      > /home/ptuser/Desktop/PacketTracer.desktop && chmod +x /home/ptuser/Desktop/PacketTracer.desktop" 2>/dev/null || true
 done
 sleep 2
 

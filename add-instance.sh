@@ -80,7 +80,7 @@ echo "✅ Containers started"
 echo ""
 
 # Create desktop symlinks for new instances
-echo -e "\e[32mStep 1b. Creating /shared symlinks and Packet Tracer shortcuts on Desktop\e[0m"
+echo -e "\e[32mStep 1b. Creating /shared symlinks on Desktop\e[0m"
 for ((i=0; i<instances_to_add; i++)); do
     instance_num=$((current_max + i + 1))
     container_name="ptvnc$instance_num"
@@ -88,19 +88,6 @@ for ((i=0; i<instances_to_add; i++)); do
     if docker ps --format "table {{.Names}}" | grep -q "^${container_name}$"; then
         docker exec $container_name mkdir -p /home/ptuser/Desktop 2>/dev/null || true
         docker exec $container_name ln -sf /shared /home/ptuser/Desktop/shared 2>/dev/null || true
-        # Create Packet Tracer shortcut
-        docker exec $container_name bash -c "printf '%s\n' \
-          '[Desktop Entry]' \
-          'Version=1.0' \
-          'Type=Application' \
-          'Name=Packet Tracer' \
-          'Comment=Cisco Packet Tracer Network Simulation Tool' \
-          'Exec=/opt/pt/bin/PacketTracer' \
-          'Icon=application-x-cisco-packet-tracer' \
-          'StartupNotify=true' \
-          'Terminal=false' \
-          'Categories=Education;Science;Network;' \
-          > /home/ptuser/Desktop/PacketTracer.desktop && chmod +x /home/ptuser/Desktop/PacketTracer.desktop" 2>/dev/null || true
     fi
 done
 sleep 2

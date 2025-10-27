@@ -1,6 +1,4 @@
 # Ignore logs and build artifacts
-pt-install.log
-ptvnc-build.log
 *.log
 *.tmp
 __pycache__/

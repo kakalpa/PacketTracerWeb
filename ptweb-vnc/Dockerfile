@@ -13,7 +13,7 @@ RUN apt-get update && \
       libxcb-keysyms1 libxcb-xfixes0 libuuid1 libxcb-util1 libxkbcommon0 libxkbcommon-x11-0 \
       libice6 libsm6 libxrender1 libxcb-sync1 libxcb-shape0 libxcb-render0 libxcb-render-util0 libxcb-randr0 libxcb-shm0 libxcb-image0 libxcb-icccm4 libx11-xcb1 \
       libfreetype6 libgl1 libglx-mesa0 \
-      libqt6gui6 libqt6widgets6 libqt6core6 libqt6dbus6 libqt6network6 libqt6networkauth6 libqt6webenginecore6 libqt6webenginewidgets6 libqt6qml6 qt6-qpa-plugins \
+      libqt6gui6 libqt6widgets6 libqt6core6 libqt6dbus6 libqt6network6 libqt6networkauth6 libqt6webenginecore6 libqt6webenginewidgets6 libqt6qml6 libqt6xml6 libqt6concurrent6 libqt6opengl6 qt6-qpa-plugins \
       libegl1-mesa libgles2-mesa libxinerama1 libxrandr2 libglib2.0-0 libopengl0 \
         fonts-dejavu-core xfonts-base xfonts-100dpi xfonts-75dpi \
     && rm -rf /var/lib/apt/lists/*
@@ -30,14 +30,7 @@ RUN chmod +x /home/ptuser/.vnc/xstartup /pt-install.sh || true
 # Users can still launch via taskbar icon or manually
 RUN rm -f /home/ptuser/.config/autostart/PacketTracer.desktop || true
 
-## Do NOT copy PacketTracer .deb into the image. Installers are proprietary and
-## large; prefer mounting the .deb at runtime or using an installer service.
-##COPY *.deb /
-## Defer Packet Tracer installation to container runtime to support different
-## PacketTracer versions and avoid dpkg pre-install interactive failures
-## at build time. A runtime installer (`/runtime-install.sh`) will run at
-## container start and attempt to install any PacketTracer .deb present.
-
+# Do NOT copy PacketTracer .deb into the image. Installers are proprietary and
 COPY customizations/runtime-install.sh /runtime-install.sh
 RUN chmod +x /runtime-install.sh || true
 COPY customizations/pt-detect.sh /pt-detect.sh
@@ -52,23 +45,6 @@ RUN chown -R ptuser /home/ptuser
 
 # Create /opt/pt directory for Packet Tracer installation
 RUN mkdir -p /opt/pt && chmod 755 /opt/pt
-
-# Create Desktop directory and add Packet Tracer shortcut
-RUN mkdir -p /home/ptuser/Desktop && \
-    printf '%s\n' \
-      '[Desktop Entry]' \
-      'Version=1.0' \
-      'Type=Application' \
-      'Name=Packet Tracer' \
-      'Comment=Cisco Packet Tracer Network Simulation Tool' \
-      'Exec=/opt/pt/bin/PacketTracer' \
-      'Icon=application-x-cisco-packet-tracer' \
-      'StartupNotify=true' \
-      'Terminal=false' \
-      'Categories=Education;Science;Network;' \
-      > /home/ptuser/Desktop/PacketTracer.desktop && \
-    chmod +x /home/ptuser/Desktop/PacketTracer.desktop && \
-    chown ptuser:ptuser /home/ptuser/Desktop/PacketTracer.desktop
 
 ENTRYPOINT ["/start"]
 
