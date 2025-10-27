@@ -48,6 +48,7 @@ for ((i=1; i<=$numofPT; i++)); do
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
       --cpus=0.1 -m 1G --ulimit nproc=2048 --ulimit nofile=1024 \
+      --dns=127.0.0.1 \
       -v "$(pwd)/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
       -e PT_DEB_PATH=/PacketTracer.deb \
