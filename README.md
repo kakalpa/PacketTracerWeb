@@ -16,12 +16,23 @@ Run multiple Cisco Packet Tracer instances in Docker containers with web-based a
 bash deploy.sh
 
 # 3. Open browser
-http://localhost/guacamole/
+http://localhost/
 
 # 4. Login: ptadmin / IlovePT
 # 5. Click connection (pt01, pt02, etc.)
-# 6. Click Packet Tracer icon on desktop
+# 6. On the desktop, you'll see two shortcuts:
+#    - Packet Tracer icon → Launch Packet Tracer directly
+#    - shared folder → Access shared files
 ```
+
+### Desktop Shortcuts
+
+Each Packet Tracer instance desktop includes:
+
+1. **Packet Tracer** - Double-click to launch Packet Tracer application
+2. **shared** - Folder link to `/shared/` for file access
+
+These shortcuts are created automatically during deployment.
 
 ---
 
@@ -31,8 +42,10 @@ http://localhost/guacamole/
 |--------|---------|
 | `deploy.sh` | Initial deployment (creates 2 instances) |
 | `add-instance.sh` | Add new instances dynamically |
+| `remove-instance.sh` | Remove instances safely |
 | `tune_ptvnc.sh` | Adjust CPU/memory per container |
 | `generate-dynamic-connections.sh` | Regenerate database connections |
+| `test-deployment.sh` | Comprehensive health check (41 tests) |
 
 ---
 
@@ -40,20 +53,21 @@ http://localhost/guacamole/
 
 Users work entirely within the web interface. To download Packet Tracer files:
 
-### Easy Method: Shared Folder
-1. **Inside Packet Tracer desktop:**
-   - File → Save As → Navigate to `/shared/`
+### Easy Method: Shared Folder (Desktop Shortcut)
+1. **On the desktop**, you'll see a **"shared"** folder
+2. **Inside Packet Tracer:**
+   - File → Save As
+   - Navigate to the **"shared"** folder on desktop
    - Save your file (e.g., `mynetwork.pkt`)
 
-2. **Download from browser:**
+3. **Download from browser:**
    - Go to: `http://localhost/downloads/`
-   - Files appear automatically after saving to `/shared/`
+   - Files appear automatically after saving
    - Click file to download
 
-### File Manager Guide
-Visit `http://localhost/files` for detailed instructions on file management inside Packet Tracer.
-
----
+### Alternative Method: Direct Path
+- File → Save As → `/shared/mynetwork.pkt`
+- Then visit `http://localhost/downloads/`
 
 ## 🎯 Usage Examples
 
@@ -65,10 +79,25 @@ bash deploy.sh
 
 ### Add Instances
 ```bash
-bash add-instance.sh      # Auto-adds next instance (pt03)
-bash add-instance.sh 5    # Scale to 5 instances (pt01-pt05)
+bash add-instance.sh      # Add 1 more instance (pt03 if you have pt01, pt02)
+bash add-instance.sh 2    # Add 2 more instances
+bash add-instance.sh 5    # Add 5 more instances
 ```
 Automatically restarts services and updates web interface.
+
+### Remove Instances
+```bash
+# Remove by count (highest numbered instances first)
+bash remove-instance.sh   # Remove 1 instance (pt05)
+bash remove-instance.sh 2 # Remove 2 instances (pt05, pt04)
+bash remove-instance.sh 3 # Remove 3 instances (pt05, pt04, pt03)
+
+# Remove specific instances by name
+bash remove-instance.sh pt02          # Remove pt02 only
+bash remove-instance.sh pt01 pt03     # Remove pt01 and pt03
+bash remove-instance.sh pt02 pt04 pt05 # Remove multiple specific instances
+```
+⚠️ **Warning:** Active users will be disconnected during removal. Always save work to `/shared/` beforehand.
 
 ### Tune Performance
 ```bash
@@ -102,6 +131,63 @@ docker stats --all
 
 ---
 
+## ⚠️ Important: User Impact During Scaling
+
+When you run `add-instance.sh` or `remove-instance.sh`:
+
+### What Happens to Active Users:
+1. **VNC streams are disconnected** - Guacamole sessions end
+2. **Browser shows error** - Users see connection lost message
+3. **Work may be lost** - Unsaved files in Packet Tracer are lost
+4. **User must refresh** - They need to reload and reconnect
+
+### Recommendations:
+- **Scale during off-hours** - Schedule changes when no one is using the system
+- **Notify users in advance** - Tell them scaling is happening
+- **Save before changes** - Ask users to save and exit before scaling
+- **Post maintenance** - Use `test-deployment.sh` to verify system after scaling
+
+### Example Safe Workflow:
+```bash
+# 1. Notify users: "System maintenance in 5 minutes"
+# 2. Wait for users to exit
+# 3. Verify no active connections
+# 4. Add/remove instances
+bash add-instance.sh 3
+
+# 5. Verify with tests
+bash test-deployment.sh
+
+# 6. Notify: "System ready"
+```
+
+---
+
+## ✅ Testing Deployment Health
+
+After deployment, verify everything is working with the comprehensive test suite:
+
+```bash
+bash test-deployment.sh
+```
+
+This runs **41 tests** across 11 categories:
+1. **Docker Containers** - Verify all 6 containers are running
+2. **Database Connectivity** - Test MariaDB and Guacamole DB
+3. **Shared Folder** - Verify `/shared/` mounted in all containers
+4. **Write Permissions** - Test file creation in `/shared/`
+5. **Desktop Symlinks** - Check shortcuts on desktop
+6. **Web Endpoints** - Test Guacamole and `/downloads/` access
+7. **File Download Workflow** - End-to-end file save/download cycle
+8. **Helper Scripts** - Verify all utilities exist
+9. **Docker Volumes** - Check persistent storage
+10. **Database Schema** - Validate Guacamole tables
+11. **Docker Networking** - Test container communication
+
+**Expected Output:** ✅ All 41 tests pass
+
+---
+
 ## 🐛 Troubleshooting
 
 | Issue | Solution |
@@ -109,6 +195,7 @@ docker stats --all
 | Container name conflict | `docker rm -f <container_name>` |
 | Connections not showing | `bash generate-dynamic-connections.sh <count>` |
 | Slow performance | `bash tune_ptvnc.sh 2G 1` |
+| Tests failing | `bash test-deployment.sh` to identify issues |
 
 ---
 
