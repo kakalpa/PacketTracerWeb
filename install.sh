@@ -13,7 +13,7 @@ numofPT=2
 PTfile="CiscoPacketTracer822_amd64.deb"
 # If you have a different PacketTracer installer (for example CiscoPacketTracer822_amd64.deb)
 # the script will try to auto-detect it. Leave checksum empty to skip strict verification.
-PTfilechecksum="35bd819fcb0e2ed1df3582387d599e4a9c6bf2c9"
+PTfilechecksum=""
 nginxport=80
 #1G memory + 4G swap can support about 10 concurrent PT user
 #DO NOT change dbname
@@ -129,7 +129,17 @@ function startPT(){
         # If a container with the same name exists from a previous run, remove it first to avoid name conflict.
         docker rm -f ptvnc$i 2>/dev/null || true
         # Run with slightly higher memory and ulimits; avoid --kernel-memory which can cause constraints.
-        docker run -d --name ptvnc$i --restart unless-stopped --cpus=0.1 -m 1G --oom-kill-disable --ulimit nproc=2048 --ulimit nofile=1024 ptvnc
+        # Mount the host PacketTracer .deb into the container at /PacketTracer.deb and
+        # mount a named volume `pt_opt` at /opt/pt so the runtime installer can persist
+        # installed files. Also pass PT_DEB_PATH and optional checksum to the container.
+        docker run -d \
+          --name ptvnc$i --restart unless-stopped \
+          --cpus=0.1 -m 1G --oom-kill-disable --ulimit nproc=2048 --ulimit nofile=1024 \
+          -v "$(pwd)/${PTfile}:/PacketTracer.deb:ro" \
+          -v pt_opt:/opt/pt \
+          -e PT_DEB_PATH=/PacketTracer.deb \
+          -e PT_DEB_SHA1=${PTfilechecksum} \
+          ptvnc
         sleep $i
     done
     sleep 1

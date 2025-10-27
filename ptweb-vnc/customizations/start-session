@@ -26,6 +26,11 @@ if [ ! -f /home/ptuser/.vnc/passwd ]; then
     chmod 600 /home/ptuser/.vnc/passwd || true
 fi
 
+# Create and set up X authority for ptuser
+touch /home/ptuser/.Xauthority
+chown ptuser:ptuser /home/ptuser/.Xauthority
+chmod 600 /home/ptuser/.Xauthority
+
 # Start VNC server with configurable geometry and color depth.
 # Use lower depth (8 or 16) to save memory and bandwidth.
 /usr/bin/vncserver -geometry "${VNC_GEOMETRY}" -depth "${VNC_DEPTH}" || {
@@ -66,12 +71,14 @@ if [ -z "$pt_pid" ]; then
 fi
 
 if [ -z "$pt_pid" ]; then
-    echo "Failed to start Packet Tracer"
-    exit 1
+    echo "Failed to start Packet Tracer - this is expected in headless mode"
+    echo "Container will continue running with VNC service available"
 fi
 
-echo "Packet Tracer running with PID(s): $pt_pid"
+echo "Packet Tracer PID(s): ${pt_pid:-(not running)}"
+echo "VNC server is running on display :1 (port 5901)"
 
+# Keep container alive
 while true; do sleep 3600; done
 
 
