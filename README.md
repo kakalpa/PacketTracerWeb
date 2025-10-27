@@ -11,28 +11,30 @@ Run multiple Cisco Packet Tracer instances in Docker containers with web-based a
 
 ### Installation
 ```bash
-# 1. Place Packet Tracer .deb file in repo root
-# 2. Run deployment
+# 1. Clone the repository
+git clone https://github.com/kakalpa/PacketTracerWeb.git
+cd PacketTracerWeb
+
+# 2. Place Packet Tracer .deb file in repo root
+# (deploy.sh will automatically build the Docker image)
+
+# 3. Run deployment
 bash deploy.sh
 
-# 3. Open browser
+# This will automatically:
+# - Build the ptvnc Docker image (first time only)
+# - Start MariaDB container
+# - Start 2 Packet Tracer VNC containers
+# - Configure Guacamole web interface
+# - Generate web access endpoints
+
+# 4. Open browser
 http://localhost/
 
-# 4. Login: ptadmin / IlovePT
-# 5. Click connection (pt01, pt02, etc.)
-# 6. On the desktop, you'll see two shortcuts:
-#    - Packet Tracer icon → Launch Packet Tracer directly
-#    - shared folder → Access shared files
+# 5. Login: ptadmin / IlovePT
+
+# 6. Click connection (pt01, pt02, etc.) to access instance
 ```
-
-### Desktop Shortcuts
-
-Each Packet Tracer instance desktop includes:
-
-1. **Packet Tracer** - Double-click to launch Packet Tracer application
-2. **shared** - Folder link to `/shared/` for file access
-
-These shortcuts are created automatically during deployment.
 
 ---
 
@@ -40,12 +42,20 @@ These shortcuts are created automatically during deployment.
 
 | Script | Purpose |
 |--------|---------|
-| `deploy.sh` | Initial deployment (creates 2 instances) |
-| `add-instance.sh` | Add new instances dynamically |
+| `deploy.sh` | Initial deployment (creates 2 instances, builds Docker image if needed) |
+| `add-instance.sh` | Add new instances dynamically (also builds image if missing) |
 | `remove-instance.sh` | Remove instances safely |
 | `tune_ptvnc.sh` | Adjust CPU/memory per container |
 | `generate-dynamic-connections.sh` | Regenerate database connections |
 | `test-deployment.sh` | Comprehensive health check (41 tests) |
+
+### Automatic Image Building
+
+Both `deploy.sh` and `add-instance.sh` automatically build the `ptvnc` Docker image if it doesn't exist:
+- ✅ First deployment: Image is built automatically (Step 0)
+- ✅ After cloning repo: Image is built on first run
+- ✅ After removing images: Image rebuilds automatically
+- ✅ Subsequent runs: Uses cached image (much faster)
 
 ---
 
