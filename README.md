@@ -28,22 +28,7 @@ This repository builds and runs multiple Cisco Packet Tracer instances inside Do
 
 ## Contents
 - `ptweb-vnc/` - Docker build context for Packet Tracer containers and startup scripts
-- `install.sh` - orchestrates building images, pulling required images, and starting containers
-
-Quick start (local)
-1. Place your Packet Tracer `.deb` installer next to `install.sh` (the script auto-detects common names).
-2. Run the installer (this script will prompt for `YES`):
-
-```bash
-sudo bash ./install.sh
-```
-
-If you prefer to run unattended and capture logs:
-
-```bash
-printf 'YES\n' | sudo bash ./install.sh 2>&1 | tee ~/pt-install.log
-tail -n 200 ~/pt-install.log
-```
+- `deploy.sh` - Main deployment script (replaces old install.sh)
 
 Performance tuning (PT instances are GUI apps inside containers; they can be heavy)
 
@@ -51,21 +36,21 @@ If PT instances feel slow, try the following (ordered by ease):
 
 1) Increase container memory and CPU
 
-For new containers, update the `startPT()` docker run line in `install.sh` to allocate more resources. Example:
+Edit `deploy.sh` and update the docker run line to allocate more resources. Look for the section with:
+
+```bash
+docker run -d --name ptvnc$i --restart unless-stopped --cpus=0.1 -m 1G --ulimit nproc=2048 --ulimit nofile=1024 ptvnc
+```
+
+Change to:
 
 ```bash
 docker run -d --name ptvnc$i --restart unless-stopped --cpus=1 -m 2G --ulimit nproc=4096 --ulimit nofile=4096 ptvnc
 ```
 
-To update running containers (applies where supported):
-
-```bash
-sudo docker update --memory 2G --cpus 1 ptvnc1 ptvnc2
-```
-
 2) Reduce number of parallel instances per host
 
-If you don't have enough RAM/CPU, reduce `numofPT` in `install.sh` (default set to a conservative 2). Run fewer containers per host or add more hosts.
+If you don't have enough RAM/CPU, reduce `numofPT` in `deploy.sh` (default set to 2). Run fewer containers per host or add more hosts.
 
 3) Add swap / zram to give hosts more virtual memory
 
@@ -94,8 +79,6 @@ Look for containers using a lot of CPU or memory. If the host CPU is saturated, 
 5) Consider horizontal scaling or dedicated hosts
 
 If you need many concurrent PT users, deploy on multiple hosts (or scale with Kubernetes) so each host holds a few PT instances.
-
-If you want, I can provide an `install.sh` variant tuned for a bigger host (more memory & CPUs per container) or patch `install.sh` to accept environment variables for resource settings.
 
 Troubleshooting
 - If a container fails due to a name conflict, remove the old container: `sudo docker rm -f <name>`
