@@ -18,7 +18,7 @@ bash deploy.sh
 # 3. Open browser
 http://localhost/guacamole/
 
-# 4. Login: guacadmin / guacadmin
+# 4. Login: ptadmin / IlovePT
 # 5. Click connection (pt01, pt02, etc.)
 # 6. Click Packet Tracer icon on desktop
 ```
@@ -33,6 +33,25 @@ http://localhost/guacamole/
 | `add-instance.sh` | Add new instances dynamically |
 | `tune_ptvnc.sh` | Adjust CPU/memory per container |
 | `generate-dynamic-connections.sh` | Regenerate database connections |
+
+---
+
+## 💾 Downloading Files (Web-Based)
+
+Users work entirely within the web interface. To download Packet Tracer files:
+
+### Easy Method: Shared Folder
+1. **Inside Packet Tracer desktop:**
+   - File → Save As → Navigate to `/shared/`
+   - Save your file (e.g., `mynetwork.pkt`)
+
+2. **Download from browser:**
+   - Go to: `http://localhost/downloads/`
+   - Files appear automatically after saving to `/shared/`
+   - Click file to download
+
+### File Manager Guide
+Visit `http://localhost/files` for detailed instructions on file management inside Packet Tracer.
 
 ---
 

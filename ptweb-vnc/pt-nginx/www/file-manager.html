@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PT File Manager - Download Packet Tracer Files</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .info-box {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 25px;
+            border-radius: 4px;
+        }
+        
+        .info-box h3 {
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .info-box p {
+            color: #666;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        .method {
+            margin-bottom: 30px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .method:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .method h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .method h2 .icon {
+            width: 30px;
+            height: 30px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .steps {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .steps ol {
+            margin-left: 20px;
+        }
+        
+        .steps li {
+            margin-bottom: 10px;
+            color: #555;
+            line-height: 1.6;
+        }
+        
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            margin-top: 10px;
+            line-height: 1.5;
+        }
+        
+        .highlight {
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid #ddd;
+        }
+        
+        .btn-secondary:hover {
+            background: #e8e8e8;
+            border-color: #bbb;
+        }
+        
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .feature-item {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .feature-item strong {
+            display: block;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .feature-item span {
+            color: #666;
+            font-size: 13px;
+        }
+        
+        .footer {
+            background: #f5f5f5;
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #eee;
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .file-types {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .file-type {
+            background: #e8f1ff;
+            color: #667eea;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📁 PT File Manager</h1>
+            <p>Download your Packet Tracer files</p>
+        </div>
+        
+        <div class="content">
+            <div class="info-box">
+                <h3>ℹ️ Supported File Types</h3>
+                <div class="file-types">
+                    <span class="file-type">.pkt</span>
+                    <span class="file-type">.pka</span>
+                    <span class="file-type">.net</span>
+                </div>
+            </div>
+            
+            <!-- Method 1: Shared Folder -->
+            <div class="method">
+                <h2>
+                    <span class="icon">1</span>
+                    Use Shared Folder (Easiest)
+                </h2>
+                
+                <div class="steps">
+                    <ol>
+                        <li>Inside Packet Tracer, click <strong>File → Save As</strong></li>
+                        <li>Navigate to: <span class="highlight">/shared/</span></li>
+                        <li>Save your file (e.g., <code>mynetwork.pkt</code>)</li>
+                        <li>Your file will be automatically available on the server</li>
+                    </ol>
+                </div>
+                
+                <div class="info-box">
+                    <h3>✅ Why use this method?</h3>
+                    <p>• Files are automatically synced<br>
+                       • No extra steps needed<br>
+                       • Perfect for continuous work</p>
+                </div>
+                
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <strong>📍 File Location</strong>
+                        <span>/shared/</span>
+                    </div>
+                    <div class="feature-item">
+                        <strong>⚡ Speed</strong>
+                        <span>Instant sync</span>
+                    </div>
+                    <div class="feature-item">
+                        <strong>💾 Storage</strong>
+                        <span>Per instance</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Method 2: Download from Desktop -->
+            <div class="method">
+                <h2>
+                    <span class="icon">2</span>
+                    Download from Desktop
+                </h2>
+                
+                <div class="steps">
+                    <ol>
+                        <li>Save your file normally to Desktop or Documents</li>
+                        <li>Right-click the file → <strong>Copy</strong></li>
+                        <li>Open terminal in desktop (right-click → Terminal)</li>
+                        <li>Paste file to shared folder:
+                            <div class="code-block">cp ~/Desktop/myfile.pkt /shared/</div>
+                        </li>
+                    </ol>
+                </div>
+                
+                <div class="info-box">
+                    <h3>💡 Tip</h3>
+                    <p>This method works if you prefer saving to familiar locations like Desktop first, then moving files to the shared folder.</p>
+                </div>
+            </div>
+            
+            <!-- Method 3: Using Terminal -->
+            <div class="method">
+                <h2>
+                    <span class="icon">3</span>
+                    Advanced: Terminal
+                </h2>
+                
+                <div class="steps">
+                    <ol>
+                        <li>Open terminal in desktop</li>
+                        <li>Copy all files from Documents to shared:
+                            <div class="code-block">cp ~/Documents/*.pkt /shared/</div>
+                        </li>
+                        <li>Verify files were copied:
+                            <div class="code-block">ls /shared/</div>
+                        </li>
+                    </ol>
+                </div>
+                
+                <div class="info-box">
+                    <h3>📝 Common Commands</h3>
+                    <p><code>cp ~/Desktop/*.pkt /shared/</code> - Copy all .pkt files<br>
+                       <code>mv ~/myfile.pka /shared/</code> - Move file<br>
+                       <code>ls /shared/</code> - List all files in shared<br>
+                       <code>rm /shared/oldfile.pkt</code> - Delete file</p>
+                </div>
+            </div>
+            
+            <!-- Download Instructions -->
+            <div class="method">
+                <h2>
+                    <span class="icon">📥</span>
+                    Download Files to Your Device
+                </h2>
+                
+                <div class="info-box">
+                    <h3>🌐 From Web Interface</h3>
+                    <p>Once files are in the shared folder, they will be accessible via the web server (usually available at a dedicated download URL that your admin provides).</p>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="alert('Download URL: http://localhost/downloads/\n\nAsk your administrator for access.')">
+                        📁 Access Download Folder
+                    </button>
+                    <button class="btn btn-secondary" onclick="alert('Contact your network administrator for direct download access.')">
+                        ❓ Need Help?
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Quick Reference -->
+            <div class="method">
+                <h2>
+                    <span class="icon">⚡</span>
+                    Quick Reference
+                </h2>
+                
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <strong>Shared Folder Path</strong>
+                        <span>/shared/</span>
+                    </div>
+                    <div class="feature-item">
+                        <strong>Save Location</strong>
+                        <span>File → Save As → /shared/</span>
+                    </div>
+                    <div class="feature-item">
+                        <strong>Move Files</strong>
+                        <span>cp ~/file.pkt /shared/</span>
+                    </div>
+                    <div class="feature-item">
+                        <strong>List Files</strong>
+                        <span>ls /shared/</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>💡 <strong>Pro Tip:</strong> Always save important files to /shared/ for easy access and backup!</p>
+        </div>
+    </div>
+</body>
+</html>
