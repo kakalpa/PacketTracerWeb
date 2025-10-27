@@ -40,43 +40,17 @@ chmod 600 /home/ptuser/.Xauthority
 
 sleep 5
 
-# Try to find Packet Tracer process by common names
-pt_pid="$(pidof PacketTracer7 || true)"
-if [ -z "$pt_pid" ]; then
-    pt_pid="$(pidof PacketTracer || true)"
-fi
-if [ -z "$pt_pid" ]; then
-    pt_pid="$(pidof packettracer || true)"
-fi
+# Start VNC server with configurable geometry and color depth.
+# Use lower depth (8 or 16) to save memory and bandwidth.
+/usr/bin/vncserver -geometry "${VNC_GEOMETRY}" -depth "${VNC_DEPTH}" || {
+    echo "vncserver failed to start" >&2
+    exit 1
+}
 
-# If Packet Tracer not running, try to start it directly (display :1 expected from vncserver)
-if [ -z "$pt_pid" ]; then
-    echo "Packet Tracer not running, attempting to start it manually..."
-    # If this script is running as root, switch to ptuser to start PT; if already running as ptuser, start directly.
-    if [ "$(id -u)" -eq 0 ]; then
-        # Prefer runuser (doesn't require PAM) in containers. Fall back to su forcing /bin/sh if not available.
-        # Prefer runuser when available, but force /bin/sh to avoid executing /bin/bash.
-        if command -v runuser >/dev/null 2>&1; then
-            # If runuser exists, use it but specify a POSIX shell to avoid bash exec issues
-            runuser -l ptuser -c "/bin/sh -c 'DISPLAY=:1 /opt/pt/packettracer >/dev/null 2>&1 &'" || true
-        else
-            su -s /bin/sh -l ptuser -c "DISPLAY=:1 /opt/pt/packettracer >/dev/null 2>&1 &" || true
-        fi
-    else
-        # already ptuser; start without su (background and ignore failures)
-        DISPLAY=:1 /opt/pt/packettracer >/dev/null 2>&1 &
-    fi
-    sleep 5
-    pt_pid="$(pidof PacketTracer || pidof packettracer || true)"
-fi
+sleep 5
 
-if [ -z "$pt_pid" ]; then
-    echo "Failed to start Packet Tracer - this is expected in headless mode"
-    echo "Container will continue running with VNC service available"
-fi
-
-echo "Packet Tracer PID(s): ${pt_pid:-(not running)}"
 echo "VNC server is running on display :1 (port 5901)"
+echo "Packet Tracer will be launched when user clicks the taskbar icon or via autostart"
 
 # Keep container alive
 while true; do sleep 3600; done
