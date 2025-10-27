@@ -26,6 +26,9 @@ COPY customizations/ /
 RUN chmod +x /start /start-session /pt-install.xp
 # Ensure xstartup and installer helper are executable
 RUN chmod +x /home/ptuser/.vnc/xstartup /pt-install.sh || true
+# Remove autostart to prevent multiple Packet Tracer instances
+# Users can still launch via taskbar icon or manually
+RUN rm -f /home/ptuser/.config/autostart/PacketTracer.desktop || true
 
 ## Do NOT copy PacketTracer .deb into the image. Installers are proprietary and
 ## large; prefer mounting the .deb at runtime or using an installer service.
