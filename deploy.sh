@@ -89,10 +89,21 @@ docker run --restart always --name pt-nginx1 \
   -p 80:${nginxport} \
   -d nginx
 
+# Step 6: Generate dynamic connections
+echo -e "\e[32mStep 6. Generating dynamic Guacamole connections\e[0m"
+sleep 10
+bash generate-dynamic-connections.sh $numofPT
+sleep 5
+
 echo -e "\e[32m=== Deployment Complete ===\e[0m"
 echo ""
 echo "Services Status:"
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 echo ""
 echo "Access the web interface at: http://localhost"
+echo ""
+echo "Available Packet Tracer connections:"
+for ((i=1; i<=$numofPT; i++)); do
+    echo "  - pt$(printf "%02d" $i)"
+done
 echo ""
