@@ -8,6 +8,7 @@
 set -e
 
 PTfile="CiscoPacketTracer.deb"
+WORKDIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Get number of instances to add (default: 1)
 instances_to_add=${1:-1}
@@ -66,9 +67,9 @@ for ((i=0; i<instances_to_add; i++)); do
       --name $container_name --restart unless-stopped \
       --cpus=0.1 -m 1G --ulimit nproc=2048 --ulimit nofile=1024 \
       --dns=127.0.0.1 \
-      -v "$(pwd)/${PTfile}:/PacketTracer.deb:ro" \
+      -v "${WORKDIR}/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
-      --mount type=bind,source="$(pwd)"/shared,target=/shared \
+      --mount type=bind,source="${WORKDIR}/shared",target=/shared,bind-propagation=rprivate \
       -e PT_DEB_PATH=/PacketTracer.deb \
       ptvnc
     
@@ -150,9 +151,9 @@ docker stop pt-nginx1 2>/dev/null || true
 docker rm pt-nginx1 2>/dev/null || true
 sleep 3
 docker run --restart always --name pt-nginx1 \
-  --mount type=bind,source="$(pwd)"/ptweb-vnc/pt-nginx/www,target=/usr/share/nginx/html,readonly \
-  --mount type=bind,source="$(pwd)"/ptweb-vnc/pt-nginx/conf,target=/etc/nginx/conf.d,readonly \
-  --mount type=bind,source="$(pwd)"/shared,target=/shared,readonly \
+  --mount type=bind,source="${WORKDIR}/ptweb-vnc/pt-nginx/www",target=/usr/share/nginx/html,readonly \
+  --mount type=bind,source="${WORKDIR}/ptweb-vnc/pt-nginx/conf",target=/etc/nginx/conf.d,readonly \
+  --mount type=bind,source="${WORKDIR}/shared",target=/shared,readonly,bind-propagation=rprivate \
   --link pt-guacamole:guacamole \
   -p 80:80 \
   -d nginx

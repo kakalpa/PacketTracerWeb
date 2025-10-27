@@ -6,6 +6,7 @@
 set -e
 
 cd "$(dirname "$0")"
+WORKDIR="$(pwd)"
 
 # Configuration from install.sh
 dbuser="ptdbuser"
@@ -44,16 +45,16 @@ sleep 10
 
 # Step 2: Start ptvnc containers
 echo -e "\e[32mStep 2. Start Packet Tracer VNC containers\e[0m"
-mkdir -p "$(pwd)/shared"
-chmod 777 "$(pwd)/shared"
+mkdir -p "${WORKDIR}/shared"
+chmod 777 "${WORKDIR}/shared"
 for ((i=1; i<=$numofPT; i++)); do
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
       --cpus=0.1 -m 1G --ulimit nproc=2048 --ulimit nofile=1024 \
       --dns=127.0.0.1 \
-      -v "$(pwd)/${PTfile}:/PacketTracer.deb:ro" \
+      -v "${WORKDIR}/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
-      --mount type=bind,source="$(pwd)"/shared,target=/shared \
+      --mount type=bind,source="${WORKDIR}/shared",target=/shared,bind-propagation=rprivate \
       -e PT_DEB_PATH=/PacketTracer.deb \
       ptvnc
     sleep $i
@@ -105,12 +106,12 @@ docker run --name pt-guacamole --restart always \
 
 # Step 5: Start Nginx
 echo -e "\e[32mStep 5. Start Nginx web server\e[0m"
-mkdir -p "$(pwd)/shared"
-chmod 777 "$(pwd)/shared"
+mkdir -p "${WORKDIR}/shared"
+chmod 777 "${WORKDIR}/shared"
 docker run --restart always --name pt-nginx1 \
-  --mount type=bind,source="$(pwd)"/ptweb-vnc/pt-nginx/www,target=/usr/share/nginx/html,readonly \
-  --mount type=bind,source="$(pwd)"/ptweb-vnc/pt-nginx/conf,target=/etc/nginx/conf.d,readonly \
-  --mount type=bind,source="$(pwd)"/shared,target=/shared,readonly \
+  --mount type=bind,source="${WORKDIR}/ptweb-vnc/pt-nginx/www",target=/usr/share/nginx/html,readonly \
+  --mount type=bind,source="${WORKDIR}/ptweb-vnc/pt-nginx/conf",target=/etc/nginx/conf.d,readonly \
+  --mount type=bind,source="${WORKDIR}/shared",target=/shared,readonly,bind-propagation=rprivate \
   --link pt-guacamole:guacamole \
   -p 80:${nginxport} \
   -d nginx
