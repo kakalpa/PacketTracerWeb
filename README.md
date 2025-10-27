@@ -1,11 +1,32 @@
 # PT (Packet Tracer) multi-container deployment - Access Packet Tracer Via the Browser
 
-
 This Project is inspired by [[This Original Project](https://github.com/cnkang/ptremote)]
 
 This repository builds and runs multiple Cisco Packet Tracer instances inside Docker containers and exposes them through Guacamole + nginx.
 
-Contents
+## 🚀 Installation Introduction
+
+### What You'll Get
+- Multiple Packet Tracer instances running in Docker containers
+- Web-based access via Guacamole (no VNC client needed)
+- Automated one-command deployment
+- Offline/demo mode (no login required)
+
+### Prerequisites
+1. **Linux system** with Docker and Docker Compose installed
+2. **Cisco Packet Tracer .deb installer** (Linux x64, version 9+)
+3. **At least 4GB RAM** available
+
+### Quick Installation
+1. Place your Packet Tracer `.deb` file in the repository root
+2. Run: `bash deploy.sh`
+3. Open browser to: `http://localhost/guacamole/`
+4. Use default credentials: `guacadmin` / `guacadmin`
+5. Click Packet Tracer icon in the desktop to launch
+
+---
+
+## Contents
 - `ptweb-vnc/` - Docker build context for Packet Tracer containers and startup scripts
 - `install.sh` - orchestrates building images, pulling required images, and starting containers
 
