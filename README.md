@@ -112,57 +112,6 @@ bash generate-dynamic-connections.sh 3
 
 ---
 
-## ⚡ Performance Tuning
-
-Packet Tracer instances consume significant resources. If slow:
-
-**Option 1: Increase resources (Recommended)**
-```bash
-bash tune_ptvnc.sh 2G 1    # 2GB RAM, 1 CPU per container
-```
-
-**Option 2: Reduce instances**
-Edit `deploy.sh`, change `numofPT=2` to `numofPT=1` and redeploy.
-
-**Option 3: Monitor usage**
-```bash
-docker stats --all
-```
-
----
-
-## ⚠️ Important: User Impact During Scaling
-
-When you run `add-instance.sh` or `remove-instance.sh`:
-
-### What Happens to Active Users:
-1. **VNC streams are disconnected** - Guacamole sessions end
-2. **Browser shows error** - Users see connection lost message
-3. **Work may be lost** - Unsaved files in Packet Tracer are lost
-4. **User must refresh** - They need to reload and reconnect
-
-### Recommendations:
-- **Scale during off-hours** - Schedule changes when no one is using the system
-- **Notify users in advance** - Tell them scaling is happening
-- **Save before changes** - Ask users to save and exit before scaling
-- **Post maintenance** - Use `test-deployment.sh` to verify system after scaling
-
-### Example Safe Workflow:
-```bash
-# 1. Notify users: "System maintenance in 5 minutes"
-# 2. Wait for users to exit
-# 3. Verify no active connections
-# 4. Add/remove instances
-bash add-instance.sh 3
-
-# 5. Verify with tests
-bash test-deployment.sh
-
-# 6. Notify: "System ready"
-```
-
----
-
 ## ✅ Testing Deployment Health
 
 After deployment, verify everything is working with the comprehensive test suite:
