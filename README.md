@@ -78,7 +78,7 @@ Users work entirely within the web interface. To download Packet Tracer files:
 
 ### Alternative Method: Direct Path
 - File → Save As → `/shared/mynetwork.pkt`
-- Then visit `http://localhost/downloads/`
+- Then visit `http://localhost/downloads/` <== trailing / is required ! 
 
 ## 🎯 Usage Examples
 
