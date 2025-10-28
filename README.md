@@ -1,6 +1,7 @@
 # Packet Tracer - Web-Based Multi-Instance Deployment
 
 Run multiple Cisco Packet Tracer instances in Docker containers with web-based access via Guacamole.
+inspired by this original project [[ptremote](https://github.com/cnkang/ptremote)]
 
 ## 🚀 Quick Start
 
