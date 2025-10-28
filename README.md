@@ -87,6 +87,7 @@ Users work entirely within the web interface. To download Packet Tracer files:
 bash deploy.sh
 # Creates: pt01, pt02
 ```
+initial deployment might take upto 5-6 minutes. be patient 😉
 
 ### Add Instances
 ```bash
