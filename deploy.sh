@@ -119,15 +119,100 @@ sleep 10
 bash generate-dynamic-connections.sh $numofPT
 sleep 5
 
+# Wait for PacketTracer installation to complete in all containers
+echo -e "\e[32m=== Waiting for PacketTracer Installation ===\e[0m"
+echo "Monitoring container logs for installation completion..."
+echo ""
+
+# Function to check if PT is installed in a container
+check_pt_installed() {
+    local container=$1
+    docker logs "$container" 2>&1 | grep -q "✓ SUCCESS: PacketTracer binary ready" && return 0 || return 1
+}
+
+# Function to get installation logs from a container
+get_install_logs() {
+    local container=$1
+    docker logs "$container" 2>&1 | grep "\[pt-install\]" | tail -5
+}
+
+# Wait for all containers to complete installation
+all_installed=false
+timeout=600  # 10 minute timeout
+elapsed=0
+last_log_display=0
+declare -A completed_containers
+
+while [ $elapsed -lt $timeout ]; do
+    all_installed=true
+    for ((i=1; i<=$numofPT; i++)); do
+        if ! check_pt_installed "ptvnc$i"; then
+            all_installed=false
+        fi
+    done
+    
+    if [ "$all_installed" = true ]; then
+        break
+    fi
+    
+    # Display logs every 15 seconds
+    if [ $((elapsed - last_log_display)) -ge 15 ] || [ $elapsed -eq 0 ]; then
+        echo ""
+        echo -e "\e[36m--- Installation Progress ---\e[0m"
+        
+        # Show status and logs for each container
+        for ((i=1; i<=$numofPT; i++)); do
+            if check_pt_installed "ptvnc$i"; then
+                # Container is done - show it only once
+                if [ -z "${completed_containers[ptvnc$i]}" ]; then
+                    echo -e "\e[32m✓ ptvnc$i: Installation completed\e[0m"
+                    completed_containers[ptvnc$i]=1
+                fi
+            else
+                # Container still installing - show progress
+                echo -e "\e[33m⏳ ptvnc$i: Installing...\e[0m"
+                get_install_logs "ptvnc$i" | tail -3
+            fi
+        done
+        
+        last_log_display=$elapsed
+    fi
+    
+    sleep 5
+    elapsed=$((elapsed + 5))
+    echo -ne "\rWaiting for installation... ($elapsed/$timeout seconds)"
+done
+
+echo ""
+echo ""
+
+if [ "$all_installed" = true ]; then
+    echo -e "\e[32m✓ PacketTracer installation completed successfully in all containers\e[0m"
+    echo ""
+    echo -e "\e[36m=== Final Installation Status ===\e[0m"
+    for ((i=1; i<=$numofPT; i++)); do
+        echo -e "\e[32mptvnc$i:\e[0m"
+        get_install_logs "ptvnc$i" | tail -3
+        echo ""
+    done
+else
+    echo -e "\e[33m⚠ Timeout waiting for installation (this may be normal if still running)\e[0m"
+fi
+
+echo ""
 echo -e "\e[32m=== Deployment Complete ===\e[0m"
 echo ""
 echo "Services Status:"
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 echo ""
-echo "Access the web interface at: http://localhost"
+echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
+echo -e "\e[32mAccess the web interface at: http://localhost\e[0m"
+echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
 echo ""
 echo "Available Packet Tracer connections:"
 for ((i=1; i<=$numofPT; i++)); do
     echo "  - pt$(printf "%02d" $i)"
 done
+echo ""
+echo -e "\e[32m✓ SUCCESS - Deployment and installation complete!\e[0m"
 echo ""
