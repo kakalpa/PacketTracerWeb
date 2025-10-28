@@ -2,6 +2,9 @@
 
 # Deployment script for PacketTracer + Guacamole stack
 # This manually runs the docker commands from install.sh without system-level changes
+# Usage: bash deploy.sh [recreate]
+#   - No args: Deploy (fails if containers exist)
+#   - recreate: Remove all containers/volumes and redeploy fresh
 
 set -e
 
@@ -15,6 +18,15 @@ dbname="guacamole_db"
 numofPT=2
 PTfile="CiscoPacketTracer.deb"
 nginxport=80
+
+# Handle recreate argument
+if [[ "${1:-}" == "recreate" ]]; then
+    echo -e "\e[33m=== Recreate Mode: Cleaning up existing containers and volumes ===\e[0m"
+    docker ps -a --format "{{.Names}}" | xargs -r docker rm -f 2>/dev/null || true
+    docker volume ls --format "{{.Name}}" | xargs -r docker volume rm 2>/dev/null || true
+    echo -e "\e[32m✓ Cleanup complete\e[0m"
+    echo ""
+fi
 
 echo -e "\e[32m=== Starting Packet Tracer + Guacamole Deployment ===\e[0m"
 
@@ -127,7 +139,8 @@ echo ""
 # Function to check if PT is installed in a container
 check_pt_installed() {
     local container=$1
-    docker logs "$container" 2>&1 | grep -q "✓ SUCCESS: PacketTracer binary ready" && return 0 || return 1
+    # Check if the binary actually exists in the container 
+    docker exec "$container" test -x /opt/pt/packettracer 2>/dev/null && return 0 || return 1
 }
 
 # Function to get installation logs from a container

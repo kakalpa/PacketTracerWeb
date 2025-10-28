@@ -89,6 +89,20 @@ bash deploy.sh
 ```
 initial deployment might take upto 5-6 minutes. be patient 😉
 
+### Recreate/Reset Deployment (Clean slate)
+```bash
+bash deploy.sh recreate
+# Removes ALL containers and volumes, then deploys fresh stack
+# Useful for testing or when you want a completely clean environment
+```
+This command will:
+- ✅ Remove all Packet Tracer containers (ptvnc1, ptvnc2, ...)
+- ✅ Remove all Guacamole containers (guacamole-mariadb, pt-guacd, pt-guacamole, pt-nginx1)
+- ✅ Remove all Docker volumes (clean slate data)
+- ✅ Then deploy fresh 2-instance stack
+
+⚠️ **Note:** This removes all data. Save important files to `/shared/` before running!
+
 ### Add Instances
 ```bash
 bash add-instance.sh      # Add 1 more instance (pt03 if you have pt01, pt02)

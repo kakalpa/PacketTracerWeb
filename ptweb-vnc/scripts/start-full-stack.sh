@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: ./scripts/start-full-stack.sh [num_of_pt]
 
 NUM=${1:-10}
-IMAGE_NAME=${IMAGE_NAME:-ptweb-vnc}
+IMAGE_NAME=${IMAGE_NAME:-ptvnc}
 PT_CONTAINER_BASE=${PT_CONTAINER_BASE:-ptvnc}
 DB_USER=${DB_USER:-ptdbuser}
 DB_PASS=${DB_PASS:-ptdbpass}
