@@ -1,0 +1,245 @@
+# Enhanced docker-compose.yml with security hardening
+# This file demonstrates security best practices
+# Load variables from .env.secure if available
+
+version: '3.8'
+
+# Create isolated internal network (not accessible from host by default)
+networks:
+  internal:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1500
+  
+  # Exposed network for nginx only (optional, for external access)
+  exposed:
+    driver: bridge
+
+services:
+  # ===== MARIADB (Internal Only) =====
+  mariadb:
+    image: mariadb:latest
+    container_name: guacamole-mariadb
+    restart: unless-stopped
+    
+    # Network configuration - internal only
+    networks:
+      - internal
+    
+    # Do NOT expose database port 3306 (commented out for security)
+    # ports:
+    #   - "3306:3306"
+    
+    # Security: Read-only root filesystem (as much as possible)
+    read_only: false  # MariaDB needs write access
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+      - SETFCAP
+    security_opt:
+      - no-new-privileges:true
+    
+    # Environment variables (load from .env.secure if available)
+    environment:
+      MARIADB_RANDOM_ROOT_PASSWORD: 'yes'
+      MARIADB_DATABASE: '${DB_NAME:-guacamole_db}'
+      MARIADB_USER: '${DB_USER:-ptdbuser}'
+      MARIADB_PASSWORD: '${DB_USER_PASSWORD:-ptdbpass}'
+    
+    # Volumes
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./db-dump.sql:/docker-entrypoint-initdb.d/db-dump.sql:ro
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=mariadb"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # ===== GUACD (Internal Only - VNC Proxy) =====
+  guacd:
+    image: guacamole/guacd
+    container_name: pt-guacd
+    restart: unless-stopped
+    
+    # Network configuration - internal only
+    networks:
+      - internal
+    
+    # Security settings
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    
+    # Volumes (read-only)
+    volumes:
+      - /tmp
+      - /run
+    tmpfs:
+      - /tmp
+      - /run
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=guacd"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "ss -tuln | grep -q 4822"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ===== GUACAMOLE (Internal Only - Web App) =====
+  guacamole:
+    image: guacamole/guacamole
+    container_name: pt-guacamole
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      guacd:
+        condition: service_healthy
+    
+    # Network configuration - internal only
+    networks:
+      - internal
+    
+    # Security settings
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Guacamole needs write access to /tmp
+    
+    # Environment variables
+    environment:
+      MYSQL_DATABASE: '${DB_NAME:-guacamole_db}'
+      MYSQL_USER: '${DB_USER:-ptdbuser}'
+      MYSQL_PASSWORD: '${DB_USER_PASSWORD:-ptdbpass}'
+      MYSQL_HOST: mariadb
+      # Additional security settings
+      GUACAMOLE_HOME: /etc/guacamole
+      # Optional: Enable HTTPS
+      # ENABLE_SSL: 'true'
+      # SSL_CERT_PATH: '/etc/guacamole/certs/fullchain.pem'
+      # SSL_KEY_PATH: '/etc/guacamole/certs/privkey.pem'
+    
+    # Volumes
+    volumes:
+      - guacamole_config:/etc/guacamole
+      - /tmp
+    tmpfs:
+      - /tmp
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=guacamole"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/guacamole/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ===== NGINX (Reverse Proxy - Exposed) =====
+  nginx:
+    image: nginx:latest
+    container_name: pt-nginx1
+    restart: unless-stopped
+    depends_on:
+      guacamole:
+        condition: service_healthy
+    
+    # Network configuration
+    networks:
+      - exposed
+      - internal
+    
+    # Ports - only expose HTTP/HTTPS (external)
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    
+    # Security settings
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    
+    # Volumes
+    volumes:
+      - ./ptweb-vnc/pt-nginx/www:/usr/share/nginx/html:ro
+      - ./ptweb-vnc/pt-nginx/conf/ptweb-secure.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./shared:/shared:ro
+      # Uncomment after setting up HTTPS:
+      # - ./ptweb-vnc/certs:/etc/nginx/certs:ro
+      # Temporary directories for nginx
+      - /tmp
+      - /var/run
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    
+    # Environment
+    environment:
+      # Nginx worker processes (auto = number of CPU cores)
+      NGINX_WORKER_PROCESSES: auto
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        labels: "service=nginx"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+# ===== VOLUMES =====
+volumes:
+  mariadb_data:
+    driver: local
+  guacamole_config:
+    driver: local
+  pt_opt:
+    driver: local
+
+# ===== DEFAULT NETWORK =====
+# Note: ptvnc containers will be added to the exposed network via docker run
+# They're not defined here because they're added dynamically

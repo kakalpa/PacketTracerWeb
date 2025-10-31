@@ -9,7 +9,7 @@ services:
       MARIADB_RANDOM_ROOT_PASSWORD: 'yes'
       MARIADB_DATABASE: 'guacamole_db'
       MARIADB_USER: 'ptdbuser'
-      MARIADB_PASSWORD: 'ptdbpass'
+      MARIADB_PASSWORD: 'djIvFOfhLCf6c6KctycxQx+bONssPyXmdXzRs52LO0w='
     volumes:
       - ./db-dump.sql:/docker-entrypoint-initdb.d/db-dump.sql:ro
 
@@ -28,7 +28,7 @@ services:
     environment:
       MYSQL_DATABASE: 'guacamole_db'
       MYSQL_USER: 'ptdbuser'
-      MYSQL_PASSWORD: 'ptdbpass'
+      MYSQL_PASSWORD: 'djIvFOfhLCf6c6KctycxQx+bONssPyXmdXzRs52LO0w='
       MYSQL_HOST: mariadb
 
   nginx:

@@ -7,4 +7,19 @@ __pycache__/
 .vscode/
 .DS_Store
 node_modules/
+
+# Debian packages
 *.deb
+
+# Shared and documentation
+/shared/*
+chat_history
+COMPLETE_DOCUMENTATION.md
+
+# Security: Do NOT commit credentials!
+.env.secure
+.env.secure.backup
+.env.init
+ptweb-vnc/certs/*.pem
+ptweb-vnc/certs/*.key
+logs/
