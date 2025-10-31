@@ -2,20 +2,110 @@
 
 # Deployment script for PacketTracer + Guacamole stack
 # This manually runs the docker commands from install.sh without system-level changes
+# Enhanced to support secure setup with credentials, HTTPS, GeoIP, and download auth
+# Usage: bash deploy.sh [recreate]
 
 set -e
 
 cd "$(dirname "$0")"
 
-# Configuration from install.sh
-dbuser="ptdbuser"
-dbpass="ptdbpass"
-dbname="guacamole_db"
+# Check for recreate argument
+RECREATE_MODE="${1:-}"
+
+# ============================================================================
+# RECREATE MODE: Remove all containers and volumes, then restart fresh
+# ============================================================================
+if [[ "$RECREATE_MODE" == "recreate" ]]; then
+    echo -e "\e[33m⚠️  RECREATE MODE: Removing all containers and volumes...\e[0m"
+    echo ""
+    
+    echo "Stopping all containers..."
+    docker stop $(docker ps -q) 2>/dev/null || true
+    
+    echo "Removing containers..."
+    docker rm guacamole-mariadb ptvnc1 ptvnc2 ptvnc3 ptvnc4 ptvnc5 pt-guacd pt-guacamole pt-nginx1 2>/dev/null || true
+    
+    echo "Removing volumes..."
+    docker volume rm dbdump pt_opt 2>/dev/null || true
+    
+    echo "Removing initialization cache..."
+    rm -f .env.init
+    
+    # Check if .env.secure exists before removing it
+    if [[ -f ".env.secure" ]]; then
+        echo "Backing up .env.secure for new deployment..."
+        cp .env.secure .env.secure.backup.$(date +%s)
+    else
+        echo "No existing credentials found, new ones will be generated."
+    fi
+    
+    echo -e "\e[32m✓ Cleanup complete. Starting fresh deployment...\e[0m"
+    echo ""
+    
+    # Continue with fresh deployment
+    FRESH_START="true"
+else
+    FRESH_START="false"
+fi
+
+# ============================================================================
+# LOAD SECURE CREDENTIALS
+# ============================================================================
+# Check if .env.secure exists (from secure-setup.sh)
+if [[ -f ".env.secure" ]] && [[ "$FRESH_START" != "true" ]]; then
+    echo -e "\e[32m✓ Loading secure credentials from .env.secure\e[0m"
+    source .env.secure
+    
+    # Use credentials from .env.secure
+    dbuser="${DB_USER}"
+    dbpass="${DB_USER_PASSWORD}"
+    dbname="${DB_NAME}"
+    DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD}"
+    VNC_PASSWORD="${VNC_PASSWORD}"
+    GUACAMOLE_PASSWORD="${GUACAMOLE_PASSWORD}"
+    DOWNLOAD_AUTH_USER="${DOWNLOAD_AUTH_USER}"
+    DOWNLOAD_AUTH_PASSWORD="${DOWNLOAD_AUTH_PASSWORD}"
+    ENABLE_HTTPS="${ENABLE_HTTPS:-false}"
+    ENABLE_GEOIP="${ENABLE_GEOIP:-false}"
+    REQUIRE_DOWNLOAD_AUTH="${REQUIRE_DOWNLOAD_AUTH:-false}"
+    nginxport="${NGINX_PORT:-80}"
+else
+    echo -e "\e[33m⚠️  .env.secure not found. Running secure-setup.sh first...\e[0m"
+    # Don't force NONINTERACTIVE mode - let the user configure interactively
+    bash secure-setup.sh
+    source .env.secure
+    
+    # Use credentials from .env.secure
+    dbuser="${DB_USER}"
+    dbpass="${DB_USER_PASSWORD}"
+    dbname="${DB_NAME}"
+    DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD}"
+    VNC_PASSWORD="${VNC_PASSWORD}"
+    GUACAMOLE_PASSWORD="${GUACAMOLE_PASSWORD}"
+    DOWNLOAD_AUTH_USER="${DOWNLOAD_AUTH_USER}"
+    DOWNLOAD_AUTH_PASSWORD="${DOWNLOAD_AUTH_PASSWORD}"
+    ENABLE_HTTPS="${ENABLE_HTTPS:-false}"
+    ENABLE_GEOIP="${ENABLE_GEOIP:-false}"
+    REQUIRE_DOWNLOAD_AUTH="${REQUIRE_DOWNLOAD_AUTH:-false}"
+    nginxport="${NGINX_PORT:-80}"
+fi
+
+# ============================================================================
+# DEPLOYMENT CONFIGURATION
+# ============================================================================
 numofPT=2
 PTfile="CiscoPacketTracer.deb"
-nginxport=80
 
 echo -e "\e[32m=== Starting Packet Tracer + Guacamole Deployment ===\e[0m"
+echo ""
+echo "Deployment Configuration:"
+echo "  Database User: $dbuser"
+echo "  Database Name: $dbname"
+echo "  PT Instances: $numofPT"
+echo "  HTTPS Enabled: $ENABLE_HTTPS"
+echo "  GeoIP Enabled: $ENABLE_GEOIP"
+echo "  Download Auth: $REQUIRE_DOWNLOAD_AUTH"
+echo ""
 
 # Check if .deb file exists
 if [[ ! -f "$PTfile" ]]; then
@@ -35,10 +125,10 @@ echo -e "\e[32mStep 1. Start MariaDB\e[0m"
 docker run --name guacamole-mariadb --restart unless-stopped \
   -v dbdump:/docker-entrypoint-initdb.d \
   -e MYSQL_ROOT_HOST=% \
+  -e MYSQL_ROOT_PASSWORD="${DB_ROOT_PASSWORD}" \
   -e MYSQL_DATABASE=${dbname} \
   -e MYSQL_USER=${dbuser} \
   -e MYSQL_PASSWORD=${dbpass} \
-  -e MYSQL_RANDOM_ROOT_PASSWORD=1 \
   -d mariadb:latest
 sleep 10
 
@@ -126,10 +216,43 @@ echo ""
 echo "Services Status:"
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 echo ""
-echo "Access the web interface at: http://localhost"
+echo -e "\e[33m=== ACCESS INFORMATION ===\e[0m"
+echo ""
+if [[ "$ENABLE_HTTPS" == "true" ]]; then
+    echo "Web Interface: https://localhost:$nginxport"
+else
+    echo "Web Interface: http://localhost:$nginxport"
+fi
+echo ""
+echo "Guacamole Login:"
+echo "  Username: ptadmin"
+echo "  Password: $GUACAMOLE_PASSWORD"
+echo ""
+if [[ "$REQUIRE_DOWNLOAD_AUTH" == "true" ]]; then
+    echo "Download Authentication:"
+    echo "  Username: $DOWNLOAD_AUTH_USER"
+    echo "  Password: $DOWNLOAD_AUTH_PASSWORD"
+    echo ""
+fi
+echo "VNC Password (for direct VNC access):"
+echo "  Password: $VNC_PASSWORD"
+echo ""
+echo "Database Credentials (saved in .env.secure):"
+echo "  Root Password: $DB_ROOT_PASSWORD"
+echo "  DB User: $dbuser"
+echo "  DB Password: $dbpass"
 echo ""
 echo "Available Packet Tracer connections:"
 for ((i=1; i<=$numofPT; i++)); do
     echo "  - pt$(printf "%02d" $i)"
 done
+echo ""
+echo -e "\e[33m⚠️  IMPORTANT REMINDERS:\e[0m"
+echo "  • All credentials are stored securely in .env.secure (mode 600)"
+echo "  • Never commit .env.secure to git"
+echo "  • For HTTPS: Add certificates to ptweb-vnc/certs/ and restart nginx"
+if [[ "$ENABLE_GEOIP" == "true" ]]; then
+    echo "  • GeoIP filtering is enabled: see GEOIP-SETUP.md for MaxMind setup"
+fi
+echo "  • Review SECURITY.md for production hardening checklist"
 echo ""

@@ -4,23 +4,35 @@
 # Generates strong random credentials and configures the deployment securely
 # Features: Random credentials, HTTPS/TLS, GeoIP restrictions, Download authentication
 # Usage: bash secure-setup.sh
+# Non-interactive: NONINTERACTIVE=1 bash secure-setup.sh
 
 set -e
 
+# Check if we're in non-interactive mode
+NONINTERACTIVE="${NONINTERACTIVE:-0}"
+
 echo -e "\e[32m=== PacketTracerWeb Secure Setup ===\e[0m"
 echo ""
-echo "⚠️  This script will generate new credentials and configure your deployment for production."
-echo "Make sure to save the credentials in a secure location!"
+if [[ "$NONINTERACTIVE" == "1" ]]; then
+    echo "Running in non-interactive mode (defaults: no HTTPS, no GeoIP, no download auth)"
+else
+    echo "⚠️  This script will generate new credentials and configure your deployment for production."
+    echo "Make sure to save the credentials in a secure location!"
+fi
 echo ""
 
 # Check if credentials already exist
 if [[ -f ".env.secure" ]]; then
     echo -e "\e[33m⚠️  .env.secure already exists!\e[0m"
-    read -p "Do you want to regenerate credentials? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Skipping credential generation."
-        exit 0
+    if [[ "$NONINTERACTIVE" != "1" ]]; then
+        printf "Do you want to regenerate credentials? (y/n) "
+        read -r REGENERATE
+        if [[ ! $REGENERATE =~ ^[Yy]$ ]]; then
+            echo "Skipping credential generation."
+            exit 0
+        fi
+    else
+        echo "Backing up and regenerating..."
     fi
     echo "Backing up existing credentials to .env.secure.backup"
     cp .env.secure .env.secure.backup
@@ -47,14 +59,21 @@ echo ""
 
 # ===== HTTPS/TLS CONFIGURATION =====
 echo -e "\e[32m--- HTTPS/TLS Configuration ---\e[0m"
-read -p "Enable HTTPS/TLS? (y/n) [default: n]: " -n 1 -r ENABLE_HTTPS_CHOICE
+if [[ "$NONINTERACTIVE" == "1" ]]; then
+    ENABLE_HTTPS_CHOICE="n"
+    echo "HTTPS: DISABLED (non-interactive mode, use default)"
+else
+    printf "Enable HTTPS/TLS? (y/n) [default: n]: "
+    read -r ENABLE_HTTPS_CHOICE
+fi
 ENABLE_HTTPS_CHOICE=${ENABLE_HTTPS_CHOICE:-n}
 echo
 
 if [[ $ENABLE_HTTPS_CHOICE =~ ^[Yy]$ ]]; then
     ENABLE_HTTPS="true"
     echo "HTTPS will be enabled."
-    read -p "Do you have Let's Encrypt certificates ready? (y/n) [default: n]: " -n 1 -r CERTS_READY
+    printf "Do you have Let's Encrypt certificates ready? (y/n) [default: n]: "
+    read -r CERTS_READY
     echo
     if [[ ! $CERTS_READY =~ ^[Yy]$ ]]; then
         echo ""
@@ -69,7 +88,8 @@ if [[ $ENABLE_HTTPS_CHOICE =~ ^[Yy]$ ]]; then
         echo "   sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem ptweb-vnc/certs/"
         echo "   sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem ptweb-vnc/certs/"
         echo ""
-        read -p "Press enter after copying certificates..."
+        printf "Press enter after copying certificates..."
+        read -r
     fi
 else
     ENABLE_HTTPS="false"
@@ -79,7 +99,13 @@ echo ""
 
 # ===== GEOIP RESTRICTIONS =====
 echo -e "\e[32m--- GeoIP Restrictions ---\e[0m"
-read -p "Enable GeoIP-based access restrictions? (y/n) [default: n]: " -n 1 -r ENABLE_GEOIP_CHOICE
+if [[ "$NONINTERACTIVE" == "1" ]]; then
+    ENABLE_GEOIP_CHOICE="n"
+    echo "GeoIP: DISABLED (non-interactive mode, use default)"
+else
+    printf "Enable GeoIP-based access restrictions? (y/n) [default: n]: "
+    read -r ENABLE_GEOIP_CHOICE
+fi
 ENABLE_GEOIP_CHOICE=${ENABLE_GEOIP_CHOICE:-n}
 echo
 
@@ -90,7 +116,8 @@ if [[ $ENABLE_GEOIP_CHOICE =~ ^[Yy]$ ]]; then
     echo "   Common codes: US (USA), GB (UK), DE (Germany), CA (Canada), AU (Australia)"
     echo "   See: https://www.iso.org/obp/ui/#search"
     echo ""
-    read -p "Enter allowed country codes (comma-separated, or press enter for all): " ALLOWED_COUNTRIES
+    printf "Enter allowed country codes (comma-separated, or press enter for all): "
+    read -r ALLOWED_COUNTRIES
     
     if [[ -z "$ALLOWED_COUNTRIES" ]]; then
         echo "No countries specified - will allow access from ALL countries"
@@ -108,7 +135,13 @@ echo ""
 
 # ===== DOWNLOAD AUTHENTICATION =====
 echo -e "\e[32m--- Download Access Authentication ---\e[0m"
-read -p "Require authentication for /downloads path? (y/n) [default: y]: " -n 1 -r DOWNLOADS_AUTH_CHOICE
+if [[ "$NONINTERACTIVE" == "1" ]]; then
+    DOWNLOADS_AUTH_CHOICE="n"
+    echo "Download Auth: DISABLED (non-interactive mode, use default)"
+else
+    printf "Require authentication for /downloads path? (y/n) [default: y]: "
+    read -r DOWNLOADS_AUTH_CHOICE
+fi
 DOWNLOADS_AUTH_CHOICE=${DOWNLOADS_AUTH_CHOICE:-y}
 echo
 
@@ -211,7 +244,8 @@ echo ""
 
 # Ask user to acknowledge (skip in automated mode if NONINTERACTIVE set)
 if [[ -z "${NONINTERACTIVE:-}" ]]; then
-    read -p "I have saved these credentials securely (y/n): " -n 1 -r
+    printf "I have saved these credentials securely (y/n): "
+    read -n 1 -r REPLY
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo -e "\e[31m❌ Setup cancelled. Please save credentials before proceeding.\e[0m"
