@@ -6,9 +6,19 @@
 
 set -e
 
-dbuser="ptdbuser"
-dbpass="ptdbpass"
-dbname="guacamole_db"
+# Load secure credentials from .env.secure
+if [[ -f ".env.secure" ]]; then
+    source .env.secure
+    dbuser="${DB_USER}"
+    dbpass="${DB_USER_PASSWORD}"
+    dbname="${DB_NAME}"
+else
+    # Fallback to defaults (for backward compatibility)
+    dbuser="ptdbuser"
+    dbpass="ptdbpass"
+    dbname="guacamole_db"
+fi
+
 mariadb_container="guacamole-mariadb"
 
 # Get actual running ptvnc container numbers (not sequential count)
@@ -25,8 +35,13 @@ echo "Generating connections for $numofPT actual instances..."
 echo "Found containers: $(echo $ptvnc_containers | tr '\n' ' ')"
 echo ""
 
-# Create SQL file with dynamic connections
-cat > /tmp/dynamic_connections.sql << 'EOF'
+# Create SQL file with dynamic connections (use local temp file if /tmp not writable)
+SQL_FILE="/tmp/dynamic_connections_$$.sql"
+if ! touch "$SQL_FILE" 2>/dev/null; then
+    SQL_FILE="./dynamic_connections_$$.sql"
+fi
+
+cat > "$SQL_FILE" << 'EOF'
 USE guacamole_db;
 
 -- Clear existing connections and related data
@@ -59,7 +74,7 @@ echo "Admin entity ID: $ptadmin_id"
 for instance_num in $ptvnc_containers; do
     connection_name="pt$(printf "%02d" $instance_num)"
     
-    cat >> /tmp/dynamic_connections.sql << EOFCONN
+    cat >> "$SQL_FILE" << EOFCONN
 -- Connection: $connection_name
 INSERT INTO \`guacamole_entity\` (\`name\`, \`type\`) VALUES ('$connection_name', 'USER');
 
@@ -84,7 +99,7 @@ EOFCONN
 done
 
 echo "SQL generated. Applying to database..."
-docker exec -i $mariadb_container mariadb -u${dbuser} -p${dbpass} < /tmp/dynamic_connections.sql
+docker exec -i $mariadb_container mariadb -u${dbuser} -p${dbpass} < "$SQL_FILE"
 
 echo "✅ Successfully created $numofPT dynamic connections in Guacamole!"
 echo ""
@@ -94,4 +109,4 @@ for instance_num in $ptvnc_containers; do
 done
 
 # Clean up
-rm /tmp/dynamic_connections.sql
+rm -f "$SQL_FILE"
