@@ -16,6 +16,13 @@ node_modules/
 chat_history
 COMPLETE_DOCUMENTATION.md
 
+# Local documentation (reference only, not in git)
+DEPLOY-EXECUTION-LOG.md
+DEPLOY-RECREATE-GUIDE.md
+DEPLOY-SECURITY-INTEGRATION.md
+DEPLOYMENT-FLOW.md
+RECREATE-SUCCESS.md
+
 # Security: Do NOT commit credentials!
 .env.secure
 .env.secure.backup
@@ -23,3 +30,7 @@ COMPLETE_DOCUMENTATION.md
 ptweb-vnc/certs/*.pem
 ptweb-vnc/certs/*.key
 logs/
+
+# Backup files
+*.bak
+*.backup
