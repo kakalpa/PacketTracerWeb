@@ -89,7 +89,7 @@ bash deploy.sh
 
 1. **deploy.sh reads .env** for GeoIP settings
 2. **Nginx config is generated automatically** with GeoIP directives
-3. **GeoIP database is downloaded** (MaxMind GeoLite2 - public, no login)
+3. **GeoIP database is downloaded** (from DB-IP)
 4. **Database is mounted** into nginx container
 5. **Filtering starts immediately** on deployment
 
@@ -166,7 +166,38 @@ bash deploy.sh
 
 ---
 
-## 📝 Available Scripts
+## � HTTPS/SSL (Optional)
+
+Enable secure connections with a simple flag:
+
+```bash
+# In .env file:
+ENABLE_HTTPS=true
+
+bash deploy.sh
+```
+
+**What happens:**
+- ✅ HTTPS server listens on port 443
+- ✅ HTTP requests auto-redirect to HTTPS (301)
+- ✅ Self-signed certificate in `./ssl/` directory
+
+**Generate new certificate (if needed):**
+```bash
+bash generate-ssl-cert.sh
+```
+
+**Disable HTTPS:**
+```bash
+# In .env file:
+ENABLE_HTTPS=false
+
+bash deploy.sh
+```
+
+---
+
+## �📝 Available Scripts
 
 | Script | Purpose |
 |--------|---------|
@@ -175,8 +206,7 @@ bash deploy.sh
 | `remove-instance.sh` | Remove instances safely |
 | `tune_ptvnc.sh` | Adjust CPU/memory per container |
 | `generate-dynamic-connections.sh` | Regenerate Guacamole database connections |
-| `generate-ssl-cert.sh` | Generate self-signed SSL certificate for local HTTPS testing |
-| `test-deployment.sh` | Comprehensive health check (57 tests) |
+| `test-deployment.sh` | Comprehensive health check (41 tests) |
 
 ### Automatic Image Building
 
@@ -255,24 +285,6 @@ bash remove-instance.sh pt02 pt04 pt05 # Remove multiple specific instances
 ```
 ⚠️ **Warning:** Active users will be disconnected during removal. Always save work to `/shared/` beforehand.
 
-### Enable HTTPS (Local Testing)
-```bash
-# 1. Generate self-signed certificate (valid 365 days)
-bash generate-ssl-cert.sh
-
-# 2. Create/update .env with HTTPS settings
-echo "ENABLE_HTTPS=true" >> .env
-echo "SSL_CERT_PATH=/etc/ssl/certs/server.crt" >> .env
-echo "SSL_KEY_PATH=/etc/ssl/private/server.key" >> .env
-
-# 3. Deploy with HTTPS
-bash deploy.sh
-
-# 4. Access at https://localhost/ (accept browser security warning)
-```
-
-**Note:** Browser will warn about self-signed certificate - this is normal for local testing. Click "Advanced" → "Proceed anyway".
-
 ### Tune Performance
 ```bash
 bash tune_ptvnc.sh 2G 1   # 2GB RAM, 1 CPU per container
@@ -286,7 +298,7 @@ bash generate-dynamic-connections.sh 3
 
 ---
 
-## ✅ Testing Deployment Health
+### ✅ Testing Deployment Health
 
 After deployment, verify everything is working with the comprehensive test suite:
 
@@ -294,7 +306,9 @@ After deployment, verify everything is working with the comprehensive test suite
 bash test-deployment.sh
 ```
 
-This runs **57 tests** across 12 categories:
+This runs **57 tests** across 12 categories and displays configuration status:
+- **GeoIP Tests:** Enabled/Disabled (based on `.env`)
+- **HTTPS:** Enabled/Disabled (based on `ENABLE_HTTPS` setting)
 1. **Docker Containers** - Verify all 6 containers are running
 2. **Database Connectivity** - Test MariaDB and Guacamole DB
 3. **Shared Folder** - Verify `/shared/` mounted in all containers
