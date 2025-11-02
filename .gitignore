@@ -5,6 +5,7 @@ __pycache__/
 .vscode/
 .github/
 Documents/*
+/documents
 .DS_Store
 node_modules/
 *.deb
