@@ -212,8 +212,8 @@ PTWEB_EOF
         if ($blocked_country = 1) {
             return 444;
         }
-        # Block if allow-mode is on AND country is not in allow list AND not a known country (default -1)
-        if ($allowed_country = 0) {
+        # Block if allow-mode is on AND country is not in allow list (includes unknown/localhost value -1)
+        if ($allowed_country != 1) {
             return 444;
         }
         
