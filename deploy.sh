@@ -249,35 +249,11 @@ PTWEB_EOF
     # Root location - catches all other requests for Guacamole
     location / {
         # GeoIP filtering logic with trusted IP bypass
-        # Note: For testing with X-Forwarded-For headers, GeoIP lookups happen on remote_addr (Docker host IP)
-        # In production, this would work correctly with real client IPs
-        #
-        # Default: allow access (trusted until proven otherwise)
-        set $allow_access 1;
+        # Using map directives (defined at http level) instead of nested if statements
+        # which nginx does not support
         
-        # Check if this is a trusted IP (localhost, private networks, or configured trusted IPs)
-        # If trusted, skip GeoIP checks
-        if ($remote_addr ~* "^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)") {
-            set $allow_access 1;
-        }
-        
-        # GeoIP checks only apply to non-trusted IPs
-        # First, check BLOCK mode (blacklist)
-        if ($allow_access = 1) {
-            if ($blocked_country = 1) {
-                set $allow_access 0;
-            }
-        }
-        
-        # Then check ALLOW mode (whitelist) - takes precedence if enabled
-        if ($allow_access = 1) {
-            if ($allowed_country != 1) {
-                set $allow_access 0;
-            }
-        }
-        
-        # Return 444 (connection closed) if access denied
-        if ($allow_access = 0) {
+        # Check access: returns 1 if allowed, 0 if denied
+        if ($deny_by_geoip = 1) {
             return 444;
         }
         
