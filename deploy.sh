@@ -80,6 +80,46 @@ else
 fi
 echo ""
 
+# Step 0.5: Download and setup GeoIP database (if GeoIP filtering is enabled)
+echo -e "\e[32mStep 0.5. Setting up GeoIP Database\e[0m"
+GEOIP_DIR="${WORKDIR}/geoip"
+GEOIP_FILE="${GEOIP_DIR}/GeoIP.dat"
+
+# Check if GeoIP filtering is enabled
+if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
+    echo -e "\e[36m  GeoIP filtering is enabled, checking database...\e[0m"
+    
+    # Create geoip directory
+    mkdir -p "$GEOIP_DIR"
+    
+    # Check if GeoIP database already exists
+    if [ -f "$GEOIP_FILE" ]; then
+        echo -e "\e[32m  ✓ GeoIP database already exists: $GEOIP_FILE\e[0m"
+    else
+        echo -e "\e[36m  GeoIP database not found, downloading...\e[0m"
+        
+        # Download from DB-IP
+        DB_IP_URL="https://download.db-ip.com/free/dbip-country-lite-2025-11.mmdb.gz"
+        TEMP_GZ="${GEOIP_DIR}/dbip-country-lite.mmdb.gz"
+        
+        if wget -q -O "$TEMP_GZ" "$DB_IP_URL" 2>/dev/null; then
+            echo -e "\e[36m  ✓ Downloaded successfully, extracting...\e[0m"
+            gunzip -f "$TEMP_GZ"
+            # Rename to GeoIP.dat for nginx compatibility
+            if [ -f "${GEOIP_DIR}/dbip-country-lite.mmdb" ]; then
+                mv "${GEOIP_DIR}/dbip-country-lite.mmdb" "$GEOIP_FILE"
+                echo -e "\e[32m  ✓ GeoIP database extracted: $GEOIP_FILE\e[0m"
+            fi
+        else
+            echo -e "\e[33m  ⚠ Warning: Failed to download GeoIP database from DB-IP\e[0m"
+            echo -e "\e[33m  GeoIP filtering may not work properly\e[0m"
+        fi
+    fi
+else
+    echo -e "\e[33m  GeoIP filtering is disabled (NGINX_GEOIP_ALLOW=false, NGINX_GEOIP_BLOCK=false)\e[0m"
+fi
+echo ""
+
 # Step 1: Start MariaDB
 echo -e "\e[32mStep 1. Start MariaDB\e[0m"
 docker run --name guacamole-mariadb --restart unless-stopped \
@@ -296,12 +336,25 @@ if [ "$ENABLE_HTTPS" = "true" ]; then
     echo -e "\033[36m  ✓ HTTPS enabled: Mounting SSL certificates\033[0m"
 fi
 
+# Mount GeoIP database if GeoIP filtering is enabled
+GEOIP_MOUNTS=""
+if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
+    GEOIP_FILE="${WORKDIR}/geoip/GeoIP.dat"
+    if [ -f "$GEOIP_FILE" ]; then
+        GEOIP_MOUNTS="--mount type=bind,source=\"$GEOIP_FILE\",target=/usr/share/GeoIP/GeoIP.dat,readonly"
+        echo -e "\033[36m  ✓ GeoIP filtering enabled: Mounting GeoIP database\033[0m"
+    else
+        echo -e "\033[33m  ⚠ GeoIP filtering enabled but database not found at: $GEOIP_FILE\033[0m"
+    fi
+fi
+
 # Run nginx with appropriate port and SSL mounts
 eval "docker run --restart always --name pt-nginx1 \
   --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/www\",target=/usr/share/nginx/html,readonly \
   --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/conf\",target=/etc/nginx/conf.d,readonly \
   --mount type=bind,source=\"${WORKDIR}/shared\",target=/shared,readonly,bind-propagation=rprivate \
   $SSL_MOUNTS \
+  $GEOIP_MOUNTS \
   --link pt-guacamole:guacamole \
   -p 80:80 \
   $([ "$ENABLE_HTTPS" = "true" ] && echo "-p 443:443") \
