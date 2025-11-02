@@ -42,6 +42,9 @@ if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
     GEOIP_ENABLED=true
 fi
 
+# HTTPS configuration flag (default to false if not set)
+ENABLE_HTTPS=${ENABLE_HTTPS:-false}
+
 echo ""
 
 # Get actual running ptvnc instances
@@ -395,6 +398,12 @@ if [ "$GEOIP_ENABLED" = true ]; then
     echo -e "GeoIP Tests: ${GREEN}Enabled${NC}"
 else
     echo -e "GeoIP Tests: ${YELLOW}Disabled (not configured)${NC}"
+fi
+
+if [ "$ENABLE_HTTPS" = "true" ]; then
+    echo -e "HTTPS: ${GREEN}Enabled${NC}"
+else
+    echo -e "HTTPS: ${YELLOW}Disabled${NC}"
 fi
 echo ""
 
