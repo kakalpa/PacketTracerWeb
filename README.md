@@ -19,22 +19,149 @@ cd PacketTracerWeb
 # 2. Place Packet Tracer .deb file in repo root
 # (deploy.sh will automatically build the Docker image)
 
-# 3. Run deployment
+# 3. (Optional) Configure GeoIP or HTTPS in .env
+# See "GeoIP Filtering" section below for configuration options
+
+# 4. Run deployment
 bash deploy.sh
 
 # This will automatically:
+# - Generate nginx configuration (with GeoIP if configured)
+# - Download GeoIP database (if GeoIP filtering enabled)
 # - Build the ptvnc Docker image (first time only)
 # - Start MariaDB container
 # - Start 2 Packet Tracer VNC containers
 # - Configure Guacamole web interface
 # - Generate web access endpoints
+# - Mount GeoIP database (if available)
 
-# 4. Open browser
+# 5. Open browser
 http://localhost/
 
-# 5. Login: ptadmin / IlovePT
+# 6. Login: ptadmin / IlovePT
 
-# 6. Click connection (pt01, pt02, etc.) to access instance
+# 7. Click connection (pt01, pt02, etc.) to access instance
+```
+
+---
+
+## 🌍 GeoIP Filtering (NEW)
+
+The deployment now supports **automatic GeoIP configuration** integrated into `deploy.sh`. No separate scripts needed!
+
+### Quick Setup
+
+#### Enable Allowlist (Whitelist - Only allow specific countries)
+```bash
+# In .env file:
+NGINX_GEOIP_ALLOW=true
+GEOIP_ALLOW_COUNTRIES=US,CA,GB,AU
+
+bash deploy.sh
+```
+✅ Users from US, Canada, GB, Australia can access
+❌ All other countries get connection closed (no response sent)
+
+#### Enable Blocklist (Blacklist - Block specific countries)
+```bash
+# In .env file:
+NGINX_GEOIP_BLOCK=true
+GEOIP_BLOCK_COUNTRIES=CN,RU,IR
+
+bash deploy.sh
+```
+✅ All users allowed except those from China, Russia, Iran
+❌ Listed countries get connection closed
+
+#### Enable HTTPS with GeoIP
+```bash
+# In .env file:
+ENABLE_HTTPS=true
+NGINX_GEOIP_ALLOW=true
+GEOIP_ALLOW_COUNTRIES=US,CA
+SSL_CERT_PATH=/etc/ssl/certs/ssl-cert.pem
+SSL_KEY_PATH=/etc/ssl/private/ssl-key.pem
+
+bash deploy.sh
+```
+
+### How It Works
+
+1. **deploy.sh reads .env** for GeoIP settings
+2. **Nginx config is generated automatically** with GeoIP directives
+3. **GeoIP database is downloaded** (MaxMind GeoLite2 - public, no login)
+4. **Database is mounted** into nginx container
+5. **Filtering starts immediately** on deployment
+
+## 🔔 Recent: GeoIP & nginx changes + Fixed add/remove instance scripts
+
+### Nginx & GeoIP Setup
+- Custom `pt-nginx` image built with HTTP GeoIP module enabled (replaces standard nginx)
+- Complete `nginx.conf`/`ptweb.conf` generated at build/deploy time (no runtime injection)
+- `deploy.sh` detects Guacamole IP and substitutes into `ptweb.conf` for correct `proxy_pass`
+- GeoIP database (GeoIP.dat / GeoIPv6.dat) auto-downloaded and mounted when filtering enabled
+- By default permissive (allow all) - explicitly enable ALLOW or BLOCK modes in `.env`
+- Private/local IP ranges exempted from GeoIP checks
+
+### Fixed: add-instance.sh & remove-instance.sh
+- Both scripts now use custom `pt-nginx` image (was using standard `nginx`, causing config errors)
+- Scripts correctly restart nginx with GeoIP support when adding/removing instances
+- All services properly linked and reconnected during scaling operations
+
+### Configuration Options
+
+| Setting | Values | Purpose |
+|---------|--------|---------|
+| `NGINX_GEOIP_ALLOW` | `true/false` | Enable whitelist mode (allow only specified countries) |
+| `GEOIP_ALLOW_COUNTRIES` | Country codes | Comma-separated list (e.g., `US,CA,GB`) |
+| `NGINX_GEOIP_BLOCK` | `true/false` | Enable blacklist mode (block specified countries) |
+| `GEOIP_BLOCK_COUNTRIES` | Country codes | Comma-separated list (e.g., `CN,RU,IR`) |
+| `ENABLE_HTTPS` | `true/false` | Enable HTTPS with auto-redirect |
+| `SSL_CERT_PATH` | Path | Container path to certificate (e.g., `/etc/ssl/certs/ssl-cert.pem`) |
+| `SSL_KEY_PATH` | Path | Container path to private key (e.g., `/etc/ssl/private/ssl-key.pem`) |
+
+### Priority & Defaults
+
+- If `NGINX_GEOIP_ALLOW=true`, it takes precedence over BLOCK mode
+- If countries list is empty, filtering is skipped for that mode
+- If both are `false`, no GeoIP filtering is applied
+- GeoIP database is only downloaded if ALLOW or BLOCK mode is enabled
+- GeoIP database location: `./geoip/GeoIP.dat` (gitignored, not committed)
+
+### GeoIP Database
+
+- **Source:** MaxMind GeoLite2 (public, no authentication required)
+- **Format:** Binary GeoIP country database
+- **License:** CC BY-SA 4.0 (free & open)
+- **Accuracy:** ~99% country-level accuracy
+- **Size:** ~2MB compressed, ~20MB uncompressed
+- **Auto-Download:** `deploy.sh` downloads if not present
+- **Location:** `./geoip/GeoIP.dat` (local), `/usr/share/GeoIP/GeoIP.dat` (in container)
+
+### Troubleshooting GeoIP
+
+**GeoIP filtering not working?**
+```bash
+# Check if GeoIP database was downloaded
+ls -lh ./geoip/GeoIP.dat
+
+# View generated nginx config
+cat ptweb-vnc/pt-nginx/conf/ptweb.conf
+
+# Restart nginx with new config
+docker restart pt-nginx1
+```
+
+**Download failed during deploy?**
+```bash
+# Manual download
+mkdir -p ./geoip
+wget -O ./geoip/GeoIP.dat.gz \
+  "https://geolite.maxmind.com/download/geoip/database/GeoLiteCountry/GeoIP.dat.gz"
+gunzip ./geoip/GeoIP.dat.gz
+
+# Re-run deploy
+bash deploy.sh
 ```
 
 ---
@@ -43,17 +170,18 @@ http://localhost/
 
 | Script | Purpose |
 |--------|---------|
-| `deploy.sh` | Initial deployment (creates 2 instances, builds Docker image if needed) |
-| `add-instance.sh` | Add new instances dynamically (also builds image if missing) |
+| `deploy.sh` | Initial deployment (2 instances, auto-setup GeoIP/HTTPS if configured) |
+| `add-instance.sh` | Add new instances dynamically |
 | `remove-instance.sh` | Remove instances safely |
 | `tune_ptvnc.sh` | Adjust CPU/memory per container |
-| `generate-dynamic-connections.sh` | Regenerate database connections |
-| `test-deployment.sh` | Comprehensive health check (41 tests) |
+| `generate-dynamic-connections.sh` | Regenerate Guacamole database connections |
+| `generate-ssl-cert.sh` | Generate self-signed SSL certificate for local HTTPS testing |
+| `test-deployment.sh` | Comprehensive health check (57 tests) |
 
 ### Automatic Image Building
 
-Both `deploy.sh` and `add-instance.sh` automatically build the `ptvnc` Docker image if it doesn't exist:
-- ✅ First deployment: Image is built automatically (Step 0)
+`deploy.sh` and `add-instance.sh` automatically build the `ptvnc` Docker image if it doesn't exist:
+- ✅ First deployment: Image is built automatically
 - ✅ After cloning repo: Image is built on first run
 - ✅ After removing images: Image rebuilds automatically
 - ✅ Subsequent runs: Uses cached image (much faster)
@@ -99,6 +227,8 @@ This command will:
 - ✅ Remove all Packet Tracer containers (ptvnc1, ptvnc2, ...)
 - ✅ Remove all Guacamole containers (guacamole-mariadb, pt-guacd, pt-guacamole, pt-nginx1)
 - ✅ Remove all Docker volumes (clean slate data)
+- ✅ Clear GeoIP database cache (will re-download on next deploy if configured)
+
 - ✅ Then deploy fresh 2-instance stack
 
 ⚠️ **Note:** This removes all data. Save important files to `/shared/` before running!
@@ -125,6 +255,24 @@ bash remove-instance.sh pt02 pt04 pt05 # Remove multiple specific instances
 ```
 ⚠️ **Warning:** Active users will be disconnected during removal. Always save work to `/shared/` beforehand.
 
+### Enable HTTPS (Local Testing)
+```bash
+# 1. Generate self-signed certificate (valid 365 days)
+bash generate-ssl-cert.sh
+
+# 2. Create/update .env with HTTPS settings
+echo "ENABLE_HTTPS=true" >> .env
+echo "SSL_CERT_PATH=/etc/ssl/certs/server.crt" >> .env
+echo "SSL_KEY_PATH=/etc/ssl/private/server.key" >> .env
+
+# 3. Deploy with HTTPS
+bash deploy.sh
+
+# 4. Access at https://localhost/ (accept browser security warning)
+```
+
+**Note:** Browser will warn about self-signed certificate - this is normal for local testing. Click "Advanced" → "Proceed anyway".
+
 ### Tune Performance
 ```bash
 bash tune_ptvnc.sh 2G 1   # 2GB RAM, 1 CPU per container
@@ -146,7 +294,7 @@ After deployment, verify everything is working with the comprehensive test suite
 bash test-deployment.sh
 ```
 
-This runs **41 tests** across 11 categories:
+This runs **57 tests** across 12 categories:
 1. **Docker Containers** - Verify all 6 containers are running
 2. **Database Connectivity** - Test MariaDB and Guacamole DB
 3. **Shared Folder** - Verify `/shared/` mounted in all containers
@@ -158,8 +306,9 @@ This runs **41 tests** across 11 categories:
 9. **Docker Volumes** - Check persistent storage
 10. **Database Schema** - Validate Guacamole tables
 11. **Docker Networking** - Test container communication
+12. **GeoIP Configuration** - Verify module, database, and filtering (if enabled)
 
-**Expected Output:** ✅ All 41 tests pass
+**Expected Output:** ✅ All 57 tests pass
 
 ---
 

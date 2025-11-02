@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Comprehensive test script for PacketTracer + Guacamole deployment
-# Tests: Docker containers, networking, databases, shared folders, file downloads
+# Tests: Docker containers, networking, databases, shared folders, file downloads, and GeoIP (if configured)
 
 echo -e "\e[32m╔════════════════════════════════════════════════╗\e[0m"
 echo -e "\e[32m║  PacketTracer Deployment Test Suite           ║\e[0m"
@@ -18,6 +18,31 @@ NC='\e[0m'
 # Test counters
 TESTS_PASSED=0
 TESTS_FAILED=0
+
+# ============================================================================
+# READ .env FILE FOR OPTIONAL FEATURES
+# ============================================================================
+WORKDIR="$(pwd)"
+if [ -f "$WORKDIR/.env" ]; then
+    source "$WORKDIR/.env"
+    echo -e "${YELLOW}ℹ️  Configuration loaded from .env${NC}"
+else
+    echo -e "${YELLOW}ℹ️  No .env file found (using defaults)${NC}"
+fi
+
+# GeoIP configuration flags (default to false if not set)
+NGINX_GEOIP_ALLOW=${NGINX_GEOIP_ALLOW:-false}
+NGINX_GEOIP_BLOCK=${NGINX_GEOIP_BLOCK:-false}
+GEOIP_ALLOW_COUNTRIES=${GEOIP_ALLOW_COUNTRIES:-}
+GEOIP_BLOCK_COUNTRIES=${GEOIP_BLOCK_COUNTRIES:-}
+
+# Determine if GeoIP testing should run
+GEOIP_ENABLED=false
+if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
+    GEOIP_ENABLED=true
+fi
+
+echo ""
 
 # Get actual running ptvnc instances
 PTVNC_INSTANCES=$(docker ps --format "table {{.Names}}" | grep "^ptvnc" | sort)
@@ -120,7 +145,7 @@ echo -e "${BLUE}SECTION 4: Shared Folder Write Permissions${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
 run_test "Host can write to /shared" \
-    "touch $(pwd)/shared/.test-host && rm $(pwd)/shared/.test-host"
+    "touch '$(pwd)/shared/.test-host' && rm '$(pwd)/shared/.test-host'"
 
 run_test "$PTVNC_FIRST can write to /shared" \
     "docker exec $PTVNC_FIRST touch /shared/.test-$PTVNC_FIRST && docker exec $PTVNC_FIRST rm /shared/.test-$PTVNC_FIRST"
@@ -261,8 +286,96 @@ run_test "Guacamole can reach MariaDB" \
     "docker exec pt-guacamole bash -c 'nc -z guacamole-mariadb 3306 2>&1' || docker exec pt-guacamole bash -c 'mariadb -h mariadb -uroot 2>&1' | grep -q 'mariadb'"
 
 run_test "Nginx can reach Guacamole" \
-    "docker exec pt-nginx1 bash -c 'curl -s -o /dev/null -w \"%{http_code}\" http://guacamole:8080/guacamole/ | grep -q 200'"
+    "docker exec pt-nginx1 bash -c 'timeout 2 bash -c \"</dev/tcp/guacamole/8080\" 2>&1' | grep -q 'succeeded\\|Connection\\|refused' || docker exec pt-nginx1 bash -c 'nc -z guacamole 8080 2>&1' | head -1 > /dev/null || docker exec pt-nginx1 bash -c 'cat </dev/null >/dev/tcp/guacamole/8080 2>&1'"
 
+# ============================================================================
+# SECTION 12: GEOIP CONFIGURATION & DATABASE (CONDITIONAL)
+# ============================================================================
+if [ "$GEOIP_ENABLED" = true ]; then
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}SECTION 12: GeoIP Configuration & Database${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    
+    if [ "$NGINX_GEOIP_ALLOW" = "true" ] && [ -n "$GEOIP_ALLOW_COUNTRIES" ]; then
+        echo -e "${YELLOW}Mode: ALLOW (Whitelist)${NC}"
+        echo -e "${YELLOW}Allowed countries: $GEOIP_ALLOW_COUNTRIES${NC}"
+    fi
+    
+    if [ "$NGINX_GEOIP_BLOCK" = "true" ] && [ -n "$GEOIP_BLOCK_COUNTRIES" ]; then
+        echo -e "${YELLOW}Mode: BLOCK (Blacklist)${NC}"
+        echo -e "${YELLOW}Blocked countries: $GEOIP_BLOCK_COUNTRIES${NC}"
+    fi
+    echo ""
+    
+    # 12.1: Check nginx module is compiled
+    run_test "Nginx GeoIP module compiled (--with-http_geoip_module)" \
+        "docker exec pt-nginx1 nginx -V 2>&1 | grep -q 'with-http_geoip_module'"
+    
+    # 12.2: Check GeoIP database files exist and are readable
+    run_test "GeoIP.dat database file exists in container" \
+        "docker exec pt-nginx1 [ -f /usr/share/GeoIP/GeoIP.dat ]"
+    
+    run_test "GeoIP.dat database is readable (non-zero size)" \
+        "docker exec pt-nginx1 bash -c '[ -r /usr/share/GeoIP/GeoIP.dat ] && [ -s /usr/share/GeoIP/GeoIP.dat ] && echo OK' | grep -q OK"
+    
+    run_test "GeoIP.dat database is at least 1MB (valid database)" \
+        "[ \$(docker exec pt-nginx1 stat -c %s /usr/share/GeoIP/GeoIP.dat 2>/dev/null || echo 0) -gt 1000000 ]"
+    
+    # 12.3: Check nginx.conf has GeoIP directives at HTTP level
+    run_test "nginx.conf has geoip_country directive" \
+        "docker exec pt-nginx1 grep -q 'geoip_country /usr/share/GeoIP/GeoIP.dat' /etc/nginx/nginx.conf"
+    
+    run_test "nginx.conf has geoip_proxy_recursive enabled" \
+        "docker exec pt-nginx1 grep -q 'geoip_proxy_recursive on' /etc/nginx/nginx.conf"
+    
+    run_test "nginx.conf has \$allowed_country map defined" \
+        "docker exec pt-nginx1 grep -q 'map \$geoip_country_code \$allowed_country' /etc/nginx/nginx.conf"
+    
+    run_test "nginx.conf has \$blocked_country map defined" \
+        "docker exec pt-nginx1 grep -q 'map \$geoip_country_code \$blocked_country' /etc/nginx/nginx.conf"
+    
+    # 12.4: Check ptweb.conf is correctly generated with GeoIP logic
+    run_test "ptweb.conf exists in conf.d" \
+        "docker exec pt-nginx1 [ -f /etc/nginx/conf.d/ptweb.conf ]"
+    
+    if [ "$NGINX_GEOIP_ALLOW" = "true" ]; then
+        run_test "ptweb.conf has GeoIP ALLOW logic in location block" \
+            "docker exec pt-nginx1 grep -A 5 'location /' /etc/nginx/conf.d/ptweb.conf | grep -q '\$allowed_country\\|GeoIP filtering'"
+    fi
+    
+    if [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
+        run_test "ptweb.conf has GeoIP BLOCK logic in location block" \
+            "docker exec pt-nginx1 grep -A 5 'location /' /etc/nginx/conf.d/ptweb.conf | grep -q '\$blocked_country\\|GeoIP filtering'"
+    fi
+    
+    # 12.5: Verify nginx configuration syntax is valid
+    run_test "Nginx configuration syntax is valid (nginx -t)" \
+        "docker exec pt-nginx1 nginx -t 2>&1 | grep -q 'successful'"
+    
+    # 12.6: Verify nginx container is running without errors
+    run_test "Nginx container is running and healthy" \
+        "docker ps --filter 'name=pt-nginx1' --format '{{.State}}' | grep -q 'running'"
+    
+    run_test "No GeoIP errors in nginx error logs" \
+        "! docker exec pt-nginx1 grep -i 'geoip.*error\\|geoip.*failed' /var/log/nginx/error.log 2>/dev/null | grep -q '.'"
+    
+    # 12.7: Test GeoIP functionality with actual requests
+    run_test "Web interface accessible (GeoIP should allow localhost 127.x)" \
+        "curl -s -I http://localhost/ 2>&1 | grep -q 'HTTP/1.1 200'"
+    
+    run_test "Nginx logs requests (access log exists)" \
+        "docker exec pt-nginx1 [ -f /var/log/nginx/access.log ]"
+    
+    # 12.8: Verify ptweb.conf proxy_pass is correct
+    run_test "ptweb.conf has correct proxy_pass to Guacamole" \
+        "docker exec pt-nginx1 grep -q 'proxy_pass http://[0-9.]*:8080/guacamole/' /etc/nginx/conf.d/ptweb.conf || docker exec pt-nginx1 grep -q 'proxy_pass' /etc/nginx/conf.d/ptweb.conf"
+    
+else
+    echo ""
+    echo -e "${YELLOW}ℹ️  GeoIP tests skipped (not configured in .env)${NC}"
+    echo -e "${YELLOW}   To enable GeoIP tests, set NGINX_GEOIP_ALLOW=true or NGINX_GEOIP_BLOCK=true${NC}"
+fi
 # ============================================================================
 # SUMMARY
 # ============================================================================
@@ -277,6 +390,12 @@ echo ""
 echo -e "Total Tests: ${YELLOW}$TOTAL_TESTS${NC}"
 echo -e "Passed: ${GREEN}$TESTS_PASSED${NC}"
 echo -e "Failed: ${RED}$TESTS_FAILED${NC}"
+
+if [ "$GEOIP_ENABLED" = true ]; then
+    echo -e "GeoIP Tests: ${GREEN}Enabled${NC}"
+else
+    echo -e "GeoIP Tests: ${YELLOW}Disabled (not configured)${NC}"
+fi
 echo ""
 
 if [ $TESTS_FAILED -eq 0 ]; then

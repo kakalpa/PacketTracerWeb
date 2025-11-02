@@ -175,7 +175,7 @@ docker run --restart always --name pt-nginx1 \
   --mount type=bind,source="$(pwd)"/shared,target=/shared,readonly \
   --link pt-guacamole:guacamole \
   -p 80:80 \
-  -d nginx
+  -d pt-nginx
 sleep 5
 
 echo "✅ Services restarted"

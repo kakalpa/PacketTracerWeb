@@ -51,6 +51,14 @@ if ! docker image inspect ptvnc:latest &>/dev/null; then
 else
     echo "ptvnc image already exists, skipping build"
 fi
+
+# Build pt-nginx Docker image if it doesn't exist
+if ! docker image inspect pt-nginx:latest &>/dev/null; then
+    echo "Building pt-nginx image..."
+    docker build -t pt-nginx ptweb-vnc/pt-nginx/
+else
+    echo "pt-nginx image already exists, skipping build"
+fi
 echo ""
 
 # Step 1: Start MariaDB
@@ -69,6 +77,85 @@ sleep 10
 echo -e "\e[32mStep 2. Start Packet Tracer VNC containers\e[0m"
 mkdir -p "${WORKDIR}/shared"
 chmod 777 "${WORKDIR}/shared"
+
+# Query Guacamole container IP and generate ptweb.conf
+sleep 3
+GUACAMOLE_IP=$(docker inspect pt-guacamole --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "172.17.0.6")
+GUACAMOLE_IP=$(echo "$GUACAMOLE_IP" | tr -d '
+' | tr -d ' ')
+echo -e "\033[36m  ✓ Guacamole IP: $GUACAMOLE_IP\033[0m"
+
+# Generate ptweb.conf with the correct Guacamole IP
+# Use single quotes for heredoc to prevent shell expansion of nginx variables,
+# then use sed to substitute the GUACAMOLE_IP placeholder
+{
+    cat << 'PTWEB_EOF'
+server {
+    listen 80;
+    server_name localhost;
+
+    charset utf-8;
+
+    # Serve shared downloads with highest priority
+    location ^~ /downloads/ {
+        alias /shared/;
+        autoindex on;
+        autoindex_exact_size off;
+        autoindex_localtime on;
+    }
+
+    # File manager interface
+    location ^~ /files {
+        rewrite ^/files/?$ /file-manager.html break;
+    }
+
+    # Root location - catches all other requests for Guacamole
+    location / {
+        # GeoIP filtering logic (demonstration)
+        # Note: For testing with X-Forwarded-For headers, GeoIP lookups happen on remote_addr (Docker host IP)
+        # In production, this would work correctly with real client IPs
+        #
+        # Block if country is in blocked list
+        if ($blocked_country = 1) {
+            return 444;
+        }
+        # Block if allow-mode is on AND country is not in allow list AND not a known country (default -1)
+        if ($allowed_country = 0) {
+            return 444;
+        }
+        
+        proxy_redirect off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support for Guacamole tunneling
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        client_max_body_size 10m;
+        client_body_buffer_size 128k;
+        proxy_connect_timeout 90;
+        proxy_send_timeout 90;
+        proxy_read_timeout 90;
+        proxy_buffers 32 4k;
+        proxy_pass http://GUACAMOLE_IP_PLACEHOLDER:8080/guacamole/;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
+}
+PTWEB_EOF
+} | sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g" > "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
+echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP\033[0m"
 for ((i=1; i<=$numofPT; i++)); do
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
@@ -117,13 +204,92 @@ docker run --name pt-guacamole --restart always \
 echo -e "\e[32mStep 5. Start Nginx web server\e[0m"
 mkdir -p "${WORKDIR}/shared"
 chmod 777 "${WORKDIR}/shared"
+
+# Query Guacamole container IP and generate ptweb.conf
+sleep 3
+GUACAMOLE_IP=$(docker inspect pt-guacamole --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "172.17.0.6")
+GUACAMOLE_IP=$(echo "$GUACAMOLE_IP" | tr -d '
+' | tr -d ' ')
+echo -e "\033[36m  ✓ Guacamole IP: $GUACAMOLE_IP\033[0m"
+
+# Generate ptweb.conf with the correct Guacamole IP
+# Use single quotes for heredoc to prevent shell expansion of nginx variables,
+# then use sed to substitute the GUACAMOLE_IP placeholder
+{
+    cat << 'PTWEB_EOF'
+server {
+    listen 80;
+    server_name localhost;
+
+    charset utf-8;
+
+    # Serve shared downloads with highest priority
+    location ^~ /downloads/ {
+        alias /shared/;
+        autoindex on;
+        autoindex_exact_size off;
+        autoindex_localtime on;
+    }
+
+    # File manager interface
+    location ^~ /files {
+        rewrite ^/files/?$ /file-manager.html break;
+    }
+
+    # Root location - catches all other requests for Guacamole
+    location / {
+        # GeoIP filtering logic (demonstration)
+        # Note: For testing with X-Forwarded-For headers, GeoIP lookups happen on remote_addr (Docker host IP)
+        # In production, this would work correctly with real client IPs
+        #
+        # Block if country is in blocked list
+        if ($blocked_country = 1) {
+            return 444;
+        }
+        # Block if allow-mode is on AND country is not in allow list AND not a known country (default -1)
+        if ($allowed_country = 0) {
+            return 444;
+        }
+        
+        proxy_redirect off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support for Guacamole tunneling
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        client_max_body_size 10m;
+        client_body_buffer_size 128k;
+        proxy_connect_timeout 90;
+        proxy_send_timeout 90;
+        proxy_read_timeout 90;
+        proxy_buffers 32 4k;
+        proxy_pass http://GUACAMOLE_IP_PLACEHOLDER:8080/guacamole/;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
+}
+PTWEB_EOF
+} | sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g" > "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
+echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP\033[0m"
 docker run --restart always --name pt-nginx1 \
   --mount type=bind,source="${WORKDIR}/ptweb-vnc/pt-nginx/www",target=/usr/share/nginx/html,readonly \
   --mount type=bind,source="${WORKDIR}/ptweb-vnc/pt-nginx/conf",target=/etc/nginx/conf.d,readonly \
   --mount type=bind,source="${WORKDIR}/shared",target=/shared,readonly,bind-propagation=rprivate \
   --link pt-guacamole:guacamole \
   -p 80:${nginxport} \
-  -d nginx
+  -d pt-nginx
 
 # Step 6: Generate dynamic connections
 echo -e "\e[32mStep 6. Generating dynamic Guacamole connections\e[0m"
