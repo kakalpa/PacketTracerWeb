@@ -11,8 +11,10 @@ inspired by this original project [[ptremote](https://github.com/cnkang/ptremote
 - 4GB+ RAM available
 
 ### Installation
+
+#### Version 2.0 (Default) - With Automatic GeoIP Database Support
 ```bash
-# 1. Clone the repository
+# 1. Clone the repository (latest version with GeoIP features)
 git clone https://github.com/kakalpa/PacketTracerWeb.git
 cd PacketTracerWeb
 
@@ -42,6 +44,31 @@ http://localhost/
 
 # 7. Click connection (pt01, pt02, etc.) to access instance
 ```
+
+#### Version 1.0 (Without GeoIP) - Legacy Release
+If you prefer the version without GeoIP filtering capabilities, use v1.0:
+```bash
+# Clone version 1.0 (legacy, without GeoIP database support)
+git clone --branch v1.0 https://github.com/kakalpa/PacketTracerWeb.git
+cd PacketTracerWeb
+
+# Place Packet Tracer .deb in repo root
+# Configure optional HTTPS in .env
+
+# Run deployment
+bash deploy.sh
+
+# This will deploy with basic setup (no GeoIP filtering)
+```
+
+**Differences between versions:**
+| Feature | v2.0 (Current) | v1.0 (Legacy) |
+|---------|---|---|
+| **GeoIP Database** | ✅ Automatic download & mounting | ❌ Manual setup |
+| **GeoIP Filtering** | ✅ Allowlist/Blocklist modes | ⚠️ Requires manual config |
+| **Nginx** | ✅ Custom image with GeoIP module | ✅ Standard nginx |
+| **HTTPS Support** | ✅ Yes | ✅ Yes |
+| **Maintenance** | ✅ Latest features | ⚠️ No updates |
 
 ---
 
