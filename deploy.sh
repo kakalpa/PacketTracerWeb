@@ -11,13 +11,32 @@ set -e
 cd "$(dirname "$0")"
 WORKDIR="$(pwd)"
 
-# Configuration from install.sh
+# Load environment configuration from .env if it exists
+if [ -f "$WORKDIR/.env" ]; then
+    source "$WORKDIR/.env"
+    echo -e "\e[36mℹ️  Configuration loaded from .env\e[0m"
+fi
+
+# Configuration from install.sh (with .env overrides)
 dbuser="ptdbuser"
 dbpass="ptdbpass"
 dbname="guacamole_db"
 numofPT=2
 PTfile="CiscoPacketTracer.deb"
-nginxport=80
+
+# SSL/HTTPS Configuration (from .env or defaults)
+ENABLE_HTTPS=${ENABLE_HTTPS:-false}
+SSL_CERT_PATH=${SSL_CERT_PATH:-/etc/ssl/certs/server.crt}
+SSL_KEY_PATH=${SSL_KEY_PATH:-/etc/ssl/private/server.key}
+
+# Determine nginx port and setup based on HTTPS
+if [ "$ENABLE_HTTPS" = "true" ]; then
+    nginxport=443
+    echo -e "\e[36mℹ️  HTTPS mode enabled (port 443)\e[0m"
+else
+    nginxport=80
+    echo -e "\e[36mℹ️  HTTP mode (port 80)\e[0m"
+fi
 
 # Handle recreate argument
 if [[ "${1:-}" == "recreate" ]]; then
@@ -85,17 +104,51 @@ GUACAMOLE_IP=$(echo "$GUACAMOLE_IP" | tr -d '
 ' | tr -d ' ')
 echo -e "\033[36m  ✓ Guacamole IP: $GUACAMOLE_IP\033[0m"
 
-# Generate ptweb.conf with the correct Guacamole IP
-# Use single quotes for heredoc to prevent shell expansion of nginx variables,
-# then use sed to substitute the GUACAMOLE_IP placeholder
-{
+# Helper function to generate nginx config with HTTPS support
+generate_nginx_config() {
+    local guacamole_ip="$1"
+    local enable_https="$2"
+    local cert_path="$3"
+    local key_path="$4"
+    
+    # Generate HTTP server block (always included)
     cat << 'PTWEB_EOF'
 server {
     listen 80;
     server_name localhost;
 
     charset utf-8;
+PTWEB_EOF
+    
+    # If HTTPS is enabled, add redirect from HTTP to HTTPS
+    if [ "$enable_https" = "true" ]; then
+        cat << 'PTWEB_EOF'
+    # Redirect HTTP to HTTPS
+    return 301 https://$host$request_uri;
+}
 
+server {
+    listen 443 ssl http2;
+    server_name localhost;
+
+    charset utf-8;
+
+    # SSL Configuration
+    ssl_certificate SSL_CERT_PATH_PLACEHOLDER;
+    ssl_certificate_key SSL_KEY_PATH_PLACEHOLDER;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+PTWEB_EOF
+    else
+        cat << 'PTWEB_EOF'
+
+PTWEB_EOF
+    fi
+    
+    # Common server block content
+    cat << 'PTWEB_EOF'
     # Serve shared downloads with highest priority
     location ^~ /downloads/ {
         alias /shared/;
@@ -154,8 +207,14 @@ server {
     }
 }
 PTWEB_EOF
-} | sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g" > "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
-echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP\033[0m"
+}
+
+# Generate ptweb.conf with HTTPS support if enabled
+generate_nginx_config "$GUACAMOLE_IP" "$ENABLE_HTTPS" "$SSL_CERT_PATH" "$SSL_KEY_PATH" | \
+    sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g; s|SSL_CERT_PATH_PLACEHOLDER|$SSL_CERT_PATH|g; s|SSL_KEY_PATH_PLACEHOLDER|$SSL_KEY_PATH|g" > \
+    "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
+echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP and HTTPS=$([ "$ENABLE_HTTPS" = "true" ] && echo "enabled" || echo "disabled")\033[0m"
+
 for ((i=1; i<=$numofPT; i++)); do
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
@@ -205,91 +264,48 @@ echo -e "\e[32mStep 5. Start Nginx web server\e[0m"
 mkdir -p "${WORKDIR}/shared"
 chmod 777 "${WORKDIR}/shared"
 
-# Query Guacamole container IP and generate ptweb.conf
-sleep 3
-GUACAMOLE_IP=$(docker inspect pt-guacamole --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "172.17.0.6")
-GUACAMOLE_IP=$(echo "$GUACAMOLE_IP" | tr -d '
+# Query Guacamole container IP (if it wasn't already determined)
+if [ -z "$GUACAMOLE_IP" ]; then
+    sleep 3
+    GUACAMOLE_IP=$(docker inspect pt-guacamole --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "172.17.0.6")
+    GUACAMOLE_IP=$(echo "$GUACAMOLE_IP" | tr -d '
 ' | tr -d ' ')
+fi
 echo -e "\033[36m  ✓ Guacamole IP: $GUACAMOLE_IP\033[0m"
 
-# Generate ptweb.conf with the correct Guacamole IP
-# Use single quotes for heredoc to prevent shell expansion of nginx variables,
-# then use sed to substitute the GUACAMOLE_IP placeholder
-{
-    cat << 'PTWEB_EOF'
-server {
-    listen 80;
-    server_name localhost;
+# Regenerate ptweb.conf with the correct Guacamole IP and HTTPS settings
+generate_nginx_config "$GUACAMOLE_IP" "$ENABLE_HTTPS" "$SSL_CERT_PATH" "$SSL_KEY_PATH" | \
+    sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g; s|SSL_CERT_PATH_PLACEHOLDER|$SSL_CERT_PATH|g; s|SSL_KEY_PATH_PLACEHOLDER|$SSL_KEY_PATH|g" > \
+    "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
+echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP and HTTPS=$([ "$ENABLE_HTTPS" = "true" ] && echo "enabled" || echo "disabled")\033[0m"
 
-    charset utf-8;
+# Mount SSL certificates if HTTPS is enabled
+SSL_MOUNTS=""
+if [ "$ENABLE_HTTPS" = "true" ]; then
+    # Extract directory paths from certificate and key paths
+    SSL_CERT_DIR=$(dirname "$SSL_CERT_PATH")
+    SSL_KEY_DIR=$(dirname "$SSL_KEY_PATH")
+    
+    # Mount certificate files if they exist on host
+    if [ -f "./ssl/server.crt" ]; then
+        SSL_MOUNTS="$SSL_MOUNTS --mount type=bind,source=\"$(pwd)/ssl/server.crt\",target=$SSL_CERT_PATH,readonly"
+    fi
+    if [ -f "./ssl/server.key" ]; then
+        SSL_MOUNTS="$SSL_MOUNTS --mount type=bind,source=\"$(pwd)/ssl/server.key\",target=$SSL_KEY_PATH,readonly"
+    fi
+    echo -e "\033[36m  ✓ HTTPS enabled: Mounting SSL certificates\033[0m"
+fi
 
-    # Serve shared downloads with highest priority
-    location ^~ /downloads/ {
-        alias /shared/;
-        autoindex on;
-        autoindex_exact_size off;
-        autoindex_localtime on;
-    }
-
-    # File manager interface
-    location ^~ /files {
-        rewrite ^/files/?$ /file-manager.html break;
-    }
-
-    # Root location - catches all other requests for Guacamole
-    location / {
-        # GeoIP filtering logic (demonstration)
-        # Note: For testing with X-Forwarded-For headers, GeoIP lookups happen on remote_addr (Docker host IP)
-        # In production, this would work correctly with real client IPs
-        #
-        # Block if country is in blocked list
-        if ($blocked_country = 1) {
-            return 444;
-        }
-        # Block if allow-mode is on AND country is not in allow list AND not a known country (default -1)
-        if ($allowed_country = 0) {
-            return 444;
-        }
-        
-        proxy_redirect off;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # WebSocket support for Guacamole tunneling
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        client_max_body_size 10m;
-        client_body_buffer_size 128k;
-        proxy_connect_timeout 90;
-        proxy_send_timeout 90;
-        proxy_read_timeout 90;
-        proxy_buffers 32 4k;
-        proxy_pass http://GUACAMOLE_IP_PLACEHOLDER:8080/guacamole/;
-    }
-
-    location ~ /\.ht {
-        deny all;
-    }
-
-    error_page   500 502 503 504  /50x.html;
-    location = /50x.html {
-        root   /usr/share/nginx/html;
-    }
-}
-PTWEB_EOF
-} | sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g" > "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
-echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP\033[0m"
-docker run --restart always --name pt-nginx1 \
-  --mount type=bind,source="${WORKDIR}/ptweb-vnc/pt-nginx/www",target=/usr/share/nginx/html,readonly \
-  --mount type=bind,source="${WORKDIR}/ptweb-vnc/pt-nginx/conf",target=/etc/nginx/conf.d,readonly \
-  --mount type=bind,source="${WORKDIR}/shared",target=/shared,readonly,bind-propagation=rprivate \
+# Run nginx with appropriate port and SSL mounts
+eval "docker run --restart always --name pt-nginx1 \
+  --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/www\",target=/usr/share/nginx/html,readonly \
+  --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/conf\",target=/etc/nginx/conf.d,readonly \
+  --mount type=bind,source=\"${WORKDIR}/shared\",target=/shared,readonly,bind-propagation=rprivate \
+  $SSL_MOUNTS \
   --link pt-guacamole:guacamole \
-  -p 80:${nginxport} \
-  -d pt-nginx
+  -p 80:80 \
+  $([ "$ENABLE_HTTPS" = "true" ] && echo "-p 443:443") \
+  -d pt-nginx"
 
 # Step 6: Generate dynamic connections
 echo -e "\e[32mStep 6. Generating dynamic Guacamole connections\e[0m"

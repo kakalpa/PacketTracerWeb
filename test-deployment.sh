@@ -185,13 +185,13 @@ echo -e "${BLUE}SECTION 6: Web Endpoints${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
 run_test "Guacamole root endpoint (HTTP 200)" \
-    "curl -s -I http://localhost/ 2>&1 | grep -q 'HTTP/1.1 200'"
+    "curl -k -L -s -I http://localhost/ 2>&1 | grep -q 'HTTP/1.1 200\\|HTTP/2 200'"
 
 run_test "Downloads endpoint (HTTP 200)" \
-    "curl -s -I http://localhost/downloads/ 2>&1 | grep -q 'HTTP/1.1 200'"
+    "curl -k -L -s -I http://localhost/downloads/ 2>&1 | grep -q 'HTTP/1.1 200\\|HTTP/2 200'"
 
 run_test "Downloads directory listing works" \
-    "curl -s http://localhost/downloads/ 2>&1 | grep -q '<title>Index of /downloads/</title>'"
+    "curl -k -L -s http://localhost/downloads/ 2>&1 | grep -q '<title>Index of /downloads/</title>'"
 
 # ============================================================================
 # SECTION 7: FILE DOWNLOAD WORKFLOW
@@ -215,10 +215,10 @@ run_test "File visible from $PTVNC_SECOND" \
     "docker exec $PTVNC_SECOND [ -f /shared/$TEST_FILE ]"
 
 run_test "File downloadable via /downloads/" \
-    "curl -s http://localhost/downloads/$TEST_FILE 2>&1 | grep -q 'Test file'"
+    "curl -k -L -s http://localhost/downloads/$TEST_FILE 2>&1 | grep -q 'Test file'"
 
 run_test "Downloaded file content matches" \
-    "[ \"\$(curl -s http://localhost/downloads/$TEST_FILE)\" = \"$TEST_CONTENT\" ]"
+    "[ \"\$(curl -k -L -s http://localhost/downloads/$TEST_FILE)\" = \"$TEST_CONTENT\" ]"
 
 # Cleanup test file
 rm "$(pwd)/shared/$TEST_FILE" 2>/dev/null || true
@@ -362,7 +362,7 @@ if [ "$GEOIP_ENABLED" = true ]; then
     
     # 12.7: Test GeoIP functionality with actual requests
     run_test "Web interface accessible (GeoIP should allow localhost 127.x)" \
-        "curl -s -I http://localhost/ 2>&1 | grep -q 'HTTP/1.1 200'"
+        "curl -k -L -s -I http://localhost/ 2>&1 | grep -q 'HTTP/1.1 200\\|HTTP/2 200'"
     
     run_test "Nginx logs requests (access log exists)" \
         "docker exec pt-nginx1 [ -f /var/log/nginx/access.log ]"

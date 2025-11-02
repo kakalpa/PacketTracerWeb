@@ -1,0 +1,72 @@
+```plaintext
+# ptweb.conf.template
+# This template is informational. The generator script `generate-nginx-conf.sh`
+# will create `ptweb.conf` in this directory based on the project's `.env`.
+
+# The generator supports three main features controlled by the .env file:
+# - ENABLE_HTTPS=true/false                    -> generate HTTPS server block + 80->443 redirect
+# - NGINX_GEOIP_BLOCK=true/false               -> add GeoIP BLOCK (blacklist) rule
+# - NGINX_GEOIP_ALLOW=true/false               -> add GeoIP ALLOW (whitelist) rule
+#
+# GeoIP Modes:
+#   - BLOCK mode (NGINX_GEOIP_BLOCK=true):     Block traffic from GEOIP_BLOCK_COUNTRIES
+#   - ALLOW mode (NGINX_GEOIP_ALLOW=true):     Allow ONLY traffic from GEOIP_ALLOW_COUNTRIES
+#   - If ALLOW is true, it takes precedence over BLOCK mode
+#   - If both are false or countries lists are empty, no GeoIP filtering is applied
+
+# Example GeoIP mapping at http context (inserted when enabled):
+
+## GeoIP BLOCK mode example
+# geoip_country /usr/share/GeoIP/GeoIP.dat;
+# geoip_proxy_recursive on;
+# map $geoip_country_code $blocked_country { default 0; ~^(CN|RU|IR)$ 1; }
+
+## GeoIP ALLOW mode example (whitelist only US, CA, GB, AU)
+# geoip_country /usr/share/GeoIP/GeoIP.dat;
+# geoip_proxy_recursive on;
+# map $geoip_country_code $allowed_country { default 0; ~^(US|CA|GB|AU)$ 1; }
+
+## HTTP -> HTTPS redirect server (if ENABLE_HTTPS=true)
+# server { listen 80; server_name localhost; return 301 https://$host$request_uri; }
+
+## HTTPS server (if enabled)
+# server {
+#   listen 443 ssl;
+#   server_name localhost;
+#   ssl_certificate /etc/ssl/certs/ssl-cert.pem;
+#   ssl_certificate_key /etc/ssl/private/ssl-key.pem;
+#
+#   # GeoIP filtering check for ALLOW mode
+#   if ($allowed_country = 0) { return 444; }
+#
+#   # OR GeoIP filtering check for BLOCK mode
+#   if ($blocked_country = 1) { return 444; }
+#
+#   # proxy settings and location blocks here (copied from generated ptweb.conf)
+# }
+
+# Usage:
+# 1. Edit the project `.env` at the repository root to set:
+#    - ENABLE_HTTPS=true|false
+#    - NGINX_GEOIP_BLOCK=true|false
+#    - NGINX_GEOIP_ALLOW=true|false
+#    - GEOIP_BLOCK_COUNTRIES (comma-separated, e.g. CN,RU,IR)
+#    - GEOIP_ALLOW_COUNTRIES (comma-separated, e.g. US,CA,GB,AU)
+#    - SSL_CERT_PATH and SSL_KEY_PATH (paths inside the nginx container)
+#
+# 2. Make the generator executable and run it:
+#    chmod +x generate-nginx-conf.sh
+#    ./generate-nginx-conf.sh
+#
+# 3. Start the stack (the generated ptweb.conf will be mounted):
+#    docker-compose up -d
+#
+# Notes & caveats:
+# - For GeoIP to work, the GeoIP database must be available in the nginx container:
+#   Install: apt-get update && apt-get install -y geoip-database
+#   Or mount manually: -v /path/to/GeoIP.dat:/usr/share/GeoIP/GeoIP.dat:ro
+# - ALLOW mode acts as a whitelist; deny anything NOT in the list (returns 444)
+# - BLOCK mode acts as a blacklist; deny anything IN the list (returns 444)
+# - 444 is a special nginx code that closes the connection without sending a response
+# - Production deployments should use proper templating or configuration management
+```
