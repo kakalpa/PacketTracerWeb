@@ -353,7 +353,79 @@ This runs **57 tests** across 12 categories and displays configuration status:
 
 ---
 
-## 🐛 Troubleshooting
+## � Project Structure
+
+```
+PacketTracerWeb/
+├── deploy.sh                           # Main deployment script
+├── test-deployment.sh                  # Full test suite (57 tests)
+├── add-instance.sh                     # Add Packet Tracer instances
+├── remove-instance.sh                  # Remove instances
+├── tune_ptvnc.sh                       # Performance tuning
+├── generate-dynamic-connections.sh     # Generate Guacamole connections
+├── generate-ssl-cert.sh                # Generate SSL certificates
+├── README.md                           # This file
+├── .env                                # Configuration (create from .env example)
+│
+├── scripts/                            # Test and validation scripts
+│   ├── README.md                       # Test documentation
+│   ├── test-nginx-geoip-logic-v3.sh    # GeoIP filtering tests (13 tests)
+│   ├── test-public-ip-detection.sh     # Public IP auto-detection tests
+│   ├── test-geoip-blocking.sh          # GeoIP blocking tests
+│   ├── test-ssl-setup.sh               # SSL setup tests
+│   ├── verify-geoip-fix.sh             # Fix verification
+│   └── ...other test scripts
+│
+├── Documents/                          # Comprehensive documentation
+│   ├── README.md                       # Navigation guide
+│   ├── GEOIP-FIX-SUMMARY.md            # GeoIP fixes quick reference ⭐
+│   ├── GEOIP-FIX-TEST-REPORT.md        # Detailed test report
+│   ├── VPS-DEPLOYMENT-GUIDE.md         # VPS deployment guide ⭐
+│   ├── COMPREHENSIVE_DOCUMENTATION.md  # Full architecture docs
+│   ├── TEST-DEPLOYMENT.md              # Test suite details
+│   └── VISUAL_SUMMARY.md               # Visual diagrams
+│
+├── ptweb-vnc/                          # Docker image for Packet Tracer
+│   ├── Dockerfile                      # Build image
+│   ├── db-dump.sql                     # Initial Guacamole DB schema
+│   ├── customizations/                 # Installation scripts
+│   ├── pt-nginx/                       # Nginx Docker setup
+│   └── ...
+│
+├── shared/                             # Shared files (bind-mounted into containers)
+│   └── (user files here)
+│
+└── geoip/                              # GeoIP database (auto-downloaded)
+    └── GeoIP.dat                       # MaxMind GeoIP database
+```
+
+**📌 Key Files:**
+- **Deployment:** `deploy.sh` (main entry point)
+- **Configuration:** `.env` (environment variables)
+- **Testing:** `test-deployment.sh` (full suite), `scripts/test-*.sh` (unit tests)
+- **Documentation:** `Documents/README.md` (start here for docs)
+- **GeoIP Info:** `Documents/GEOIP-FIX-SUMMARY.md` (quick reference)
+- **VPS Guide:** `Documents/VPS-DEPLOYMENT-GUIDE.md` (production deployment)
+
+---
+
+## 📖 Documentation
+
+All documentation is organized in the `Documents/` folder:
+
+| Document | Purpose |
+|----------|---------|
+| **Documents/GEOIP-FIX-SUMMARY.md** ⭐ | Quick reference for GeoIP fixes (start here) |
+| **Documents/VPS-DEPLOYMENT-GUIDE.md** ⭐ | Step-by-step VPS deployment instructions |
+| **Documents/COMPREHENSIVE_DOCUMENTATION.md** | Full architecture and configuration guide |
+| **Documents/GEOIP-FIX-TEST-REPORT.md** | Detailed testing results and validation |
+| **Documents/README.md** | Navigation guide for all documentation |
+
+See `scripts/README.md` for test script documentation.
+
+---
+
+## �🐛 Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
