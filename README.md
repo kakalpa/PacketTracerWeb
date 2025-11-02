@@ -376,15 +376,6 @@ PacketTracerWeb/
 │   ├── verify-geoip-fix.sh             # Fix verification
 │   └── ...other test scripts
 │
-├── Documents/                          # Comprehensive documentation
-│   ├── README.md                       # Navigation guide
-│   ├── GEOIP-FIX-SUMMARY.md            # GeoIP fixes quick reference ⭐
-│   ├── GEOIP-FIX-TEST-REPORT.md        # Detailed test report
-│   ├── VPS-DEPLOYMENT-GUIDE.md         # VPS deployment guide ⭐
-│   ├── COMPREHENSIVE_DOCUMENTATION.md  # Full architecture docs
-│   ├── TEST-DEPLOYMENT.md              # Test suite details
-│   └── VISUAL_SUMMARY.md               # Visual diagrams
-│
 ├── ptweb-vnc/                          # Docker image for Packet Tracer
 │   ├── Dockerfile                      # Build image
 │   ├── db-dump.sql                     # Initial Guacamole DB schema
@@ -403,9 +394,7 @@ PacketTracerWeb/
 - **Deployment:** `deploy.sh` (main entry point)
 - **Configuration:** `.env` (environment variables)
 - **Testing:** `test-deployment.sh` (full suite), `scripts/test-*.sh` (unit tests)
-- **Documentation:** `Documents/README.md` (start here for docs)
-- **GeoIP Info:** `Documents/GEOIP-FIX-SUMMARY.md` (quick reference)
-- **VPS Guide:** `Documents/VPS-DEPLOYMENT-GUIDE.md` (production deployment)
+- **Test Documentation:** `scripts/README.md` (explains all test scripts)
 
 ---
 
@@ -421,7 +410,11 @@ All documentation is organized in the `Documents/` folder:
 | **Documents/GEOIP-FIX-TEST-REPORT.md** | Detailed testing results and validation |
 | **Documents/README.md** | Navigation guide for all documentation |
 
-See `scripts/README.md` for test script documentation.
+- **Test Documentation:** `scripts/README.md` (explains all test scripts)
+
+---
+
+## 🐛 Troubleshooting
 
 ---
 
