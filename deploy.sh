@@ -29,6 +29,50 @@ ENABLE_HTTPS=${ENABLE_HTTPS:-false}
 SSL_CERT_PATH=${SSL_CERT_PATH:-/etc/ssl/certs/server.crt}
 SSL_KEY_PATH=${SSL_KEY_PATH:-/etc/ssl/private/server.key}
 
+# GeoIP Configuration (from .env or defaults)
+NGINX_GEOIP_ALLOW=${NGINX_GEOIP_ALLOW:-false}
+NGINX_GEOIP_BLOCK=${NGINX_GEOIP_BLOCK:-false}
+GEOIP_ALLOW_COUNTRIES=${GEOIP_ALLOW_COUNTRIES:-US,CA,GB,AU,FI}
+GEOIP_BLOCK_COUNTRIES=${GEOIP_BLOCK_COUNTRIES:-CN,RU,IR}
+
+# Production Mode and Public IP Detection
+PRODUCTION_MODE=${PRODUCTION_MODE:-false}
+PUBLIC_IP=${PUBLIC_IP:-}
+
+# Build trusted IPs list (always includes local/private networks)
+NGINX_TRUSTED_IPS="127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+# In production mode, detect and add public IP to trusted list
+if [ "$PRODUCTION_MODE" = "true" ] || [ "$PRODUCTION_MODE" = "1" ]; then
+    if [ -z "$PUBLIC_IP" ]; then
+        echo -e "\e[36mℹ️  Production mode enabled. Detecting public IP...\e[0m"
+        PUBLIC_IP=$(curl -s --max-time 5 https://ifconfig.co 2>/dev/null || echo "")
+        if [ -n "$PUBLIC_IP" ]; then
+            echo -e "\e[32m  ✓ Detected public IP: $PUBLIC_IP\e[0m"
+        else
+            echo -e "\e[33m  ⚠ Could not detect public IP (ifconfig.co unreachable). Proceeding with local-only access.\e[0m"
+        fi
+    else
+        echo -e "\e[36mℹ️  Production mode: Using PUBLIC_IP from .env: $PUBLIC_IP\e[0m"
+    fi
+    
+    # Add public IP to trusted list if detected
+    if [ -n "$PUBLIC_IP" ]; then
+        NGINX_TRUSTED_IPS="${NGINX_TRUSTED_IPS},$PUBLIC_IP"
+        echo -e "\e[32m  ✓ Added public IP to trusted IPs\e[0m"
+    fi
+else
+    echo -e "\e[36mℹ️  Development mode (PRODUCTION_MODE=false). Local IPs only.\e[0m"
+fi
+
+# Allow .env override of trusted IPs (if explicitly set)
+if [ -n "${NGINX_TRUSTED_IPS_OVERRIDE:-}" ]; then
+    NGINX_TRUSTED_IPS="$NGINX_TRUSTED_IPS_OVERRIDE"
+    echo -e "\e[36mℹ️  Using NGINX_TRUSTED_IPS_OVERRIDE from .env\e[0m"
+fi
+
+echo -e "\e[36m  Trusted IPs for GeoIP bypass: $NGINX_TRUSTED_IPS\e[0m"
+
 # Determine nginx port and setup based on HTTPS
 if [ "$ENABLE_HTTPS" = "true" ]; then
     nginxport=443
@@ -204,16 +248,36 @@ PTWEB_EOF
 
     # Root location - catches all other requests for Guacamole
     location / {
-        # GeoIP filtering logic (demonstration)
+        # GeoIP filtering logic with trusted IP bypass
         # Note: For testing with X-Forwarded-For headers, GeoIP lookups happen on remote_addr (Docker host IP)
         # In production, this would work correctly with real client IPs
         #
-        # Block if country is in blocked list
-        if ($blocked_country = 1) {
-            return 444;
+        # Default: allow access (trusted until proven otherwise)
+        set $allow_access 1;
+        
+        # Check if this is a trusted IP (localhost, private networks, or configured trusted IPs)
+        # If trusted, skip GeoIP checks
+        if ($remote_addr ~* "^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)") {
+            set $allow_access 1;
         }
-        # Block if allow-mode is on AND country is not in allow list (includes unknown/localhost value -1)
-        if ($allowed_country != 1) {
+        
+        # GeoIP checks only apply to non-trusted IPs
+        # First, check BLOCK mode (blacklist)
+        if ($allow_access = 1) {
+            if ($blocked_country = 1) {
+                set $allow_access 0;
+            }
+        }
+        
+        # Then check ALLOW mode (whitelist) - takes precedence if enabled
+        if ($allow_access = 1) {
+            if ($allowed_country != 1) {
+                set $allow_access 0;
+            }
+        }
+        
+        # Return 444 (connection closed) if access denied
+        if ($allow_access = 0) {
             return 444;
         }
         
