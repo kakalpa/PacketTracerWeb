@@ -1,7 +1,8 @@
 # Packet Tracer - Web-Based Multi-Instance Deployment
 
-Run multiple Cisco Packet Tracer instances in Docker containers with web-based access via Guacamole.
-inspired by this original project [[ptremote](https://github.com/cnkang/ptremote)]
+Run multiple Cisco Packet Tracer instances in Docker containers with web-based access via Guacamole.  
+Includes **GeoIP filtering** and **rate limiting** for security.  
+Inspired by this original project [[ptremote](https://github.com/cnkang/ptremote)]
 
 ## 🚀 Quick Start
 
@@ -143,6 +144,10 @@ bash deploy.sh
 | `GEOIP_ALLOW_COUNTRIES` | Country codes | Comma-separated list (e.g., `US,CA,GB`) |
 | `NGINX_GEOIP_BLOCK` | `true/false` | Enable blacklist mode (block specified countries) |
 | `GEOIP_BLOCK_COUNTRIES` | Country codes | Comma-separated list (e.g., `CN,RU,IR`) |
+| `NGINX_RATE_LIMIT_ENABLE` | `true/false` | Enable per-IP request rate limiting |
+| `NGINX_RATE_LIMIT_RATE` | Rate string | Rate limit (e.g., `10r/s`, `100r/m`) |
+| `NGINX_RATE_LIMIT_BURST` | Integer | Burst allowance (default: 20) |
+| `NGINX_RATE_LIMIT_ZONE_SIZE` | Size string | Memory zone size (e.g., `10m`, `20m`) |
 | `ENABLE_HTTPS` | `true/false` | Enable HTTPS with auto-redirect |
 | `SSL_CERT_PATH` | Path | Container path to certificate (e.g., `/etc/ssl/certs/ssl-cert.pem`) |
 | `SSL_KEY_PATH` | Path | Container path to private key (e.g., `/etc/ssl/private/ssl-key.pem`) |
@@ -221,6 +226,39 @@ ENABLE_HTTPS=false
 
 bash deploy.sh
 ```
+
+---
+
+## 🚦 Rate Limiting (New!)
+
+Protect your deployment from brute-force attacks and DoS with per-IP request rate limiting.
+
+### Quick Enable
+
+```bash
+# In .env file:
+NGINX_RATE_LIMIT_ENABLE=true
+NGINX_RATE_LIMIT_RATE=10r/s        # 10 requests/second per IP
+NGINX_RATE_LIMIT_BURST=20          # Allow burst of 20 requests
+NGINX_RATE_LIMIT_ZONE_SIZE=10m     # Support ~160k unique IPs
+
+bash deploy.sh
+```
+
+### Testing Rate Limiting
+
+```bash
+# Send 50 rapid requests (will show mix of 200 and 503)
+for i in {1..50}; do curl -k https://localhost/ 2>/dev/null & done; wait
+
+# Monitor for 503 (rate-limited) responses
+docker exec pt-nginx1 tail -f /var/log/nginx/access.log | grep " 503 "
+
+# Run validation test
+bash test-rate-limiting.sh
+```
+
+
 
 ---
 
