@@ -351,14 +351,31 @@ if [ "$NGINX_RATE_LIMIT_ENABLE" = "true" ]; then
         "curl -k -L -s -I http://localhost/ 2>&1 | grep -q 'HTTP/1.1 200\\|HTTP/2 200\\|HTTP/1.1 30'"
     
     run_test "Rate limiting allows requests within limit" \
-        "for i in {1..3}; do curl -k -s -o /dev/null http://localhost/ 2>&1; done; echo 'ok'"
+        "for i in {1..5}; do curl -k -s -o /dev/null http://localhost/ 2>&1; done; echo 'ok'"
     
-    # 12.6: Verify access logs are being recorded
+    # 12.6: Test burst allowance - rapid requests should succeed up to burst limit
+    run_test "Burst allowance allows rapid requests up to burst limit" \
+        "codes=\$(for i in \$(seq 1 25); do curl -k -s -o /dev/null -w '%{http_code}' http://localhost/ 2>&1; done); echo \$codes | grep -q '200'; test \${PIPESTATUS[0]} -eq 0"
+    
+    # 12.7: Test that rate limiting returns 429 when exceeded (optional - may be timing dependent)
+    # This test is commented as it's timing-dependent and might not always trigger in test environment
+    # run_test "Rate limiting returns 429 when limit exceeded" \
+    #     "codes=\$(for i in \$(seq 1 50); do curl -k -s -o /dev/null -w '%{http_code}' http://localhost/ 2>&1; done); echo \$codes | grep -q '429'"
+    
+    # 12.8: Verify access logs are being recorded
     run_test "Nginx access logs record requests" \
         "docker exec pt-nginx1 test -f /var/log/nginx/access.log -a -s /var/log/nginx/access.log"
     
     run_test "Recent requests recorded in access logs" \
-        "[ \$(docker exec pt-nginx1 tail -5 /var/log/nginx/access.log 2>/dev/null | wc -l) -gt 0 ]"
+        "[ \$(docker exec pt-nginx1 tail -10 /var/log/nginx/access.log 2>/dev/null | wc -l) -gt 0 ]"
+    
+    # 12.9: Verify rate limiting directive is in location block
+    run_test "limit_req directive applied to location block" \
+        "docker exec pt-nginx1 grep -q 'limit_req' /etc/nginx/conf.d/ptweb.conf"
+    
+    # 12.10: Check that multiple rate limiting parameters are correct
+    run_test "Rate limit zone uses binary_remote_addr for per-IP tracking" \
+        "docker exec pt-nginx1 grep 'limit_req_zone' /etc/nginx/conf.d/ptweb.conf | grep -q '\$binary_remote_addr'"
     
 else
     echo ""

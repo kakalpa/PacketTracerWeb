@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk User & Instance Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section h2 {
+            color: #667eea;
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        input[type="file"],
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        input[type="file"]:focus,
+        input[type="password"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
+        }
+
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4a5568;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .status.error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #fc8181;
+        }
+
+        .status.info {
+            background: #bee3f8;
+            color: #2c5282;
+            border: 1px solid #90cdf4;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .info-text {
+            font-size: 13px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .csv-template {
+            background: #f7fafc;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-family: monospace;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Packet Tracer Instance Manager</h1>
+
+        <!-- Section 1: Create Users -->
+        <div class="section">
+            <h2>Step 1: Create Users in Guacamole</h2>
+            
+            <div class="form-group">
+                <label for="csvFile">CSV File (username,password)</label>
+                <div class="csv-template">
+                    username,password<br>
+                    alice,pass123<br>
+                    bob,pass456
+                </div>
+                <input type="file" id="csvFile" accept=".csv" />
+                <div class="info-text">Upload a CSV file with username and password columns</div>
+            </div>
+
+            <div class="form-group">
+                <label for="adminUser">Admin Username</label>
+                <input type="text" id="adminUser" value="admin" />
+            </div>
+
+            <div class="form-group">
+                <label for="adminPass">Admin Password</label>
+                <input type="password" id="adminPass" value="admin123" />
+            </div>
+
+            <button class="btn-primary" onclick="createUsers()">
+                <span>📝 Create Users</span>
+            </button>
+
+            <div id="createStatus" class="status"></div>
+        </div>
+
+        <!-- Section 2: Deploy Instances -->
+        <div class="section">
+            <h2>Step 2: Deploy Instances</h2>
+            
+            <p style="color: #666; margin-bottom: 15px;">
+                Deploy containers for the users created above
+            </p>
+
+            <button class="btn-success" onclick="deployInstances()">
+                <span>🚀 Deploy Now</span>
+            </button>
+
+            <div id="deployStatus" class="status"></div>
+        </div>
+
+        <!-- Section 3: Status -->
+        <div class="section">
+            <h2>📊 Status</h2>
+            
+            <button class="btn-secondary" onclick="checkStatus()">
+                <span>🔄 Check Status</span>
+            </button>
+
+            <div id="statusOutput" class="status"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        function showStatus(elementId, message, type = 'info') {
+            const el = document.getElementById(elementId);
+            el.className = `status show ${type}`;
+            el.textContent = message;
+        }
+
+        function createUsers() {
+            const csvFile = document.getElementById('csvFile');
+            const adminUser = document.getElementById('adminUser').value;
+            const adminPass = document.getElementById('adminPass').value;
+
+            if (!csvFile.files || !csvFile.files[0]) {
+                showStatus('createStatus', '❌ Please select a CSV file', 'error');
+                return;
+            }
+
+            showStatus('createStatus', '⏳ Creating users...', 'info');
+            const button = event.target;
+            button.disabled = true;
+
+            const formData = new FormData();
+            formData.append('csvFile', csvFile.files[0]);
+            formData.append('action', 'create');
+            formData.append('adminUser', adminUser);
+            formData.append('adminPass', adminPass);
+
+            fetch('/bulk-user-api', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('createStatus', `✅ ${data.message}`, 'success');
+                } else {
+                    showStatus('createStatus', `❌ ${data.message || 'Failed to create users'}`, 'error');
+                }
+            })
+            .catch(error => {
+                showStatus('createStatus', `❌ Error: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
+        }
+
+        function deployInstances() {
+            const adminUser = document.getElementById('adminUser').value;
+            const adminPass = document.getElementById('adminPass').value;
+            const csvFile = document.getElementById('csvFile');
+
+            if (!csvFile.files || !csvFile.files[0]) {
+                showStatus('deployStatus', '❌ Please select a CSV file first', 'error');
+                return;
+            }
+
+            showStatus('deployStatus', '⏳ Deploying instances...', 'info');
+            const button = event.target;
+            button.disabled = true;
+
+            const formData = new FormData();
+            formData.append('csvFile', csvFile.files[0]);
+            formData.append('action', 'deploy');
+            formData.append('adminUser', adminUser);
+            formData.append('adminPass', adminPass);
+
+            fetch('/bulk-user-api', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('deployStatus', `✅ ${data.message}`, 'success');
+                } else {
+                    showStatus('deployStatus', `❌ ${data.message || 'Failed to deploy instances'}`, 'error');
+                }
+            })
+            .catch(error => {
+                showStatus('deployStatus', `❌ Error: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
+        }
+
+        function checkStatus() {
+            showStatus('statusOutput', '⏳ Checking status...', 'info');
+            const button = event.target;
+            button.disabled = true;
+
+            fetch('/bulk-user-api?action=status')
+            .then(response => response.json())
+            .then(data => {
+                const message = `
+                    Active Containers: ${data.containers || 0}
+                    Total Users: ${data.users || 0}
+                    Last Updated: ${new Date().toLocaleTimeString()}
+                `;
+                showStatus('statusOutput', message, 'success');
+            })
+            .catch(error => {
+                showStatus('statusOutput', `❌ Error: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
+        }
+    </script>
+</body>
+</html>

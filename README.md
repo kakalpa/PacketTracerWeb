@@ -13,23 +13,23 @@ Inspired by this original project [[ptremote](https://github.com/cnkang/ptremote
 
 ### Installation
 
-#### Version 2.0 (Default) - With Automatic GeoIP Database Support
+#### Version 2.1 (Current) - With Rate Limiting & Enhanced Security
 ```bash
-# 1. Clone the repository (latest version with GeoIP features)
+# 1. Clone the repository (latest version with GeoIP + Rate Limiting)
 git clone https://github.com/kakalpa/PacketTracerWeb.git
 cd PacketTracerWeb
 
 # 2. Place Packet Tracer .deb file in repo root
 # (deploy.sh will automatically build the Docker image)
 
-# 3. (Optional) Configure GeoIP or HTTPS in .env
-# See "GeoIP Filtering" section below for configuration options
+# 3. (Optional) Configure GeoIP, Rate Limiting or HTTPS in .env
+# See configuration sections below for options
 
 # 4. Run deployment
 bash deploy.sh
 
 # This will automatically:
-# - Generate nginx configuration (with GeoIP if configured)
+# - Generate nginx configuration (with GeoIP and Rate Limiting if configured)
 # - Download GeoIP database (if GeoIP filtering enabled)
 # - Build the ptvnc Docker image (first time only)
 # - Start MariaDB container
@@ -37,6 +37,7 @@ bash deploy.sh
 # - Configure Guacamole web interface
 # - Generate web access endpoints
 # - Mount GeoIP database (if available)
+# - Apply rate limiting rules (if enabled)
 
 # 5. Open browser
 http://localhost/
@@ -44,6 +45,19 @@ http://localhost/
 # 6. Login: ptadmin / IlovePT
 
 # 7. Click connection (pt01, pt02, etc.) to access instance
+```
+
+#### Version 2.0 - With GeoIP Support
+```bash
+# Clone version 2.0 (with GeoIP, without rate limiting)
+git clone --branch v2.0 https://github.com/kakalpa/PacketTracerWeb.git
+cd PacketTracerWeb
+
+# Place Packet Tracer .deb in repo root
+# Configure GeoIP or HTTPS in .env
+
+# Run deployment
+bash deploy.sh
 ```
 
 #### Version 1.0 (Without GeoIP) - Legacy Release
@@ -63,13 +77,14 @@ bash deploy.sh
 ```
 
 **Differences between versions:**
-| Feature | v2.0 (Current) | v1.0 (Legacy) |
-|---------|---|---|
-| **GeoIP Database** | ✅ Automatic download & mounting | ❌ Manual setup |
-| **GeoIP Filtering** | ✅ Allowlist/Blocklist modes | ⚠️ Requires manual config |
-| **Nginx** | ✅ Custom image with GeoIP module | ✅ Standard nginx |
-| **HTTPS Support** | ✅ Yes | ✅ Yes |
-| **Maintenance** | ✅ Latest features | ⚠️ No updates |
+| Feature | v2.1 (Current) | v2.0 | v1.0 (Legacy) |
+|---------|---|---|---|
+| **GeoIP Database** | ✅ Automatic | ✅ Automatic | ❌ Manual setup |
+| **GeoIP Filtering** | ✅ Allowlist/Blocklist | ✅ Allowlist/Blocklist | ⚠️ Requires manual config |
+| **Rate Limiting** | ✅ Per-IP request limiting | ❌ Not available | ❌ Not available |
+| **Nginx** | ✅ Custom image with GeoIP module | ✅ Custom image with GeoIP module | ✅ Standard nginx |
+| **HTTPS Support** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Maintenance** | ✅ Latest features & security | ⚠️ Security fixes only | ⚠️ No updates |
 
 ---
 
@@ -271,7 +286,7 @@ bash test-rate-limiting.sh
 | `remove-instance.sh` | Remove instances safely |
 | `tune_ptvnc.sh` | Adjust CPU/memory per container |
 | `generate-dynamic-connections.sh` | Regenerate Guacamole database connections |
-| `test-deployment.sh` | Comprehensive health check (41 tests) |
+| `health_check.sh` | Comprehensive health check (41 tests) |
 
 ### Automatic Image Building
 
@@ -368,7 +383,7 @@ bash generate-dynamic-connections.sh 3
 After deployment, verify everything is working with the comprehensive test suite:
 
 ```bash
-bash test-deployment.sh
+bash health_check.sh
 ```
 
 This runs **57 tests** across 12 categories and displays configuration status:
@@ -398,7 +413,7 @@ This runs **57 tests** across 12 categories and displays configuration status:
 | Container name conflict | `docker rm -f <container_name>` |
 | Connections not showing | `bash generate-dynamic-connections.sh <count>` |
 | Slow performance | `bash tune_ptvnc.sh 2G 1` |
-| Tests failing | `bash test-deployment.sh` to identify issues |
+| Tests failing | `bash health_check.sh` to identify issues |
 
 ---
 
