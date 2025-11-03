@@ -103,7 +103,8 @@ for ((i=0; i<instances_to_add; i++)); do
     
     if docker ps --format "table {{.Names}}" | grep -q "^${container_name}$"; then
         docker exec $container_name mkdir -p /home/ptuser/Desktop 2>/dev/null || true
-        docker exec $container_name ln -sf /shared /home/ptuser/Desktop/shared 2>/dev/null || true
+        docker exec $container_name rm -f /home/ptuser/Desktop/shared 2>/dev/null || true
+        docker exec $container_name ln -sfn /shared /home/ptuser/Desktop/shared 2>/dev/null || true
     fi
 done
 sleep 2

@@ -14,4 +14,4 @@ node_modules/
 chat_history
 COMPLETE_DOCUMENTATION.md
 /ssl/*
-.env
+*.env
