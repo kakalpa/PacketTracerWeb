@@ -1,7 +1,8 @@
 # Packet Tracer - Web-Based Multi-Instance Deployment
 
-Run multiple Cisco Packet Tracer instances in Docker containers with web-based access via Guacamole.
-inspired by this original project [[ptremote](https://github.com/cnkang/ptremote)]
+Run multiple Cisco Packet Tracer instances in Docker containers with web-based access via Guacamole.  
+Includes **GeoIP filtering** and **rate limiting** for security.  
+Inspired by this original project [[ptremote](https://github.com/cnkang/ptremote)]
 
 ## 🚀 Quick Start
 
@@ -12,23 +13,23 @@ inspired by this original project [[ptremote](https://github.com/cnkang/ptremote
 
 ### Installation
 
-#### Version 2.0 (Default) - With Automatic GeoIP Database Support
+#### Version 2.1 (Current) - With Rate Limiting & Enhanced Security
 ```bash
-# 1. Clone the repository (latest version with GeoIP features)
+# 1. Clone the repository (latest version with GeoIP + Rate Limiting)
 git clone https://github.com/kakalpa/PacketTracerWeb.git
 cd PacketTracerWeb
 
 # 2. Place Packet Tracer .deb file in repo root
 # (deploy.sh will automatically build the Docker image)
 
-# 3. (Optional) Configure GeoIP or HTTPS in .env
-# See "GeoIP Filtering" section below for configuration options
+# 3. (Optional) Configure GeoIP, Rate Limiting or HTTPS in .env
+# See configuration sections below for options
 
 # 4. Run deployment
 bash deploy.sh
 
 # This will automatically:
-# - Generate nginx configuration (with GeoIP if configured)
+# - Generate nginx configuration (with GeoIP and Rate Limiting if configured)
 # - Download GeoIP database (if GeoIP filtering enabled)
 # - Build the ptvnc Docker image (first time only)
 # - Start MariaDB container
@@ -36,6 +37,7 @@ bash deploy.sh
 # - Configure Guacamole web interface
 # - Generate web access endpoints
 # - Mount GeoIP database (if available)
+# - Apply rate limiting rules (if enabled)
 
 # 5. Open browser
 http://localhost/
@@ -43,6 +45,19 @@ http://localhost/
 # 6. Login: ptadmin / IlovePT
 
 # 7. Click connection (pt01, pt02, etc.) to access instance
+```
+
+#### Version 2.0 - With GeoIP Support
+```bash
+# Clone version 2.0 (with GeoIP, without rate limiting)
+git clone --branch v2.0 https://github.com/kakalpa/PacketTracerWeb.git
+cd PacketTracerWeb
+
+# Place Packet Tracer .deb in repo root
+# Configure GeoIP or HTTPS in .env
+
+# Run deployment
+bash deploy.sh
 ```
 
 #### Version 1.0 (Without GeoIP) - Legacy Release
@@ -62,13 +77,14 @@ bash deploy.sh
 ```
 
 **Differences between versions:**
-| Feature | v2.0 (Current) | v1.0 (Legacy) |
-|---------|---|---|
-| **GeoIP Database** | ✅ Automatic download & mounting | ❌ Manual setup |
-| **GeoIP Filtering** | ✅ Allowlist/Blocklist modes | ⚠️ Requires manual config |
-| **Nginx** | ✅ Custom image with GeoIP module | ✅ Standard nginx |
-| **HTTPS Support** | ✅ Yes | ✅ Yes |
-| **Maintenance** | ✅ Latest features | ⚠️ No updates |
+| Feature | v2.1 (Current) | v2.0 | v1.0 (Legacy) |
+|---------|---|---|---|
+| **GeoIP Database** | ✅ Automatic | ✅ Automatic | ❌ Manual setup |
+| **GeoIP Filtering** | ✅ Allowlist/Blocklist | ✅ Allowlist/Blocklist | ⚠️ Requires manual config |
+| **Rate Limiting** | ✅ Per-IP request limiting | ❌ Not available | ❌ Not available |
+| **Nginx** | ✅ Custom image with GeoIP module | ✅ Custom image with GeoIP module | ✅ Standard nginx |
+| **HTTPS Support** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Maintenance** | ✅ Latest features & security | ⚠️ Security fixes only | ⚠️ No updates |
 
 ---
 
@@ -143,6 +159,10 @@ bash deploy.sh
 | `GEOIP_ALLOW_COUNTRIES` | Country codes | Comma-separated list (e.g., `US,CA,GB`) |
 | `NGINX_GEOIP_BLOCK` | `true/false` | Enable blacklist mode (block specified countries) |
 | `GEOIP_BLOCK_COUNTRIES` | Country codes | Comma-separated list (e.g., `CN,RU,IR`) |
+| `NGINX_RATE_LIMIT_ENABLE` | `true/false` | Enable per-IP request rate limiting |
+| `NGINX_RATE_LIMIT_RATE` | Rate string | Rate limit (e.g., `10r/s`, `100r/m`) |
+| `NGINX_RATE_LIMIT_BURST` | Integer | Burst allowance (default: 20) |
+| `NGINX_RATE_LIMIT_ZONE_SIZE` | Size string | Memory zone size (e.g., `10m`, `20m`) |
 | `ENABLE_HTTPS` | `true/false` | Enable HTTPS with auto-redirect |
 | `SSL_CERT_PATH` | Path | Container path to certificate (e.g., `/etc/ssl/certs/ssl-cert.pem`) |
 | `SSL_KEY_PATH` | Path | Container path to private key (e.g., `/etc/ssl/private/ssl-key.pem`) |
@@ -224,6 +244,39 @@ bash deploy.sh
 
 ---
 
+## 🚦 Rate Limiting (New!)
+
+Protect your deployment from brute-force attacks and DoS with per-IP request rate limiting.
+
+### Quick Enable
+
+```bash
+# In .env file:
+NGINX_RATE_LIMIT_ENABLE=true
+NGINX_RATE_LIMIT_RATE=10r/s        # 10 requests/second per IP
+NGINX_RATE_LIMIT_BURST=20          # Allow burst of 20 requests
+NGINX_RATE_LIMIT_ZONE_SIZE=10m     # Support ~160k unique IPs
+
+bash deploy.sh
+```
+
+### Testing Rate Limiting
+
+```bash
+# Send 50 rapid requests (will show mix of 200 and 503)
+for i in {1..50}; do curl -k https://localhost/ 2>/dev/null & done; wait
+
+# Monitor for 503 (rate-limited) responses
+docker exec pt-nginx1 tail -f /var/log/nginx/access.log | grep " 503 "
+
+# Run validation test
+bash test-rate-limiting.sh
+```
+
+
+
+---
+
 ## �📝 Available Scripts
 
 | Script | Purpose |
@@ -233,7 +286,7 @@ bash deploy.sh
 | `remove-instance.sh` | Remove instances safely |
 | `tune_ptvnc.sh` | Adjust CPU/memory per container |
 | `generate-dynamic-connections.sh` | Regenerate Guacamole database connections |
-| `test-deployment.sh` | Comprehensive health check (41 tests) |
+| `health_check.sh` | Comprehensive health check (41 tests) |
 
 ### Automatic Image Building
 
@@ -330,7 +383,7 @@ bash generate-dynamic-connections.sh 3
 After deployment, verify everything is working with the comprehensive test suite:
 
 ```bash
-bash test-deployment.sh
+bash health_check.sh
 ```
 
 This runs **57 tests** across 12 categories and displays configuration status:
@@ -425,7 +478,7 @@ All documentation is organized in the `Documents/` folder:
 | Container name conflict | `docker rm -f <container_name>` |
 | Connections not showing | `bash generate-dynamic-connections.sh <count>` |
 | Slow performance | `bash tune_ptvnc.sh 2G 1` |
-| Tests failing | `bash test-deployment.sh` to identify issues |
+| Tests failing | `bash health_check.sh` to identify issues |
 
 ---
 

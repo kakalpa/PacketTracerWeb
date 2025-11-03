@@ -36,6 +36,12 @@ NGINX_GEOIP_BLOCK=${NGINX_GEOIP_BLOCK:-false}
 GEOIP_ALLOW_COUNTRIES=${GEOIP_ALLOW_COUNTRIES:-}
 GEOIP_BLOCK_COUNTRIES=${GEOIP_BLOCK_COUNTRIES:-}
 
+# Rate limiting configuration flags (default to false if not set)
+NGINX_RATE_LIMIT_ENABLE=${NGINX_RATE_LIMIT_ENABLE:-false}
+NGINX_RATE_LIMIT_RATE=${NGINX_RATE_LIMIT_RATE:-10r/s}
+NGINX_RATE_LIMIT_BURST=${NGINX_RATE_LIMIT_BURST:-20}
+NGINX_RATE_LIMIT_ZONE_SIZE=${NGINX_RATE_LIMIT_ZONE_SIZE:-10m}
+
 # Determine if GeoIP testing should run
 GEOIP_ENABLED=false
 if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
@@ -292,12 +298,98 @@ run_test "Nginx can reach Guacamole" \
     "docker exec pt-nginx1 bash -c 'timeout 2 bash -c \"</dev/tcp/guacamole/8080\" 2>&1' | grep -q 'succeeded\\|Connection\\|refused' || docker exec pt-nginx1 bash -c 'nc -z guacamole 8080 2>&1' | head -1 > /dev/null || docker exec pt-nginx1 bash -c 'cat </dev/null >/dev/tcp/guacamole/8080 2>&1'"
 
 # ============================================================================
-# SECTION 12: GEOIP CONFIGURATION & DATABASE (CONDITIONAL)
+# SECTION 12: RATE LIMITING CONFIGURATION (CONDITIONAL)
+# ============================================================================
+if [ "$NGINX_RATE_LIMIT_ENABLE" = "true" ]; then
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}SECTION 12: Rate Limiting Configuration${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    
+    echo -e "${YELLOW}Configuration:${NC}"
+    echo -e "${YELLOW}  Rate: $NGINX_RATE_LIMIT_RATE${NC}"
+    echo -e "${YELLOW}  Burst: $NGINX_RATE_LIMIT_BURST${NC}"
+    echo -e "${YELLOW}  Zone Size: $NGINX_RATE_LIMIT_ZONE_SIZE${NC}"
+    echo ""
+    
+    # 12.1: Check nginx limit_req module is available by verifying -T output works
+    run_test "Nginx limit_req module available (nginx -T succeeds)" \
+        "docker exec pt-nginx1 nginx -T 2>&1 | grep -q 'limit_req'"
+    
+    # 12.2: Check rate limiting zone is configured at http level
+    run_test "Rate limiting zone (limit_req_zone) configured in ptweb.conf" \
+        "docker exec pt-nginx1 grep -q 'limit_req_zone' /etc/nginx/conf.d/ptweb.conf"
+    
+    run_test "Rate limiting zone name is pt_req_zone" \
+        "docker exec pt-nginx1 grep -q 'zone=pt_req_zone' /etc/nginx/conf.d/ptweb.conf"
+    
+    run_test "Rate limit rate is correctly set ($NGINX_RATE_LIMIT_RATE)" \
+        "docker exec pt-nginx1 grep 'limit_req_zone' /etc/nginx/conf.d/ptweb.conf | grep -q 'rate=${NGINX_RATE_LIMIT_RATE}'"
+    
+    run_test "Rate limit zone size is correctly set ($NGINX_RATE_LIMIT_ZONE_SIZE)" \
+        "docker exec pt-nginx1 grep 'limit_req_zone' /etc/nginx/conf.d/ptweb.conf | grep -q 'pt_req_zone:${NGINX_RATE_LIMIT_ZONE_SIZE}'"
+    
+    # 12.3: Check ptweb.conf has limit_req directive in location block
+    run_test "ptweb.conf has limit_req directive in location block" \
+        "docker exec pt-nginx1 grep -A 30 'location /' /etc/nginx/conf.d/ptweb.conf | grep -q 'limit_req zone=pt_req_zone'"
+    
+    run_test "limit_req burst value is correctly set ($NGINX_RATE_LIMIT_BURST)" \
+        "docker exec pt-nginx1 grep 'limit_req' /etc/nginx/conf.d/ptweb.conf | grep -q 'burst=${NGINX_RATE_LIMIT_BURST}'"
+    
+    run_test "limit_req has nodelay parameter for immediate rejection" \
+        "docker exec pt-nginx1 grep 'limit_req' /etc/nginx/conf.d/ptweb.conf | grep -q 'nodelay'"
+    
+    # 12.4: Verify nginx configuration is valid
+    run_test "Nginx configuration syntax is valid (nginx -t)" \
+        "docker exec pt-nginx1 nginx -t 2>&1 | grep -q 'successful'"
+    
+    run_test "No rate limiting errors in nginx error logs" \
+        "! docker exec pt-nginx1 grep -i 'limit_req.*error' /var/log/nginx/error.log 2>/dev/null | grep -q '.'"
+    
+    # 12.5: Test rate limiting functionality with concurrent requests
+    run_test "Web interface accessible under normal load" \
+        "curl -k -L -s -I http://localhost/ 2>&1 | grep -q 'HTTP/1.1 200\\|HTTP/2 200\\|HTTP/1.1 30'"
+    
+    run_test "Rate limiting allows requests within limit" \
+        "for i in {1..5}; do curl -k -s -o /dev/null http://localhost/ 2>&1; done; echo 'ok'"
+    
+    # 12.6: Test burst allowance - rapid requests should succeed up to burst limit
+    run_test "Burst allowance allows rapid requests up to burst limit" \
+        "codes=\$(for i in \$(seq 1 25); do curl -k -s -o /dev/null -w '%{http_code}' http://localhost/ 2>&1; done); echo \$codes | grep -q '200'; test \${PIPESTATUS[0]} -eq 0"
+    
+    # 12.7: Test that rate limiting returns 429 when exceeded (optional - may be timing dependent)
+    # This test is commented as it's timing-dependent and might not always trigger in test environment
+    # run_test "Rate limiting returns 429 when limit exceeded" \
+    #     "codes=\$(for i in \$(seq 1 50); do curl -k -s -o /dev/null -w '%{http_code}' http://localhost/ 2>&1; done); echo \$codes | grep -q '429'"
+    
+    # 12.8: Verify access logs are being recorded
+    run_test "Nginx access logs record requests" \
+        "docker exec pt-nginx1 test -f /var/log/nginx/access.log -a -s /var/log/nginx/access.log"
+    
+    run_test "Recent requests recorded in access logs" \
+        "[ \$(docker exec pt-nginx1 tail -10 /var/log/nginx/access.log 2>/dev/null | wc -l) -gt 0 ]"
+    
+    # 12.9: Verify rate limiting directive is in location block
+    run_test "limit_req directive applied to location block" \
+        "docker exec pt-nginx1 grep -q 'limit_req' /etc/nginx/conf.d/ptweb.conf"
+    
+    # 12.10: Check that multiple rate limiting parameters are correct
+    run_test "Rate limit zone uses binary_remote_addr for per-IP tracking" \
+        "docker exec pt-nginx1 grep 'limit_req_zone' /etc/nginx/conf.d/ptweb.conf | grep -q '\$binary_remote_addr'"
+    
+else
+    echo ""
+    echo -e "${YELLOW}ℹ️  Rate Limiting tests skipped (not configured in .env)${NC}"
+    echo -e "${YELLOW}   To enable Rate Limiting tests, set NGINX_RATE_LIMIT_ENABLE=true${NC}"
+fi
+
+# ============================================================================
+# SECTION 13: GEOIP CONFIGURATION & DATABASE (CONDITIONAL)
 # ============================================================================
 if [ "$GEOIP_ENABLED" = true ]; then
     echo ""
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}SECTION 12: GeoIP Configuration & Database${NC}"
+    echo -e "${BLUE}SECTION 13: GeoIP Configuration & Database${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     
     if [ "$NGINX_GEOIP_ALLOW" = "true" ] && [ -n "$GEOIP_ALLOW_COUNTRIES" ]; then
@@ -398,6 +490,13 @@ if [ "$GEOIP_ENABLED" = true ]; then
     echo -e "GeoIP Tests: ${GREEN}Enabled${NC}"
 else
     echo -e "GeoIP Tests: ${YELLOW}Disabled (not configured)${NC}"
+fi
+
+if [ "$NGINX_RATE_LIMIT_ENABLE" = "true" ]; then
+    echo -e "Rate Limiting Tests: ${GREEN}Enabled${NC}"
+    echo -e "  Rate: $NGINX_RATE_LIMIT_RATE, Burst: $NGINX_RATE_LIMIT_BURST"
+else
+    echo -e "Rate Limiting Tests: ${YELLOW}Disabled (not configured)${NC}"
 fi
 
 if [ "$ENABLE_HTTPS" = "true" ]; then

@@ -53,6 +53,10 @@
 #    - GEOIP_BLOCK_COUNTRIES (comma-separated, e.g. CN,RU,IR)
 #    - GEOIP_ALLOW_COUNTRIES (comma-separated, e.g. US,CA,GB,AU)
 #    - SSL_CERT_PATH and SSL_KEY_PATH (paths inside the nginx container)
+#    - NGINX_RATE_LIMIT_ENABLE=true|false         -> enable request rate limiting
+#    - NGINX_RATE_LIMIT_RATE=10r/s                -> rate for limit_req_zone (e.g. 10r/s or 100r/m)
+#    - NGINX_RATE_LIMIT_BURST=20                  -> burst value for limit_req
+#    - NGINX_RATE_LIMIT_ZONE_SIZE=10m             -> shared memory zone size for limit_req_zone
 #
 # 2. Make the generator executable and run it:
 #    chmod +x generate-nginx-conf.sh
@@ -60,6 +64,12 @@
 #
 # 3. Start the stack (the generated ptweb.conf will be mounted):
 #    docker-compose up -d
+#
+# Example rate limiting in `.env` (enables a per-IP rate limit of 10 requests/sec):
+# NGINX_RATE_LIMIT_ENABLE=true
+# NGINX_RATE_LIMIT_RATE=10r/s
+# NGINX_RATE_LIMIT_BURST=20
+# NGINX_RATE_LIMIT_ZONE_SIZE=10m
 #
 # Notes & caveats:
 # - For GeoIP to work, the GeoIP database must be available in the nginx container:

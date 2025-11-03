@@ -1,6 +1,3 @@
-# Rate limiting zone (http context)
-limit_req_zone $binary_remote_addr zone=pt_req_zone:10m rate=10r/s;
-
 server {
     listen 80;
     server_name localhost;
@@ -38,16 +35,12 @@ server {
 
     # Root location - catches all other requests for Guacamole
     location / {
-        # GeoIP filtering logic (demonstration)
-        # Note: For testing with X-Forwarded-For headers, GeoIP lookups happen on remote_addr (Docker host IP)
-        # In production, this would work correctly with real client IPs
-        #
-        # Block if country is in blocked list
-        if ($blocked_country = 1) {
-            return 444;
-        }
-        # Block if allow-mode is on AND country is not in allow list AND not a known country (default -1)
-        if ($allowed_country = 0) {
+        # GeoIP filtering logic with trusted IP bypass
+        # Using map directives (defined at http level) instead of nested if statements
+        # which nginx does not support
+        
+        # Check access: returns 1 if allowed, 0 if denied
+        if ($deny_by_geoip = 1) {
             return 444;
         }
         
@@ -63,7 +56,6 @@ server {
         proxy_set_header Connection "upgrade";
 
         client_max_body_size 10m;
-        limit_req zone=pt_req_zone burst=20 nodelay;
         client_body_buffer_size 128k;
         proxy_connect_timeout 90;
         proxy_send_timeout 90;

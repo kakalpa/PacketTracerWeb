@@ -195,6 +195,15 @@ generate_nginx_config() {
     local cert_path="$3"
     local key_path="$4"
     
+    # Generate http context directives (rate limiting zone)
+    if [ "$NGINX_RATE_LIMIT_ENABLE" = "true" ]; then
+        cat << 'PTWEB_EOF'
+# Rate limiting zone (http context)
+limit_req_zone $binary_remote_addr zone=pt_req_zone:RATE_LIMIT_ZONE_SIZE rate=RATE_LIMIT_RATE;
+
+PTWEB_EOF
+    fi
+    
     # Generate HTTP server block (always included)
     cat << 'PTWEB_EOF'
 server {
@@ -269,6 +278,7 @@ PTWEB_EOF
         proxy_set_header Connection "upgrade";
 
         client_max_body_size 10m;
+        RATE_LIMIT_DIRECTIVE_PLACEHOLDER
         client_body_buffer_size 128k;
         proxy_connect_timeout 90;
         proxy_send_timeout 90;
@@ -290,9 +300,19 @@ PTWEB_EOF
 }
 
 # Generate ptweb.conf with HTTPS support if enabled
-generate_nginx_config "$GUACAMOLE_IP" "$ENABLE_HTTPS" "$SSL_CERT_PATH" "$SSL_KEY_PATH" | \
-    sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g; s|SSL_CERT_PATH_PLACEHOLDER|$SSL_CERT_PATH|g; s|SSL_KEY_PATH_PLACEHOLDER|$SSL_KEY_PATH|g" > \
-    "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
+{
+    # Prepare rate limit directive if enabled
+    if [ "$NGINX_RATE_LIMIT_ENABLE" = "true" ]; then
+        RATE_LIMIT_DIRECTIVE="limit_req zone=pt_req_zone burst=${NGINX_RATE_LIMIT_BURST} nodelay;"
+    else
+        RATE_LIMIT_DIRECTIVE=""
+    fi
+    
+    # Generate config with all placeholders replaced
+    generate_nginx_config "$GUACAMOLE_IP" "$ENABLE_HTTPS" "$SSL_CERT_PATH" "$SSL_KEY_PATH" | \
+        sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g; s|SSL_CERT_PATH_PLACEHOLDER|$SSL_CERT_PATH|g; s|SSL_KEY_PATH_PLACEHOLDER|$SSL_KEY_PATH|g; s|RATE_LIMIT_ZONE_SIZE|${NGINX_RATE_LIMIT_ZONE_SIZE:-10m}|g; s|RATE_LIMIT_RATE|${NGINX_RATE_LIMIT_RATE:-10r/s}|g;" | \
+        sed "s|RATE_LIMIT_DIRECTIVE_PLACEHOLDER|$RATE_LIMIT_DIRECTIVE|g"
+} > "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
 echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP and HTTPS=$([ "$ENABLE_HTTPS" = "true" ] && echo "enabled" || echo "disabled")\033[0m"
 
 for ((i=1; i<=$numofPT; i++)); do
@@ -354,9 +374,19 @@ fi
 echo -e "\033[36m  ✓ Guacamole IP: $GUACAMOLE_IP\033[0m"
 
 # Regenerate ptweb.conf with the correct Guacamole IP and HTTPS settings
-generate_nginx_config "$GUACAMOLE_IP" "$ENABLE_HTTPS" "$SSL_CERT_PATH" "$SSL_KEY_PATH" | \
-    sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g; s|SSL_CERT_PATH_PLACEHOLDER|$SSL_CERT_PATH|g; s|SSL_KEY_PATH_PLACEHOLDER|$SSL_KEY_PATH|g" > \
-    "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
+{
+    # Prepare rate limit directive if enabled
+    if [ "$NGINX_RATE_LIMIT_ENABLE" = "true" ]; then
+        RATE_LIMIT_DIRECTIVE="limit_req zone=pt_req_zone burst=${NGINX_RATE_LIMIT_BURST} nodelay;"
+    else
+        RATE_LIMIT_DIRECTIVE=""
+    fi
+    
+    # Generate config with all placeholders replaced
+    generate_nginx_config "$GUACAMOLE_IP" "$ENABLE_HTTPS" "$SSL_CERT_PATH" "$SSL_KEY_PATH" | \
+        sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g; s|SSL_CERT_PATH_PLACEHOLDER|$SSL_CERT_PATH|g; s|SSL_KEY_PATH_PLACEHOLDER|$SSL_KEY_PATH|g; s|RATE_LIMIT_ZONE_SIZE|${NGINX_RATE_LIMIT_ZONE_SIZE:-10m}|g; s|RATE_LIMIT_RATE|${NGINX_RATE_LIMIT_RATE:-10r/s}|g;" | \
+        sed "s|RATE_LIMIT_DIRECTIVE_PLACEHOLDER|$RATE_LIMIT_DIRECTIVE|g"
+} > "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
 echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP and HTTPS=$([ "$ENABLE_HTTPS" = "true" ] && echo "enabled" || echo "disabled")\033[0m"
 
 # Mount SSL certificates if HTTPS is enabled
