@@ -229,13 +229,6 @@ PacketTracerWeb/
 
 ---
 
-## 📚 Documentation
-
-Detailed documentation available in `Documents/` folder (for your reference).
-
-Test scripts and validation: See `Scripts/README.md`
-
----
 
 ## 📄 License
 
@@ -273,20 +266,6 @@ Guacamole: [guacamole.apache.org](https://guacamole.apache.org)
 
 ---
 
-## 📚 Documentation
-
-Detailed documentation available in `Documents/` folder (for your reference).
-
-Test scripts and validation: See `Scripts/README.md`
-
----
-
-## 📄 License
-
-Cisco Packet Tracer installer not included. Place official `.deb` copy in repo root.  
-Using Packet Tracer implies acceptance of Cisco EULA.
-
----
 
 ## 🔗 References
 
@@ -294,27 +273,6 @@ Original project: [ptremote](https://github.com/cnkang/ptremote)
 Docker documentation: [docker.com](https://docker.com)  
 Guacamole: [guacamole.apache.org](https://guacamole.apache.org)
 
----
-
-## 📖 Documentation
-
-All documentation is organized in the `Documents/` folder:
-
-| Document | Purpose |
-|----------|---------|
-| **Documents/GEOIP-FIX-SUMMARY.md** ⭐ | Quick reference for GeoIP fixes (start here) |
-| **Documents/VPS-DEPLOYMENT-GUIDE.md** ⭐ | Step-by-step VPS deployment instructions |
-| **Documents/COMPREHENSIVE_DOCUMENTATION.md** | Full architecture and configuration guide |
-| **Documents/GEOIP-FIX-TEST-REPORT.md** | Detailed testing results and validation |
-| **Documents/README.md** | Navigation guide for all documentation |
-
-- **Test Documentation:** `Scripts/README.md` (explains all test scripts)
-
----
-
-## 🐛 Troubleshooting
-
----
 
 ## 🐛 Troubleshooting
 
@@ -326,50 +284,11 @@ All documentation is organized in the `Documents/` folder:
 | Tests failing | `bash health_check.sh` to identify issues |
 
 ---
-
-## 📄 License
-
-Cisco Packet Tracer installer not included. Place official copy in repo root. Using Packet Tracer implies acceptance of Cisco EULA.
-```
 
 **📌 Key Files:**
 - **Deployment:** `deploy.sh` (main entry point)
 - **Configuration:** `.env` (environment variables)
 - **Testing:** `test-deployment.sh` (full suite), `Scripts/test-*.sh` (unit tests)
-- **Test Documentation:** `Scripts/README.md` (explains all test scripts)
-
----
-
-## 📖 Documentation
-
-All documentation is organized in the `Documents/` folder:
-
-| Document | Purpose |
-|----------|---------|
-| **Documents/GEOIP-FIX-SUMMARY.md** ⭐ | Quick reference for GeoIP fixes (start here) |
-| **Documents/VPS-DEPLOYMENT-GUIDE.md** ⭐ | Step-by-step VPS deployment instructions |
-| **Documents/COMPREHENSIVE_DOCUMENTATION.md** | Full architecture and configuration guide |
-| **Documents/GEOIP-FIX-TEST-REPORT.md** | Detailed testing results and validation |
-| **Documents/README.md** | Navigation guide for all documentation |
-
-- **Test Documentation:** `Scripts/README.md` (explains all test scripts)
-
----
-
-## 🐛 Troubleshooting
-
----
-
-## �🐛 Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Container name conflict | `docker rm -f <container_name>` |
-| Connections not showing | `bash generate-dynamic-connections.sh <count>` |
-| Slow performance | `bash tune_ptvnc.sh 2G 1` |
-| Tests failing | `bash health_check.sh` to identify issues |
-
----
 
 ## 📄 License
 
