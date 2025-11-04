@@ -43,22 +43,20 @@ http {
     # Returns 1 if country is in allow list, 0 (deny) for all others including unknown
     map $geoip_country_code $allowed_country {
         default 0;  # Default to 0 (deny all unless explicitly allowed)
-        US 1;
-        CA 1;
-        GB 1;
-        AU 1;
         FI 1;
     }
 
-    # BLOCK mode (blacklist): Deny traffic from specified countries
-    # Returns 1 if country is in block list, 0 (allow) for all others
+    # BLOCK mode disabled - no countries blocked
     map $geoip_country_code $blocked_country {
-        default 0;  # Default to 0 (allow unless explicitly blocked)
-        CN 1;
-        RU 1;
-        IR 1;
+        default 0;  # Default to 0 (don't block)
     }
-
     # Include all server configurations from conf.d
     include /etc/nginx/conf.d/*.conf;
 }
+d_ip {
+        default 0;
+        "127.0.0.1" 1;  # Added from NGINX_TRUSTED_IPS
+        "~^10\." 1;              # 10.0.0.0/8 (private)
+        "~^172\.(1[6-9]|2[0-9]|3[01])\." 1;  # 172.16.0.0/12 (private)
+        "~^192\.168\." 1;         # 192.168.0.0/16 (private)
+    }

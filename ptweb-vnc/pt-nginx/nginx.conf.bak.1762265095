@@ -31,7 +31,8 @@ http {
     gzip_comp_level 6;
     gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss application/rss+xml font/truetype font/opentype application/vnd.ms-fontobject image/svg+xml;
 
-    # Docker DNS resolver
+    # Docker DNS resolver - resolves container names dynamically
+    # This allows proxy_pass to use container hostnames that may change IPs on restart
     resolver 127.0.0.11:53 valid=10s;
     resolver_timeout 5s;
 
@@ -39,10 +40,9 @@ http {
     geoip_country /usr/share/GeoIP/GeoIP.dat;
     geoip_proxy_recursive on;
 
-    # ALLOW mode (whitelist): Only permit traffic from specified countries
-    # Returns 1 if country is in allow list, 0 (deny) for all others including unknown
+    # Default GeoIP maps - allow US, CA, GB, AU, FI by default
     map $geoip_country_code $allowed_country {
-        default 0;  # Default to 0 (deny all unless explicitly allowed)
+        default -1;  # Changed to -1 to distinguish "unknown" from "not allowed"
         US 1;
         CA 1;
         GB 1;
@@ -50,13 +50,39 @@ http {
         FI 1;
     }
 
-    # BLOCK mode (blacklist): Deny traffic from specified countries
-    # Returns 1 if country is in block list, 0 (allow) for all others
+    # Blocked countries map - empty by default
     map $geoip_country_code $blocked_country {
-        default 0;  # Default to 0 (allow unless explicitly blocked)
-        CN 1;
-        RU 1;
-        IR 1;
+        default 0;
+    }
+
+    # Check if IP is trusted (localhost or private network)
+    map $remote_addr $is_trusted_ip {
+        default 0;
+        "~^127\." 1;              # 127.x.x.x (localhost)
+        "~^10\." 1;               # 10.0.0.0/8 (private)
+        "~^172\.(1[6-9]|2[0-9]|3[01])\." 1;  # 172.16.0.0/12 (private)
+        "~^192\.168\." 1;         # 192.168.0.0/16 (private)
+    }
+
+    # Determine if access should be denied by GeoIP
+    # Returns 1 to deny, 0 to allow
+    map $is_trusted_ip $deny_by_geoip {
+        default 0;  # By default, allow (for trusted IPs)
+    }
+
+    # If NOT a trusted IP, evaluate GeoIP rules
+    map "$is_trusted_ip:$blocked_country:$allowed_country" $deny_by_geoip {
+        # If trusted IP, always allow
+        "1:*:*" 0;
+        
+        # If not trusted and blocked_country=1, deny
+        "0:1:*" 1;
+        
+        # If not trusted and allowed_country is not 1, deny
+        "0:*:~^(?!1).*" 1;
+        
+        # Otherwise allow
+        default 0;
     }
 
     # Include all server configurations from conf.d

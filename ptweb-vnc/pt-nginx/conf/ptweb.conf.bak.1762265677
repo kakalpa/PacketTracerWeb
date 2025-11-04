@@ -1,0 +1,79 @@
+# Rate limiting zone (http context)
+limit_req_zone $binary_remote_addr zone=pt_req_zone:10m rate=10r/s;
+
+server {
+    listen 80;
+    server_name localhost;
+
+    charset utf-8;
+    # Redirect HTTP to HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name localhost;
+
+    charset utf-8;
+
+    # SSL Configuration
+    ssl_certificate /etc/ssl/certs/server.crt;
+    ssl_certificate_key /etc/ssl/private/server.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Serve shared downloads with highest priority
+    location ^~ /downloads/ {
+        alias /shared/;
+        autoindex on;
+        autoindex_exact_size off;
+        autoindex_localtime on;
+    }
+
+    # File manager interface
+    location ^~ /files {
+        rewrite ^/files/?$ /file-manager.html break;
+    }
+
+    # Root location - catches all other requests for Guacamole
+    location / {
+        # GeoIP filtering logic with trusted IP bypass
+        # Using map directives (defined at http level) instead of nested if statements
+        # which nginx does not support
+        
+        # Check access: returns 1 if allowed, 0 if denied
+        if ($deny_by_geoip = 1) {
+            return 444;
+        }
+        
+        proxy_redirect off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support for Guacamole tunneling
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        client_max_body_size 10m;
+        limit_req zone=pt_req_zone burst=20 nodelay;
+        client_body_buffer_size 128k;
+        proxy_connect_timeout 90;
+        proxy_send_timeout 90;
+        proxy_read_timeout 90;
+        proxy_buffers 32 4k;
+        proxy_pass http://172.17.0.6:8080/guacamole/;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
+}

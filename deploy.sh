@@ -188,132 +188,13 @@ GUACAMOLE_IP=$(echo "$GUACAMOLE_IP" | tr -d '
 ' | tr -d ' ')
 echo -e "\033[36m  ✓ Guacamole IP: $GUACAMOLE_IP\033[0m"
 
-# Helper function to generate nginx config with HTTPS support
-generate_nginx_config() {
-    local guacamole_ip="$1"
-    local enable_https="$2"
-    local cert_path="$3"
-    local key_path="$4"
-    
-    # Generate http context directives (rate limiting zone)
-    if [ "$NGINX_RATE_LIMIT_ENABLE" = "true" ]; then
-        cat << 'PTWEB_EOF'
-# Rate limiting zone (http context)
-limit_req_zone $binary_remote_addr zone=pt_req_zone:RATE_LIMIT_ZONE_SIZE rate=RATE_LIMIT_RATE;
+# Nginx configuration generation is now handled by generate-nginx-conf.sh
+# which dynamically generates both nginx.conf and ptweb.conf based on .env settings
 
-PTWEB_EOF
-    fi
-    
-    # Generate HTTP server block (always included)
-    cat << 'PTWEB_EOF'
-server {
-    listen 80;
-    server_name localhost;
-
-    charset utf-8;
-PTWEB_EOF
-    
-    # If HTTPS is enabled, add redirect from HTTP to HTTPS
-    if [ "$enable_https" = "true" ]; then
-        cat << 'PTWEB_EOF'
-    # Redirect HTTP to HTTPS
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name localhost;
-
-    charset utf-8;
-
-    # SSL Configuration
-    ssl_certificate SSL_CERT_PATH_PLACEHOLDER;
-    ssl_certificate_key SSL_KEY_PATH_PLACEHOLDER;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-
-PTWEB_EOF
-    else
-        cat << 'PTWEB_EOF'
-
-PTWEB_EOF
-    fi
-    
-    # Common server block content
-    cat << 'PTWEB_EOF'
-    # Serve shared downloads with highest priority
-    location ^~ /downloads/ {
-        alias /shared/;
-        autoindex on;
-        autoindex_exact_size off;
-        autoindex_localtime on;
-    }
-
-    # File manager interface
-    location ^~ /files {
-        rewrite ^/files/?$ /file-manager.html break;
-    }
-
-    # Root location - catches all other requests for Guacamole
-    location / {
-        # GeoIP filtering logic with trusted IP bypass
-        # Using map directives (defined at http level) instead of nested if statements
-        # which nginx does not support
-        
-        # Check access: returns 1 if allowed, 0 if denied
-        if ($deny_by_geoip = 1) {
-            return 444;
-        }
-        
-        proxy_redirect off;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # WebSocket support for Guacamole tunneling
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        client_max_body_size 10m;
-        RATE_LIMIT_DIRECTIVE_PLACEHOLDER
-        client_body_buffer_size 128k;
-        proxy_connect_timeout 90;
-        proxy_send_timeout 90;
-        proxy_read_timeout 90;
-        proxy_buffers 32 4k;
-        proxy_pass http://GUACAMOLE_IP_PLACEHOLDER:8080/guacamole/;
-    }
-
-    location ~ /\.ht {
-        deny all;
-    }
-
-    error_page   500 502 503 504  /50x.html;
-    location = /50x.html {
-        root   /usr/share/nginx/html;
-    }
-}
-PTWEB_EOF
-}
-
-# Generate ptweb.conf with HTTPS support if enabled
-{
-    # Prepare rate limit directive if enabled
-    if [ "$NGINX_RATE_LIMIT_ENABLE" = "true" ]; then
-        RATE_LIMIT_DIRECTIVE="limit_req zone=pt_req_zone burst=${NGINX_RATE_LIMIT_BURST} nodelay;"
-    else
-        RATE_LIMIT_DIRECTIVE=""
-    fi
-    
-    # Generate config with all placeholders replaced
-    generate_nginx_config "$GUACAMOLE_IP" "$ENABLE_HTTPS" "$SSL_CERT_PATH" "$SSL_KEY_PATH" | \
-        sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g; s|SSL_CERT_PATH_PLACEHOLDER|$SSL_CERT_PATH|g; s|SSL_KEY_PATH_PLACEHOLDER|$SSL_KEY_PATH|g; s|RATE_LIMIT_ZONE_SIZE|${NGINX_RATE_LIMIT_ZONE_SIZE:-10m}|g; s|RATE_LIMIT_RATE|${NGINX_RATE_LIMIT_RATE:-10r/s}|g;" | \
-        sed "s|RATE_LIMIT_DIRECTIVE_PLACEHOLDER|$RATE_LIMIT_DIRECTIVE|g"
-} > "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
-echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP and HTTPS=$([ "$ENABLE_HTTPS" = "true" ] && echo "enabled" || echo "disabled")\033[0m"
+# Generate nginx configs with dynamic GeoIP maps and location blocks
+echo -e "\033[32m  Generating dynamic nginx configuration...\033[0m"
+bash "${WORKDIR}/ptweb-vnc/pt-nginx/generate-nginx-conf.sh"
+echo -e "\033[32m  ✓ Generated nginx.conf and ptweb.conf with GeoIP filtering\033[0m"
 
 for ((i=1; i<=$numofPT; i++)); do
     docker run -d \
@@ -373,21 +254,10 @@ if [ -z "$GUACAMOLE_IP" ]; then
 fi
 echo -e "\033[36m  ✓ Guacamole IP: $GUACAMOLE_IP\033[0m"
 
-# Regenerate ptweb.conf with the correct Guacamole IP and HTTPS settings
-{
-    # Prepare rate limit directive if enabled
-    if [ "$NGINX_RATE_LIMIT_ENABLE" = "true" ]; then
-        RATE_LIMIT_DIRECTIVE="limit_req zone=pt_req_zone burst=${NGINX_RATE_LIMIT_BURST} nodelay;"
-    else
-        RATE_LIMIT_DIRECTIVE=""
-    fi
-    
-    # Generate config with all placeholders replaced
-    generate_nginx_config "$GUACAMOLE_IP" "$ENABLE_HTTPS" "$SSL_CERT_PATH" "$SSL_KEY_PATH" | \
-        sed "s|GUACAMOLE_IP_PLACEHOLDER|$GUACAMOLE_IP|g; s|SSL_CERT_PATH_PLACEHOLDER|$SSL_CERT_PATH|g; s|SSL_KEY_PATH_PLACEHOLDER|$SSL_KEY_PATH|g; s|RATE_LIMIT_ZONE_SIZE|${NGINX_RATE_LIMIT_ZONE_SIZE:-10m}|g; s|RATE_LIMIT_RATE|${NGINX_RATE_LIMIT_RATE:-10r/s}|g;" | \
-        sed "s|RATE_LIMIT_DIRECTIVE_PLACEHOLDER|$RATE_LIMIT_DIRECTIVE|g"
-} > "${WORKDIR}/ptweb-vnc/pt-nginx/conf/ptweb.conf"
-echo -e "\033[32m  ✓ Generated ptweb.conf with Guacamole IP and HTTPS=$([ "$ENABLE_HTTPS" = "true" ] && echo "enabled" || echo "disabled")\033[0m"
+# Regenerate nginx configs dynamically from .env settings
+echo -e "\033[32m  Regenerating nginx configurations...\033[0m"
+bash "${WORKDIR}/ptweb-vnc/pt-nginx/generate-nginx-conf.sh"
+echo -e "\033[32m  ✓ Regenerated nginx.conf and ptweb.conf\033[0m"
 
 # Mount SSL certificates if HTTPS is enabled
 SSL_MOUNTS=""
@@ -420,6 +290,7 @@ fi
 
 # Run nginx with appropriate port and SSL mounts
 eval "docker run --restart always --name pt-nginx1 \
+  --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/nginx.conf\",target=/etc/nginx/nginx.conf,readonly \
   --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/www\",target=/usr/share/nginx/html,readonly \
   --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/conf\",target=/etc/nginx/conf.d,readonly \
   --mount type=bind,source=\"${WORKDIR}/shared\",target=/shared,readonly,bind-propagation=rprivate \
