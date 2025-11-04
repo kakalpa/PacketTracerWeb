@@ -8,19 +8,19 @@ This folder contains additional test scripts for validating GeoIP filtering logi
 Tests the original GeoIP filtering logic (before v3).
 - **Tests:** 5 scenarios
 - **Purpose:** Validates basic blocking logic
-- **Run:** `bash scripts/test-nginx-geoip-logic.sh`
+- **Run:** `bash Scripts/test-nginx-geoip-logic.sh`
 
 ### `test-nginx-geoip-logic-v2.sh`
 Tests GeoIP filtering with localhost exception.
 - **Tests:** 7 scenarios
 - **Purpose:** Validates localhost bypass logic
-- **Run:** `bash scripts/test-nginx-geoip-logic-v2.sh`
+- **Run:** `bash Scripts/test-nginx-geoip-logic-v2.sh`
 
 ### `test-nginx-geoip-logic-v3.sh` ⭐ (Latest)
 Tests GeoIP filtering with trusted IP bypass (current version).
 - **Tests:** 13 scenarios
 - **Purpose:** Validates trusted IP bypass for public IPs
-- **Run:** `bash scripts/test-nginx-geoip-logic-v3.sh`
+- **Run:** `bash Scripts/test-nginx-geoip-logic-v3.sh`
 - **Result:** All 13 tests PASS ✅
 
 **Test Coverage:**
@@ -33,7 +33,7 @@ Tests GeoIP filtering with trusted IP bypass (current version).
 ### `test-nginx-config-preview.sh`
 Displays a preview of the nginx configuration that will be generated.
 - **Purpose:** Visual verification of GeoIP directives
-- **Run:** `bash scripts/test-nginx-config-preview.sh`
+- **Run:** `bash Scripts/test-nginx-config-preview.sh`
 - **Output:** Shows map definitions, if-block logic, and scenario table
 
 ### `test-public-ip-detection.sh` ⭐
@@ -44,20 +44,20 @@ Tests the automatic public IP detection logic for production mode.
   2. Production mode with auto-detect
   3. Production mode with manual IP
   4. Production mode with custom override
-- **Run:** `bash scripts/test-public-ip-detection.sh`
+- **Run:** `bash Scripts/test-public-ip-detection.sh`
 - **Result:** All 4 scenarios PASS ✅
 
 ### `test-deploy-config-gen.sh`
 Tests that deploy.sh correctly generates the nginx configuration.
 - **Purpose:** Validates configuration generation from source
-- **Run:** `bash scripts/test-deploy-config-gen.sh`
+- **Run:** `bash Scripts/test-deploy-config-gen.sh`
 
 ### `verify-geoip-fix.sh`
 Quick verification that the GeoIP fix is applied in deploy.sh.
 - **Tests:** 2 checks
   1. ✅ Fixed logic is present: `if ($allowed_country != 1)`
   2. ✅ Old broken logic is removed: `if ($allowed_country = 0)`
-- **Run:** `bash scripts/verify-geoip-fix.sh`
+- **Run:** `bash Scripts/verify-geoip-fix.sh`
 - **Result:** VERIFICATION PASSED ✅
 
 ## Quick Test All
@@ -65,11 +65,11 @@ Quick verification that the GeoIP fix is applied in deploy.sh.
 Run all GeoIP logic tests:
 
 ```bash
-bash scripts/test-nginx-geoip-logic.sh
-bash scripts/test-nginx-geoip-logic-v2.sh
-bash scripts/test-nginx-geoip-logic-v3.sh
-bash scripts/test-public-ip-detection.sh
-bash scripts/verify-geoip-fix.sh
+bash Scripts/test-nginx-geoip-logic.sh
+bash Scripts/test-nginx-geoip-logic-v2.sh
+bash Scripts/test-nginx-geoip-logic-v3.sh
+bash Scripts/test-public-ip-detection.sh
+bash Scripts/verify-geoip-fix.sh
 ```
 
 ## Integration with Main Tests

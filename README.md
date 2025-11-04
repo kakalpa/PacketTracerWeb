@@ -420,7 +420,7 @@ PacketTracerWeb/
 ├── README.md                           # This file
 ├── .env                                # Configuration (create from .env example)
 │
-├── scripts/                            # Test and validation scripts
+├── Scripts/                            # Test and validation scripts
 │   ├── README.md                       # Test documentation
 │   ├── test-nginx-geoip-logic-v3.sh    # GeoIP filtering tests (13 tests)
 │   ├── test-public-ip-detection.sh     # Public IP auto-detection tests
@@ -446,8 +446,8 @@ PacketTracerWeb/
 **📌 Key Files:**
 - **Deployment:** `deploy.sh` (main entry point)
 - **Configuration:** `.env` (environment variables)
-- **Testing:** `test-deployment.sh` (full suite), `scripts/test-*.sh` (unit tests)
-- **Test Documentation:** `scripts/README.md` (explains all test scripts)
+- **Testing:** `test-deployment.sh` (full suite), `Scripts/test-*.sh` (unit tests)
+- **Test Documentation:** `Scripts/README.md` (explains all test scripts)
 
 ---
 
@@ -463,7 +463,7 @@ All documentation is organized in the `Documents/` folder:
 | **Documents/GEOIP-FIX-TEST-REPORT.md** | Detailed testing results and validation |
 | **Documents/README.md** | Navigation guide for all documentation |
 
-- **Test Documentation:** `scripts/README.md` (explains all test scripts)
+- **Test Documentation:** `Scripts/README.md` (explains all test scripts)
 
 ---
 

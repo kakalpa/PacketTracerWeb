@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Helper to bring up the full stack: MariaDB, guacd, guacamole, nginx, and N PacketTracer containers
-# Usage: ./scripts/start-full-stack.sh [num_of_pt]
+# Usage: ./ptweb-vnc/scripts/start-full-stack.sh [num_of_pt]
 
 NUM=${1:-10}
 IMAGE_NAME=${IMAGE_NAME:-ptvnc}
