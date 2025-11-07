@@ -104,6 +104,7 @@ docker run -d --name pt-management \
   -e DB_PASSWORD="$DB_PASSWORD" \
   -e DB_NAME="$DB_NAME" \
   -e PROJECT_ROOT=/project \
+  -e SHARED_HOST_PATH="$ROOT_DIR/shared" \
   pt-management:latest
 
 # 4) Wait for pt-management health endpoint
