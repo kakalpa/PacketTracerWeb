@@ -38,6 +38,10 @@ for i in $(seq 1 ${NUM}); do
   
   # Connect container to pt-stack network for Guacamole access
   docker network connect pt-stack ${cname} 2>/dev/null || true
+  
+  # Create Desktop symlink to /shared for easy file access
+  docker exec ${cname} mkdir -p /home/ptuser/Desktop 2>/dev/null || true
+  docker exec ${cname} ln -sf /shared /home/ptuser/Desktop/shared 2>/dev/null || true
 done
 
 echo "All done. Access Guacamole via http://<host>/guacamole (nginx proxies to guacamole)."
