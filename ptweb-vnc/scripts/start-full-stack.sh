@@ -35,6 +35,9 @@ for i in $(seq 1 ${NUM}); do
   echo "Starting container ${cname}"
   docker run -d --name ${cname} --restart unless-stopped --cpus=0.1 -m 512M --kernel-memory 64M --oom-kill-disable --ulimit nproc=512 --ulimit nofile=1024:1024 ${IMAGE_NAME} || echo "Failed to start ${cname} (may already exist)"
   sleep 1
+  
+  # Connect container to pt-stack network for Guacamole access
+  docker network connect pt-stack ${cname} 2>/dev/null || true
 done
 
 echo "All done. Access Guacamole via http://<host>/guacamole (nginx proxies to guacamole)."
