@@ -1,6 +1,7 @@
 """API routes for bulk user and container management"""
 
 import logging
+import os
 import subprocess
 from functools import wraps
 from flask import Blueprint, request, jsonify, session
@@ -190,6 +191,17 @@ def create_api_blueprint():
                             
                             if result.returncode == 0:
                                 logger.info(f"✓ Created container {container_name}")
+
+                                # Connect container to pt-stack network for Guacamole connectivity
+                                try:
+                                    net_cmd = ['docker', 'network', 'connect', 'pt-stack', container_name]
+                                    net_result = subprocess.run(net_cmd, capture_output=True, text=True, timeout=10)
+                                    if net_result.returncode == 0:
+                                        logger.info(f"✓ Connected {container_name} to pt-stack network")
+                                    else:
+                                        logger.warning(f"⚠ Failed to connect {container_name} to pt-stack: {net_result.stderr}")
+                                except Exception as e:
+                                    logger.warning(f"⚠ Error connecting to network: {e}")
                                 
                                 # Assign container to user
                                 if assign_container_to_user(username, container_name):

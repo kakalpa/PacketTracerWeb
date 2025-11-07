@@ -3,6 +3,12 @@
 # This script creates database entries that match the ACTUAL running ptvnc containers
 # Usage: bash generate-dynamic-connections.sh
 # (automatically detects running containers)
+#
+# NOTE: This script is now NON-DESTRUCTIVE. It:
+# - Does NOT delete user-created connections (vnc-ptvnc*)
+# - Does NOT delete bulk-created users
+# - Only ensures the legacy pt01, pt02, etc. connections exist for ptadmin
+# - New connections should be created via bulk-create API, not this script
 
 set -e
 
@@ -21,32 +27,19 @@ fi
 
 numofPT=$(echo "$ptvnc_containers" | wc -l)
 
-echo "Generating connections for $numofPT actual instances..."
+echo "Generating legacy connections for $numofPT actual instances..."
 echo "Found containers: $(echo $ptvnc_containers | tr '\n' ' ')"
 echo ""
+echo "⚠️  NOTE: This only creates legacy pt01, pt02... connections for backward compatibility"
+echo "    For bulk-created users, connections are created automatically during user creation"
+echo ""
 
-# Create SQL file with dynamic connections
+# Create SQL file with dynamic connections (NON-DESTRUCTIVE)
 cat > /tmp/dynamic_connections.sql << 'EOF'
 USE guacamole_db;
 
--- Clear existing connections and related data
-DELETE FROM guacamole_connection_permission;
-DELETE FROM guacamole_connection_parameter;
-DELETE FROM guacamole_connection;
-DELETE FROM guacamole_connection_group;
-
--- Reset auto_increment for connection table
-ALTER TABLE guacamole_connection AUTO_INCREMENT = 1;
-
--- Clear existing users/entities (except ptadmin)
-DELETE FROM guacamole_user_permission WHERE affected_user_id NOT IN (SELECT user_id FROM guacamole_user WHERE entity_id = (SELECT entity_id FROM guacamole_entity WHERE name = 'ptadmin'));
-DELETE FROM guacamole_user_group_member;
-DELETE FROM guacamole_user WHERE entity_id NOT IN (SELECT entity_id FROM guacamole_entity WHERE name = 'ptadmin');
-DELETE FROM guacamole_user_group WHERE entity_id NOT IN (SELECT entity_id FROM guacamole_entity WHERE name = 'admins' OR name = 'PTuser');
-DELETE FROM guacamole_entity WHERE name NOT IN ('ptadmin', 'admins', 'PTuser');
-
--- Reset auto_increment for entity table  
-ALTER TABLE guacamole_entity AUTO_INCREMENT = 5;
+-- Get ptadmin entity_id for permission assignment
+SET @ptadmin_id = (SELECT entity_id FROM guacamole_entity WHERE name='ptadmin' AND type='USER');
 
 EOF
 
@@ -55,30 +48,30 @@ ptadmin_id=$(docker exec $mariadb_container mariadb -u${dbuser} -p${dbpass} ${db
 
 echo "Admin entity ID: $ptadmin_id"
 
-# Generate connection entries dynamically for EACH ACTUAL CONTAINER
+# Generate connection entries ONLY for legacy pt01, pt02, etc. naming
+# Do NOT delete existing vnc-ptvnc* connections created by bulk-create
 for instance_num in $ptvnc_containers; do
     connection_name="pt$(printf "%02d" $instance_num)"
     
     cat >> /tmp/dynamic_connections.sql << EOFCONN
--- Connection: $connection_name
-INSERT INTO \`guacamole_entity\` (\`name\`, \`type\`) VALUES ('$connection_name', 'USER');
-
-SET @conn_id = (SELECT LAST_INSERT_ID());
-
-INSERT INTO \`guacamole_connection\` (\`connection_name\`, \`protocol\`, \`proxy_port\`, \`proxy_hostname\`, \`proxy_encryption_method\`, \`max_connections\`, \`max_connections_per_user\`, \`failover_only\`) 
+-- Create legacy connection: $connection_name -> ptvnc$instance_num
+-- Only create if it doesn't already exist
+INSERT IGNORE INTO \`guacamole_connection\` 
+(\`connection_name\`, \`protocol\`, \`proxy_port\`, \`proxy_hostname\`, \`proxy_encryption_method\`, \`max_connections\`, \`max_connections_per_user\`, \`failover_only\`) 
 VALUES ('$connection_name', 'vnc', 4822, 'guacd', 'NONE', 1, 1, 0);
 
-SET @last_conn = (SELECT LAST_INSERT_ID());
+-- Grant access to ptadmin (only if not already granted)
+INSERT IGNORE INTO \`guacamole_connection_permission\` 
+(\`entity_id\`, \`connection_id\`, \`permission\`) 
+VALUES (@ptadmin_id, (SELECT connection_id FROM guacamole_connection WHERE connection_name = '$connection_name'), 'READ');
 
-INSERT INTO \`guacamole_connection_parameter\` (\`connection_id\`, \`parameter_name\`, \`parameter_value\`) 
+-- Set connection parameters (only create if not already set)
+INSERT IGNORE INTO \`guacamole_connection_parameter\` 
+(\`connection_id\`, \`parameter_name\`, \`parameter_value\`) 
 VALUES 
-  (@last_conn, 'hostname', 'ptvnc$instance_num'),
-  (@last_conn, 'port', '5901'),
-  (@last_conn, 'password', 'Cisco123');
-
--- Grant access to ptadmin
-INSERT INTO \`guacamole_connection_permission\` (\`entity_id\`, \`connection_id\`, \`permission\`) 
-VALUES ($ptadmin_id, @last_conn, 'READ');
+  ((SELECT connection_id FROM guacamole_connection WHERE connection_name = '$connection_name'), 'hostname', 'ptvnc$instance_num'),
+  ((SELECT connection_id FROM guacamole_connection WHERE connection_name = '$connection_name'), 'port', '5901'),
+  ((SELECT connection_id FROM guacamole_connection WHERE connection_name = '$connection_name'), 'password', 'Cisco123');
 
 EOFCONN
 done
@@ -86,12 +79,14 @@ done
 echo "SQL generated. Applying to database..."
 docker exec -i $mariadb_container mariadb -u${dbuser} -p${dbpass} < /tmp/dynamic_connections.sql
 
-echo "✅ Successfully created $numofPT dynamic connections in Guacamole!"
+echo "✅ Successfully ensured $numofPT legacy connections exist in Guacamole!"
 echo ""
-echo "Available connections:"
+echo "Available legacy connections (for ptadmin):"
 for instance_num in $ptvnc_containers; do
     echo "  - pt$(printf "%02d" $instance_num)"
 done
+echo ""
+echo "User-specific connections (vnc-ptvnc*) are created automatically during bulk user creation."
 
 # Clean up
 rm /tmp/dynamic_connections.sql
