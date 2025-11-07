@@ -50,6 +50,13 @@ if ! docker network ls --format '{{.Name}}' | grep -q '^pt-stack$'; then
   docker network create pt-stack || true
 fi
 
+# Ensure host shared directory exists and is writable so containers can mount it
+if [[ ! -d "$ROOT_DIR/shared" ]]; then
+  echo "Creating host shared directory: $ROOT_DIR/shared"
+  mkdir -p "$ROOT_DIR/shared"
+  chmod 777 "$ROOT_DIR/shared" || true
+fi
+
 # Connect all containers to pt-stack network for inter-container communication
 echo "Connecting containers to pt-stack network..."
 for container in guacamole-mariadb pt-guacd pt-guacamole pt-nginx1 ptvnc1 ptvnc2; do

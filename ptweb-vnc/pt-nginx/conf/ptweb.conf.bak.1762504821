@@ -33,6 +33,8 @@ server {
     }
     # ALLOW mode: only permitted countries allowed
     if ($allowed_country = 0) { return 444; }
+    # BLOCK mode: blocked countries denied
+    if ($blocked_country = 1) { return 444; }
     alias /shared/;
     autoindex on;
     autoindex_exact_size off;
@@ -48,6 +50,8 @@ server {
     }
     # ALLOW mode: only permitted countries allowed
     if ($allowed_country = 0) { return 444; }
+    # BLOCK mode: blocked countries denied
+    if ($blocked_country = 1) { return 444; }
     rewrite ^/files/?$ /file-manager.html break;
   }
 
@@ -60,6 +64,8 @@ server {
     }
     # ALLOW mode: only permitted countries allowed
     if ($allowed_country = 0) { return 444; }
+    # BLOCK mode: blocked countries denied
+    if ($blocked_country = 1) { return 444; }
     proxy_redirect off;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

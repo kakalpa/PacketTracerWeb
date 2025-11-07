@@ -66,6 +66,9 @@ def execute_query(query, params=None, fetch_one=False, fetch_all=False):
         return result
     except Error as e:
         logger.error(f"Query execution failed: {e}")
+        logger.error(f"Failed query: {query}")
+        if params:
+            logger.error(f"Parameters: {params}")
         return None if fetch_all else None
     finally:
         connection.close()
