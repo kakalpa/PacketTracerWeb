@@ -31,9 +31,16 @@ def require_auth_or_internal(f):
     """Decorator to require authentication OR internal network access"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Allow internal network (127.0.0.1, ::1, localhost, docker internal IPs)
+        # Allow internal network (127.0.0.1, ::1, localhost, docker internal IPs starting with 172. or 10.)
         client_ip = request.remote_addr
-        if client_ip in ['127.0.0.1', '::1', 'localhost'] or client_ip.startswith('172.'):
+        is_internal = (
+            client_ip in ['127.0.0.1', '::1', 'localhost'] or 
+            client_ip.startswith('172.') or 
+            client_ip.startswith('10.')
+        )
+        
+        if is_internal:
+            logger.debug(f"✓ Allowing internal request from {client_ip}")
             return f(*args, **kwargs)
         
         # Otherwise require session auth
@@ -85,7 +92,7 @@ def create_api_blueprint():
             return jsonify({'error': str(e)}), 500
     
     @api.route('/users', methods=['POST'])
-    @require_auth
+    @require_auth_or_internal
     def create_users():
         """
         Create multiple users from CSV data.
@@ -142,19 +149,41 @@ def create_api_blueprint():
                             logger.warning(f"⚠ Failed to grant admin permission to {username}")
                     
                     if create_container:
-                        # Spin up a new container for this user
-                        container_name = f"{username}-ptvnc"
+                        # Spin up a new container - auto-increment ptvnc naming
                         try:
+                            # Get all existing ptvnc containers to find the next number
+                            from ptmanagement.docker_mgmt.container import DockerManager
+                            docker_mgr = DockerManager()
+                            existing_containers = docker_mgr.list_containers()
+                            
+                            # Extract numbers from container names like ptvnc1, ptvnc10, etc.
+                            next_number = 1
+                            numbers = []
+                            for container in existing_containers:
+                                name = container.get('name', '')
+                                if name.startswith('ptvnc') and len(name) > 5:
+                                    suffix = name[5:]  # Everything after 'ptvnc'
+                                    if suffix.isdigit():
+                                        numbers.append(int(suffix))
+                            
+                            if numbers:
+                                next_number = max(numbers) + 1
+                            
+                            container_name = f'ptvnc{next_number}'
                             logger.info(f"Creating container {container_name} for user {username}...")
                             
-                            # Create the container using docker CLI
+                            # Get the actual host path for /shared (needed for docker daemon to understand)
+                            shared_path = os.getenv('SHARED_HOST_PATH', os.path.join(os.getenv('PROJECT_ROOT', '/project'), 'shared'))
+                            
+                            # Create the container using docker CLI with /shared mount
                             cmd = [
                                 'docker', 'run', '-d',
                                 '--name', container_name,
                                 '--restart', 'unless-stopped',
                                 '--cpus', '0.5',
                                 '-m', '512m',
-                                '-p', '5900:5900/tcp',
+                                '-v', 'pt_opt:/opt/pt',  # Named volume for Packet Tracer binary
+                                f'--mount=type=bind,source={shared_path},target=/shared,bind-propagation=rprivate',
                                 'ptvnc'
                             ]
                             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -167,12 +196,33 @@ def create_api_blueprint():
                                     logger.info(f"✓ Assigned container {container_name} to {username}")
                                     container_assigned = container_name
                                     
+                                    # Create VNC connection in Guacamole for this container
+                                    connection_name = f"vnc-{container_name}"
+                                    try:
+                                        connection_id = create_vnc_connection(connection_name, container_name, vnc_port=5900)
+                                        if connection_id:
+                                            # Assign connection to user (use connection_id, not connection_name!)
+                                            if assign_connection_to_user(username, connection_id):
+                                                logger.info(f"✓ Created and assigned VNC connection {connection_name} to {username}")
+                                            else:
+                                                logger.warning(f"⚠ Failed to assign connection {connection_name} to {username}")
+                                        else:
+                                            logger.warning(f"⚠ Failed to create VNC connection {connection_name}")
+                                    except Exception as conn_err:
+                                        logger.warning(f"⚠ Error creating VNC connection: {conn_err}")
+                                    
                                     # Get list of admin users and assign them the same container
                                     # For now, we'll assign to the logged-in admin user
                                     current_user = session.get('user')
                                     if current_user:
                                         assign_container_to_user(current_user, container_name)
                                         logger.info(f"✓ Assigned container {container_name} to admin {current_user}")
+                                        # Also assign the connection to admin
+                                        try:
+                                            assign_connection_to_user(current_user, connection_id)
+                                            logger.info(f"✓ Assigned connection {connection_name} to admin {current_user}")
+                                        except Exception as conn_err:
+                                            logger.warning(f"⚠ Error assigning connection to admin: {conn_err}")
                                 else:
                                     logger.warning(f"⚠ Failed to assign container {container_name} to {username}")
                             else:
@@ -211,13 +261,38 @@ def create_api_blueprint():
     @api.route('/users/<username>', methods=['DELETE'])
     @require_auth
     def delete_user_endpoint(username):
-        """Delete a user"""
+        """Delete a user with optional container deletion
+        
+        Query parameters:
+        - delete_container: 'true' or 'false' (default: 'false')
+        """
         try:
             if not user_exists(username):
                 return jsonify({'error': 'User not found'}), 404
             
+            delete_container = request.args.get('delete_container', 'false').lower() == 'true'
+            containers_deleted = []
+            
+            # If delete_container flag is set, get and delete assigned containers
+            if delete_container:
+                from ptmanagement.db.guacamole import get_containers_by_user
+                user_containers = get_containers_by_user(username)
+                
+                for container_name in user_containers:
+                    try:
+                        docker_mgr.delete_container(container_name, force=True)
+                        containers_deleted.append(container_name)
+                        logger.info(f"✓ Deleted container {container_name} for user {username}")
+                    except Exception as e:
+                        logger.warning(f"⚠ Failed to delete container {container_name}: {e}")
+            
             if delete_user(username):
-                return jsonify({'success': True, 'message': f'User {username} deleted'}), 200
+                response = {
+                    'success': True,
+                    'message': f'User {username} deleted',
+                    'containers_deleted': containers_deleted
+                }
+                return jsonify(response), 200
             else:
                 return jsonify({'error': 'Failed to delete user'}), 500
         except Exception as e:
@@ -225,24 +300,18 @@ def create_api_blueprint():
             return jsonify({'error': str(e)}), 500
     
     @api.route('/users/bulk/delete', methods=['POST'])
-    @require_auth
+    @require_auth_or_internal
     def bulk_delete_users():
         """
-        Delete multiple users from CSV data.
+        Delete multiple users with optional container deletion.
         
         Expected JSON:
         {
             "users": [
                 {"username": "user1"},
                 {"username": "user2"}
-            ]
-        }
-        Or for backward compatibility with create CSV format:
-        {
-            "users": [
-                {"username": "user1", "password": "pass1"},
-                {"username": "user2", "password": "pass2"}
-            ]
+            ],
+            "delete_containers": true  # Optional: delete assigned containers (default: false)
         }
         """
         try:
@@ -251,9 +320,13 @@ def create_api_blueprint():
                 return jsonify({'error': 'Missing users data'}), 400
             
             users = data['users']
+            delete_containers = data.get('delete_containers', False)
             deleted = []
             failed = []
             not_found = []
+            containers_deleted = []
+            
+            from ptmanagement.db.guacamole import get_containers_by_user
             
             for user_data in users:
                 username = user_data.get('username', '').strip()
@@ -266,6 +339,20 @@ def create_api_blueprint():
                     not_found.append(username)
                     continue
                 
+                # Delete containers if requested
+                if delete_containers:
+                    try:
+                        user_containers = get_containers_by_user(username)
+                        for container_name in user_containers:
+                            try:
+                                docker_mgr.delete_container(container_name, force=True)
+                                containers_deleted.append(container_name)
+                                logger.info(f"✓ Deleted container {container_name} for user {username}")
+                            except Exception as e:
+                                logger.warning(f"⚠ Failed to delete container {container_name}: {e}")
+                    except Exception as e:
+                        logger.warning(f"⚠ Failed to get containers for user {username}: {e}")
+                
                 if delete_user(username):
                     deleted.append(username)
                 else:
@@ -276,9 +363,11 @@ def create_api_blueprint():
                 'deleted': deleted,
                 'not_found': not_found,
                 'failed': failed,
+                'containers_deleted': containers_deleted,
                 'count_deleted': len(deleted),
                 'count_not_found': len(not_found),
-                'count_failed': len(failed)
+                'count_failed': len(failed),
+                'count_containers_deleted': len(containers_deleted)
             }), 200
         except Exception as e:
             logger.error(f"✗ Failed to bulk delete users: {e}")

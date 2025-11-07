@@ -694,6 +694,7 @@ CREATE TABLE `user_container_mapping` (
   `container_id` varchar(255),
   `status` varchar(20) DEFAULT 'active',
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_user_container` (`user_id`, `container_name`),
   FOREIGN KEY (`user_id`) REFERENCES `guacamole_user` (`user_id`) ON DELETE CASCADE,

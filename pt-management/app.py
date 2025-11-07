@@ -95,11 +95,41 @@ def create_app():
         protected_routes = ['/dashboard', '/settings', '/api/']
         
         if any(request.path.startswith(route) for route in protected_routes):
-            # Allow specific endpoints without auth
+            # Allow specific endpoints without auth (internal or batch operations)
             if request.path.startswith('/api/containers') and request.method == 'POST':
                 return  # Skip auth
             if request.path.startswith('/api/env/defaults') and request.method == 'GET':
                 return  # Skip auth for public defaults endpoint
+            if request.path.startswith('/api/users') and request.method == 'POST':
+                # Allow POST to /api/users for bulk create from internal network
+                client_ip = request.remote_addr
+                is_internal = (
+                    client_ip in ['127.0.0.1', '::1', 'localhost'] or 
+                    client_ip.startswith('172.') or 
+                    client_ip.startswith('10.')
+                )
+                if is_internal:
+                    return  # Allow internal requests
+            if request.path.startswith('/api/users/bulk/delete') and request.method == 'POST':
+                # Allow bulk delete from internal network
+                client_ip = request.remote_addr
+                is_internal = (
+                    client_ip in ['127.0.0.1', '::1', 'localhost'] or 
+                    client_ip.startswith('172.') or 
+                    client_ip.startswith('10.')
+                )
+                if is_internal:
+                    return  # Allow internal requests
+            if request.path.startswith('/api/users/') and request.method == 'DELETE':
+                # Allow DELETE /api/users/<username> from internal network
+                client_ip = request.remote_addr
+                is_internal = (
+                    client_ip in ['127.0.0.1', '::1', 'localhost'] or 
+                    client_ip.startswith('172.') or 
+                    client_ip.startswith('10.')
+                )
+                if is_internal:
+                    return  # Allow internal requests
                 
             if 'user' not in session:
                 return redirect(url_for('login'))

@@ -219,10 +219,10 @@ def delete_user(username):
         
         user_id = user_result['user_id']
         
-        # Delete all permissions for this user
-        execute_query("DELETE FROM guacamole_user_permission WHERE user_id = %s", (user_id,))
-        execute_query("DELETE FROM guacamole_connection_permission WHERE user_id = %s", (user_id,))
-        execute_query("DELETE FROM guacamole_sharing_profile_permission WHERE user_id = %s", (user_id,))
+        # Delete all permissions for this user (use entity_id, not user_id)
+        execute_query("DELETE FROM guacamole_user_permission WHERE affected_user_id = %s", (user_id,))
+        execute_query("DELETE FROM guacamole_connection_permission WHERE entity_id = %s", (entity_id,))
+        execute_query("DELETE FROM guacamole_sharing_profile_permission WHERE entity_id = %s", (entity_id,))
         
         # Delete the user record
         execute_query("DELETE FROM guacamole_user WHERE user_id = %s", (user_id,))
@@ -581,6 +581,31 @@ def get_user_container(username):
     except Exception as e:
         logger.error(f"✗ Failed to get user container: {e}")
         return None
+
+
+def get_containers_by_user(username):
+    """
+    Get all containers assigned to a user.
+    
+    Args:
+        username: Username
+    
+    Returns:
+        List of container names
+    """
+    try:
+        query = """
+        SELECT ucm.container_name
+        FROM user_container_mapping ucm
+        JOIN guacamole_user u ON ucm.user_id = u.user_id
+        JOIN guacamole_entity e ON u.entity_id = e.entity_id
+        WHERE e.name = %s AND ucm.status = 'active'
+        """
+        results = execute_query(query, (username,), fetch_all=True)
+        return [r['container_name'] for r in (results or [])]
+    except Exception as e:
+        logger.error(f"✗ Failed to get containers for user {username}: {e}")
+        return []
 
 
 def get_users_by_container(container_name):
