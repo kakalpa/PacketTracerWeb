@@ -27,14 +27,12 @@ server {
   # Serve shared downloads with highest priority
   location ^~ /downloads/ {
     # Bypass GeoIP for trusted IPs (local/private/public)
-    if ($remote_addr ~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)) {
+    if ($remote_addr ~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)|86.50.84.227) {
       set $allowed_country 1;
       set $blocked_country 0;
     }
     # ALLOW mode: only permitted countries allowed
     if ($allowed_country = 0) { return 444; }
-    # BLOCK mode: blocked countries denied
-    if ($blocked_country = 1) { return 444; }
     alias /shared/;
     autoindex on;
     autoindex_exact_size off;
@@ -44,28 +42,24 @@ server {
   # File manager interface
   location ^~ /files {
     # Bypass GeoIP for trusted IPs (local/private/public)
-    if ($remote_addr ~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)) {
+    if ($remote_addr ~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)|86.50.84.227) {
       set $allowed_country 1;
       set $blocked_country 0;
     }
     # ALLOW mode: only permitted countries allowed
     if ($allowed_country = 0) { return 444; }
-    # BLOCK mode: blocked countries denied
-    if ($blocked_country = 1) { return 444; }
     rewrite ^/files/?$ /file-manager.html break;
   }
 
-  # Root location - proxy Guacamole at /
-  location / {
+  # Guacamole location
+  location /guacamole/ {
     # Bypass GeoIP for trusted IPs (local/private/public)
-    if ($remote_addr ~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)) {
+    if ($remote_addr ~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)|86.50.84.227) {
       set $allowed_country 1;
       set $blocked_country 0;
     }
     # ALLOW mode: only permitted countries allowed
     if ($allowed_country = 0) { return 444; }
-    # BLOCK mode: blocked countries denied
-    if ($blocked_country = 1) { return 444; }
     proxy_redirect off;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -85,6 +79,11 @@ server {
     proxy_read_timeout 90;
     proxy_buffers 32 4k;
     proxy_pass http://guacamole:8080/guacamole/;
+  }
+
+  # Root redirect to Guacamole
+  location = / {
+    return 301 /guacamole/;
   }
 
   location ~ \.ht {

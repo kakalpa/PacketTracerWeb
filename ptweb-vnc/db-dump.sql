@@ -679,6 +679,39 @@ LOCK TABLES `guacamole_user_permission` WRITE;
 INSERT INTO `guacamole_user_permission` VALUES (5,3,'READ'),(6,4,'READ'),(7,5,'READ'),(8,6,'READ'),(9,7,'READ'),(10,8,'READ'),(11,9,'READ'),(12,10,'READ'),(13,11,'READ'),(14,12,'READ'),(15,13,'READ'),(15,13,'UPDATE');
 /*!40000 ALTER TABLE `guacamole_user_permission` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table `user_container_mapping`
+--
+
+DROP TABLE IF EXISTS `user_container_mapping`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `user_container_mapping` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `container_name` varchar(255) NOT NULL,
+  `container_id` varchar(255),
+  `status` varchar(20) DEFAULT 'active',
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_user_container` (`user_id`, `container_name`),
+  FOREIGN KEY (`user_id`) REFERENCES `guacamole_user` (`user_id`) ON DELETE CASCADE,
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_container_name` (`container_name`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `user_container_mapping`
+--
+
+LOCK TABLES `user_container_mapping` WRITE;
+/*!40000 ALTER TABLE `user_container_mapping` DISABLE KEYS */;
+/*!40000 ALTER TABLE `user_container_mapping` ENABLE KEYS */;
+UNLOCK TABLES;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

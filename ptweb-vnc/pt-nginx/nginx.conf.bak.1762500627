@@ -45,7 +45,6 @@ http {
         default 0;  # Default to 0 (deny all unless explicitly allowed)
         FI 1;
         SL 1;
-        UK 1;
         US 1;
     }
 
@@ -53,6 +52,7 @@ http {
     # Returns 1 if country is in block list, 0 (allow) for all others
     map $geoip_country_code $blocked_country {
         default 0;  # Default to 0 (allow unless explicitly blocked)
+        CN 1;
         RU 1;
         IR 1;
     }

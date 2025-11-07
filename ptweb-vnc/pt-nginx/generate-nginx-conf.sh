@@ -270,7 +270,7 @@ EOF
     rewrite ^/files/?$ /file-manager.html break;
   }
 
-  # Root location - catches all other requests for Guacamole
+  # Root location - proxy Guacamole at /
   location / {
 EOF
   render_geoip_check

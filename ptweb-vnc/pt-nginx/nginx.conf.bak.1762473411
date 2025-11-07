@@ -46,17 +46,12 @@ http {
         FI 1;
         SL 1;
         UK 1;
-        US 1;
     }
 
-    # BLOCK mode (blacklist): Deny traffic from specified countries
-    # Returns 1 if country is in block list, 0 (allow) for all others
+    # BLOCK mode disabled - no countries blocked
     map $geoip_country_code $blocked_country {
-        default 0;  # Default to 0 (allow unless explicitly blocked)
-        RU 1;
-        IR 1;
+        default 0;  # Default to 0 (don't block)
     }
-
     # Include all server configurations from conf.d
     include /etc/nginx/conf.d/*.conf;
 }
