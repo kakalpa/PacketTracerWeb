@@ -203,6 +203,21 @@ def create_api_blueprint():
                                 except Exception as e:
                                     logger.warning(f"⚠ Error connecting to network: {e}")
                                 
+                                # Create Desktop symlink to /shared for easy file access
+                                try:
+                                    symlink_cmd = [
+                                        'docker', 'exec', container_name,
+                                        'bash', '-c',
+                                        'mkdir -p /home/ptuser/Desktop && ln -sf /shared /home/ptuser/Desktop/shared'
+                                    ]
+                                    symlink_result = subprocess.run(symlink_cmd, capture_output=True, text=True, timeout=10)
+                                    if symlink_result.returncode == 0:
+                                        logger.info(f"✓ Created Desktop symlink in {container_name}")
+                                    else:
+                                        logger.warning(f"⚠ Failed to create Desktop symlink in {container_name}: {symlink_result.stderr}")
+                                except Exception as e:
+                                    logger.warning(f"⚠ Error creating Desktop symlink: {e}")
+                                
                                 # Assign container to user
                                 if assign_container_to_user(username, container_name):
                                     logger.info(f"✓ Assigned container {container_name} to {username}")
