@@ -90,6 +90,10 @@ for ((i=0; i<instances_to_add; i++)); do
       ptvnc
     
     sleep 2
+    
+    # Connect container to pt-stack network for Guacamole access
+    docker network connect pt-stack $container_name 2>/dev/null || true
+    echo "  ✓ Connected $container_name to pt-stack network"
 done
 
 echo "✅ Containers started"
