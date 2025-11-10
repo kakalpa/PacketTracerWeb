@@ -224,7 +224,9 @@ def create_api_blueprint():
                                     container_assigned = container_name
                                     
                                     # Create VNC connection in Guacamole for this container
-                                    connection_name = f"vnc-{container_name}"
+                                    # Extract number from container name (ptvnc3 -> pt03)
+                                    container_num = container_name.replace('ptvnc', '').lstrip('0') or '0'
+                                    connection_name = f"pt{int(container_num):02d}"
                                     try:
                                         connection_id = create_vnc_connection(connection_name, container_name, vnc_port=5901)
                                         if connection_id:
@@ -269,7 +271,9 @@ def create_api_blueprint():
                             container_assigned = existing_container
                             
                             # Create or get VNC connection for this container
-                            connection_name = f"vnc-{existing_container}"
+                            # Extract number from container name (ptvnc3 -> pt03)
+                            container_num = existing_container.replace('ptvnc', '').lstrip('0') or '0'
+                            connection_name = f"pt{int(container_num):02d}"
                             try:
                                 connection_id = create_vnc_connection(connection_name, existing_container, vnc_port=5901)
                                 if connection_id:
