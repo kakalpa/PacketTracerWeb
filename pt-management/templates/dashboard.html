@@ -89,6 +89,48 @@
             max-height: 200px;
             margin: 10px 0;
         }
+        
+        /* Make user admin checkbox styling - red to stand out */
+        #makeAdminCheckbox {
+            accent-color: #dc3545;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        #makeAdminCheckbox:checked {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        
+        #makeAdminCheckbox:focus {
+            box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+            border-color: #dc3545;
+        }
+        
+        /* Style the label to emphasize the admin checkbox */
+        .admin-checkbox-label {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        
+        /* Apply red accent to single user admin checkbox */
+        #singleUserIsAdmin {
+            accent-color: #dc3545;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        #singleUserIsAdmin:checked {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        
+        #singleUserIsAdmin:focus {
+            box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+            border-color: #dc3545;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 </head>
@@ -367,8 +409,8 @@
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="makeAdminCheckbox">
-                            <label class="form-check-label" for="makeAdminCheckbox">
-                                Make All Users Admin
+                            <label class="form-check-label admin-checkbox-label" for="makeAdminCheckbox">
+                                ⚠️ Make All Users Admin
                             </label>
                         </div>
                         <small class="text-muted d-block mt-2">
@@ -488,8 +530,8 @@
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="singleUserIsAdmin">
-                            <label class="form-check-label" for="singleUserIsAdmin">
-                                Make this user an Admin
+                            <label class="form-check-label admin-checkbox-label" for="singleUserIsAdmin">
+                                ⚠️ Make this user an Admin
                             </label>
                         </div>
                         <small class="text-muted d-block mt-2">
