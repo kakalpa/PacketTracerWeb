@@ -183,6 +183,7 @@ def create_api_blueprint():
                                 '--restart', 'unless-stopped',
                                 '--cpus', '0.5',
                                 '-m', '512m',
+                                '--dns', '127.0.0.1',
                                 '-v', 'pt_opt:/opt/pt',  # Named volume for Packet Tracer binary
                                 f'--mount=type=bind,source={shared_path},target=/shared,bind-propagation=rprivate',
                                 'ptvnc'
@@ -194,10 +195,17 @@ def create_api_blueprint():
 
                                 # Connect container to pt-stack network for Guacamole connectivity
                                 try:
+                                    # Connect to network and preserve DNS settings
                                     net_cmd = ['docker', 'network', 'connect', 'pt-stack', container_name]
                                     net_result = subprocess.run(net_cmd, capture_output=True, text=True, timeout=10)
                                     if net_result.returncode == 0:
                                         logger.info(f"✓ Connected {container_name} to pt-stack network")
+                                        
+                                        # Verify DNS is still set after network connection
+                                        inspect_cmd = ['docker', 'inspect', container_name, '--format={{json .HostConfig.Dns}}']
+                                        inspect_result = subprocess.run(inspect_cmd, capture_output=True, text=True, timeout=5)
+                                        if inspect_result.returncode == 0:
+                                            logger.info(f"  DNS config: {inspect_result.stdout.strip()}")
                                     else:
                                         logger.warning(f"⚠ Failed to connect {container_name} to pt-stack: {net_result.stderr}")
                                 except Exception as e:
