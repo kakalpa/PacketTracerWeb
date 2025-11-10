@@ -174,7 +174,11 @@ def create_api_blueprint():
                             logger.info(f"Creating container {container_name} for user {username}...")
                             
                             # Get the actual host path for /shared (needed for docker daemon to understand)
-                            shared_path = os.getenv('SHARED_HOST_PATH', os.path.join(os.getenv('PROJECT_ROOT', '/project'), 'shared'))
+                            # CRITICAL: Must use SHARED_HOST_PATH from environment (host path), not PROJECT_ROOT (container path)
+                            shared_path_env = os.getenv('SHARED_HOST_PATH')
+                            shared_path = shared_path_env if shared_path_env else os.path.join(os.getenv('PROJECT_ROOT', '/project'), 'shared')
+                            logger.info(f"DEBUG: SHARED_HOST_PATH env = {shared_path_env}")
+                            logger.info(f"DEBUG: Using shared_path = {shared_path}")
                             project_root = os.getenv('PROJECT_ROOT', '/project')
                             
                             # Find CiscoPacketTracer.deb - check common locations
@@ -235,15 +239,16 @@ def create_api_blueprint():
                                     logger.warning(f"⚠ Error connecting to network: {e}")
                                 
                                 # Create Desktop symlink to /shared for easy file access
+                                # Also fix /shared permissions to be writable by ptuser
                                 try:
                                     symlink_cmd = [
                                         'docker', 'exec', container_name,
                                         'bash', '-c',
-                                        'mkdir -p /home/ptuser/Desktop && ln -sf /shared /home/ptuser/Desktop/shared'
+                                        'mkdir -p /home/ptuser/Desktop && ln -sf /shared /home/ptuser/Desktop/shared && chmod 777 /shared && chown ptuser:ptuser /shared'
                                     ]
                                     symlink_result = subprocess.run(symlink_cmd, capture_output=True, text=True, timeout=10)
                                     if symlink_result.returncode == 0:
-                                        logger.info(f"✓ Created Desktop symlink in {container_name}")
+                                        logger.info(f"✓ Created Desktop symlink and fixed /shared permissions in {container_name}")
                                     else:
                                         logger.warning(f"⚠ Failed to create Desktop symlink in {container_name}: {symlink_result.stderr}")
                                 except Exception as e:
@@ -257,7 +262,14 @@ def create_api_blueprint():
                                     # Create VNC connection in Guacamole for this container
                                     # Extract number from container name (ptvnc3 -> pt03)
                                     container_num = container_name.replace('ptvnc', '').lstrip('0') or '0'
-                                    connection_name = f"pt{int(container_num):02d}"
+                                    connection_num = int(container_num)
+                                    
+                                    # Prevent creating pt01 or pt02 (reserved for ptvnc1 and ptvnc2)
+                                    if connection_num < 3:
+                                        logger.warning(f"⚠ Skipping connection pt{connection_num:02d} - reserved for hardcoded containers")
+                                        continue
+                                    
+                                    connection_name = f"pt{connection_num:02d}"
                                     try:
                                         connection_id = create_vnc_connection(connection_name, container_name, vnc_port=5901)
                                         if connection_id:
@@ -304,19 +316,25 @@ def create_api_blueprint():
                             # Create or get VNC connection for this container
                             # Extract number from container name (ptvnc3 -> pt03)
                             container_num = existing_container.replace('ptvnc', '').lstrip('0') or '0'
-                            connection_name = f"pt{int(container_num):02d}"
-                            try:
-                                connection_id = create_vnc_connection(connection_name, existing_container, vnc_port=5901)
-                                if connection_id:
-                                    # Assign connection to user
-                                    if assign_connection_to_user(username, connection_id):
-                                        logger.info(f"✓ Assigned VNC connection {connection_name} to {username}")
+                            connection_num = int(container_num)
+                            
+                            # Prevent creating pt01 or pt02 (reserved for ptvnc1 and ptvnc2)
+                            if connection_num < 3:
+                                logger.warning(f"⚠ Skipping VNC connection for pt{connection_num:02d} - reserved for hardcoded containers")
+                            else:
+                                connection_name = f"pt{connection_num:02d}"
+                                try:
+                                    connection_id = create_vnc_connection(connection_name, existing_container, vnc_port=5901)
+                                    if connection_id:
+                                        # Assign connection to user
+                                        if assign_connection_to_user(username, connection_id):
+                                            logger.info(f"✓ Assigned VNC connection {connection_name} to {username}")
+                                        else:
+                                            logger.warning(f"⚠ Failed to assign connection {connection_name} to {username}")
                                     else:
-                                        logger.warning(f"⚠ Failed to assign connection {connection_name} to {username}")
-                                else:
-                                    logger.warning(f"⚠ Failed to create VNC connection {connection_name}")
-                            except Exception as conn_err:
-                                logger.warning(f"⚠ Error creating VNC connection: {conn_err}")
+                                        logger.warning(f"⚠ Failed to create VNC connection {connection_name}")
+                                except Exception as conn_err:
+                                    logger.warning(f"⚠ Error creating VNC connection: {conn_err}")
                         else:
                             logger.warning(f"⚠ Failed to assign container {existing_container} to {username}")
                     
@@ -547,12 +565,15 @@ def create_api_blueprint():
                     logger.warning(f"⚠ Error connecting to network: {e}")
                 
                 # Create symlink to /shared on Desktop for easy access
+                # Also fix /shared permissions to be writable by ptuser
                 try:
                     docker_mgr.exec_in_container(container_name, ['mkdir', '-p', '/home/ptuser/Desktop'])
                     docker_mgr.exec_in_container(container_name, ['ln', '-sf', '/shared', '/home/ptuser/Desktop/shared'])
-                    logger.info(f"✓ Created /shared symlink on {container_name} Desktop")
+                    docker_mgr.exec_in_container(container_name, ['chmod', '777', '/shared'])
+                    docker_mgr.exec_in_container(container_name, ['chown', 'ptuser:ptuser', '/shared'])
+                    logger.info(f"✓ Created /shared symlink and fixed permissions on {container_name} Desktop")
                 except Exception as symlink_err:
-                    logger.warning(f"⚠ Failed to create /shared symlink: {symlink_err}")
+                    logger.warning(f"⚠ Failed to create /shared symlink or fix permissions: {symlink_err}")
                 
                 # Automatically register the container in Guacamole
                 try:

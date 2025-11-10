@@ -207,9 +207,6 @@ for ((i=1; i<=$numofPT; i++)); do
       -e PT_DEB_PATH=/PacketTracer.deb \
       ptvnc
     sleep $i
-    
-    # Connect container to pt-stack network for Guacamole access
-    docker network connect pt-stack ptvnc$i 2>/dev/null || true
 done
 
 # Create desktop symlinks for easy access to /shared

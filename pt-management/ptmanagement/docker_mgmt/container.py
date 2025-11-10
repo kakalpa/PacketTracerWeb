@@ -332,7 +332,8 @@ class DockerManager:
                     "PortBindings": {},
                     "Memory": 536870912,  # 512MB in bytes
                     "Binds": [],  # For volume mounts
-                    "NetworkMode": "pt-network",  # Use custom network for hostname resolution
+                    # Don't specify NetworkMode here - use bridge (default)
+                    # Container will be connected to pt-stack separately after creation
                     "Dns": ["127.0.0.1"]  # Block external DNS to prevent internet access (Packet Tracer sign-in bypass)
                 },
                 "Volumes": {
@@ -348,13 +349,21 @@ class DockerManager:
             
             # Mount shared /opt/pt volume (named volume pt_opt - reused across containers)
             # Mount shared files directory
-            shared_path = "/run/media/kalpa/9530f1e7-4f57-4bf2-b7f2-b03a2b8d41111/PT DEv/PacketTracerWeb/shared"
+            # CRITICAL: Use SHARED_HOST_PATH (host path) not PROJECT_ROOT (container path)
+            # Docker daemon reads paths from host perspective, not from pt-management container perspective
+            shared_host_path_env = os.getenv('SHARED_HOST_PATH')
+            project_root_env = os.getenv('PROJECT_ROOT')
+            logger.info(f"DEBUG container.py: SHARED_HOST_PATH={shared_host_path_env}, PROJECT_ROOT={project_root_env}")
+            
+            shared_path = shared_host_path_env if shared_host_path_env else '/run/media/kalpa/9530f1e7-4f57-4bf2-b7f2-b03a2b8d4111/PT DEv/PacketTracerWeb/shared'
+            logger.info(f"DEBUG container.py: Using shared_path={shared_path}")
+            
             request_data["HostConfig"]["Binds"] = [
                 "pt_opt:/opt/pt",  # Named volume for Packet Tracer binary
-                f"{shared_path}:/shared"  # Bind mount for shared files
+                f"{shared_path}:/shared"  # Bind mount for shared files (MUST be host path)
             ]
             
-            logger.info(f"Mounting: pt_opt:/opt/pt and {shared_path}:/shared on network pt-network")
+            logger.info(f"Mounting: pt_opt:/opt/pt and {shared_path}:/shared on bridge network (will connect to pt-stack after creation)")
             
             # Add port mappings
             if ports:
@@ -379,7 +388,7 @@ class DockerManager:
                 # Start the container
                 self.client.start_container(response["Id"])
                 
-                logger.info(f"✓ Created container {container_name} ({container_id}) on pt-network")
+                logger.info(f"✓ Created container {container_name} ({container_id}) on bridge network")
                 return container_name
             else:
                 logger.error(f"✗ Failed to create container {container_name}: {response}")

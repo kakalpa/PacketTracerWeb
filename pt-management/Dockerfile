@@ -2,6 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Force rebuild - Timestamp: 1730975000
 # Install system dependencies including Docker CLI
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -34,3 +35,4 @@ EXPOSE 5000
 
 # Run with gunicorn on port 5000
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "wsgi:app"]
+# Force rebuild - 1762517097600552840

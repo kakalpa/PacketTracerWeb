@@ -46,7 +46,7 @@ CREATE TABLE `guacamole_connection` (
   UNIQUE KEY `connection_name_parent` (`connection_name`,`parent_id`),
   KEY `guacamole_connection_ibfk_1` (`parent_id`),
   CONSTRAINT `guacamole_connection_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `guacamole_connection_group` (`connection_group_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -55,7 +55,7 @@ CREATE TABLE `guacamole_connection` (
 
 LOCK TABLES `guacamole_connection` WRITE;
 /*!40000 ALTER TABLE `guacamole_connection` DISABLE KEYS */;
-INSERT INTO `guacamole_connection` VALUES (1,'pt01',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(2,'pt02',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(3,'pt03',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(4,'pt04',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(5,'pt05',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(6,'pt06',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(7,'pt07',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(8,'pt08',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(9,'pt09',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(10,'pt10',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0);
+INSERT INTO `guacamole_connection` VALUES (1,'pt01',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(2,'pt02',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0);
 /*!40000 ALTER TABLE `guacamole_connection` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -231,7 +231,7 @@ CREATE TABLE `guacamole_connection_parameter` (
 
 LOCK TABLES `guacamole_connection_parameter` WRITE;
 /*!40000 ALTER TABLE `guacamole_connection_parameter` DISABLE KEYS */;
-INSERT INTO `guacamole_connection_parameter` VALUES (1,'hostname','ptvnc1'),(1,'password','Cisco123'),(1,'port','5901'),(2,'hostname','ptvnc2'),(2,'password','Cisco123'),(2,'port','5901'),(3,'hostname','ptvnc3'),(3,'password','Cisco123'),(3,'port','5901'),(4,'hostname','ptvnc4'),(4,'password','Cisco123'),(4,'port','5901'),(5,'hostname','ptvnc5'),(5,'password','Cisco123'),(5,'port','5901'),(6,'hostname','ptvnc6'),(6,'password','Cisco123'),(6,'port','5901'),(7,'hostname','ptvnc7'),(7,'password','Cisco123'),(7,'port','5901'),(8,'hostname','ptvnc8'),(8,'password','Cisco123'),(8,'port','5901'),(9,'hostname','ptvnc9'),(9,'password','Cisco123'),(9,'port','5901'),(10,'hostname','ptvnc10'),(10,'password','Cisco123'),(10,'port','5901');
+INSERT INTO `guacamole_connection_parameter` VALUES (1,'hostname','ptvnc1'),(1,'password','Cisco123'),(1,'port','5901'),(2,'hostname','ptvnc2'),(2,'password','Cisco123'),(2,'port','5901');
 /*!40000 ALTER TABLE `guacamole_connection_parameter` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -259,7 +259,7 @@ CREATE TABLE `guacamole_connection_permission` (
 
 LOCK TABLES `guacamole_connection_permission` WRITE;
 /*!40000 ALTER TABLE `guacamole_connection_permission` DISABLE KEYS */;
-INSERT INTO `guacamole_connection_permission` VALUES (15,1,'READ'),(15,2,'READ'),(15,3,'READ'),(15,4,'READ'),(15,5,'READ'),(15,6,'READ'),(15,7,'READ'),(15,8,'READ'),(15,9,'READ'),(15,10,'READ');
+INSERT INTO `guacamole_connection_permission` VALUES (15,1,'READ'),(15,2,'READ');
 /*!40000 ALTER TABLE `guacamole_connection_permission` ENABLE KEYS */;
 UNLOCK TABLES;
 
