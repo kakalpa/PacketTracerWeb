@@ -226,7 +226,7 @@ def create_api_blueprint():
                                     # Create VNC connection in Guacamole for this container
                                     connection_name = f"vnc-{container_name}"
                                     try:
-                                        connection_id = create_vnc_connection(connection_name, container_name, vnc_port=5900)
+                                        connection_id = create_vnc_connection(connection_name, container_name, vnc_port=5901)
                                         if connection_id:
                                             # Assign connection to user (use connection_id, not connection_name!)
                                             if assign_connection_to_user(username, connection_id):
@@ -267,6 +267,21 @@ def create_api_blueprint():
                         if assign_container_to_user(username, existing_container):
                             logger.info(f"✓ Assigned container {existing_container} to {username}")
                             container_assigned = existing_container
+                            
+                            # Create or get VNC connection for this container
+                            connection_name = f"vnc-{existing_container}"
+                            try:
+                                connection_id = create_vnc_connection(connection_name, existing_container, vnc_port=5901)
+                                if connection_id:
+                                    # Assign connection to user
+                                    if assign_connection_to_user(username, connection_id):
+                                        logger.info(f"✓ Assigned VNC connection {connection_name} to {username}")
+                                    else:
+                                        logger.warning(f"⚠ Failed to assign connection {connection_name} to {username}")
+                                else:
+                                    logger.warning(f"⚠ Failed to create VNC connection {connection_name}")
+                            except Exception as conn_err:
+                                logger.warning(f"⚠ Error creating VNC connection: {conn_err}")
                         else:
                             logger.warning(f"⚠ Failed to assign container {existing_container} to {username}")
                     
@@ -485,6 +500,16 @@ def create_api_blueprint():
             
             if result:
                 logger.info(f"✓ Successfully created container {container_name}")
+                # Connect container to pt-stack network for Guacamole access
+                try:
+                    net_cmd = ['docker', 'network', 'connect', 'pt-stack', container_name]
+                    net_result = subprocess.run(net_cmd, capture_output=True, text=True, timeout=10)
+                    if net_result.returncode == 0:
+                        logger.info(f"✓ Connected {container_name} to pt-stack network")
+                    else:
+                        logger.warning(f"⚠ Failed to connect {container_name} to pt-stack: {net_result.stderr}")
+                except Exception as e:
+                    logger.warning(f"⚠ Error connecting to network: {e}")
                 
                 # Create symlink to /shared on Desktop for easy access
                 try:

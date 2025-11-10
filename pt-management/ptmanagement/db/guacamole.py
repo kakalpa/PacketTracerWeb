@@ -682,7 +682,7 @@ def delete_connection(connection_name):
         return False
 
 
-def create_vnc_connection(connection_name, container_hostname, vnc_port=5900, password="Cisco123"):
+def create_vnc_connection(connection_name, container_hostname, vnc_port=5901, password="Cisco123"):
     """
     Create a VNC connection in Guacamole for a Packet Tracer container.
     
