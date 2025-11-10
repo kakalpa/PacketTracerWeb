@@ -175,19 +175,42 @@ def create_api_blueprint():
                             
                             # Get the actual host path for /shared (needed for docker daemon to understand)
                             shared_path = os.getenv('SHARED_HOST_PATH', os.path.join(os.getenv('PROJECT_ROOT', '/project'), 'shared'))
+                            project_root = os.getenv('PROJECT_ROOT', '/project')
                             
-                            # Create the container using docker CLI with /shared mount
+                            # Find CiscoPacketTracer.deb - check common locations
+                            pt_deb = os.getenv('PT_DEB_FILE')
+                            if not pt_deb:
+                                # Try to find it in project root or parent directories
+                                possible_paths = [
+                                    os.path.join(project_root, 'CiscoPacketTracer.deb'),
+                                    '/run/media/kalpa/9530f1e7-4f57-4bf2-b7f2-b03a2b8d4111/PT DEv/PacketTracerWeb/CiscoPacketTracer.deb',
+                                    '/project/CiscoPacketTracer.deb',
+                                ]
+                                for path in possible_paths:
+                                    if os.path.exists(path):
+                                        pt_deb = path
+                                        break
+                            
+                            if not pt_deb:
+                                pt_deb = os.path.join(project_root, 'CiscoPacketTracer.deb')
+                            
+                            # Create the container using docker CLI with /shared mount - matching deploy.sh exactly
                             cmd = [
                                 'docker', 'run', '-d',
                                 '--name', container_name,
                                 '--restart', 'unless-stopped',
-                                '--cpus', '0.5',
-                                '-m', '512m',
-                                '--dns', '127.0.0.1',
-                                '-v', 'pt_opt:/opt/pt',  # Named volume for Packet Tracer binary
+                                '--cpus', '0.1',
+                                '-m', '1G',
+                                '--ulimit', 'nproc=2048',
+                                '--ulimit', 'nofile=1024',
+                                '--dns=127.0.0.1',
+                                '-v', f'{pt_deb}:/PacketTracer.deb:ro',
+                                '-v', 'pt_opt:/opt/pt',
                                 f'--mount=type=bind,source={shared_path},target=/shared,bind-propagation=rprivate',
+                                '-e', 'PT_DEB_PATH=/PacketTracer.deb',
                                 'ptvnc'
                             ]
+                            logger.info(f"Docker command: {' '.join(cmd)}")
                             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                             
                             if result.returncode == 0:
