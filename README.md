@@ -1,295 +1,165 @@
-# Packet Tracer - Web-Based Multi-Instance Deployment
+# PacketTracerWeb
 
-Run multiple Cisco Packet Tracer instances in Docker containers with web-based access via Guacamole.  
-Includes **GeoIP filtering**, **rate limiting**, and **HTTPS support**.
-
----
+A scalable, containerized platform for deploying and managing multiple Cisco Packet Tracer instances with web-based remote access, bulk user management, and advanced security controls.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Linux system with Docker installed
-- Cisco Packet Tracer `.deb` installer (v9+)
-- 4GB+ RAM available
+- Docker & Docker Compose
+- Cisco Packet Tracer `.deb` file (place in repo root)
+- Linux environment (Ubuntu 20.04+)
+- Minimum 4GB RAM, 2 CPU cores
 
-### Installation (3 Steps)
-
-```bash
-# 1. Clone repository
-git clone https://github.com/kakalpa/PacketTracerWeb.git
-cd PacketTracerWeb
-
-# 2. Place Packet Tracer .deb file in repo root
-# (The .deb file is required for deployment)
-
-# 3. Deploy
-bash deploy.sh
-
-# Opens browser at: http://localhost/
-# Login: ptadmin / IlovePT
-```
-
-⏱️ **First deployment takes 5-6 minutes** (includes Docker image build)
-
----
-
-## ✨ Key Features
-
-| Feature | Status | Details |
-|---------|--------|---------|
-| **Multi-Instance** | ✅ | Deploy 2+ Packet Tracer instances |
-| **Web Access** | ✅ | Guacamole web UI (no client install needed) |
-| **GeoIP Filtering** | ✅ | Whitelist/Blacklist countries |
-| **Rate Limiting** | ✅ | Per-IP request limits (DDoS protection) |
-| **HTTPS/SSL** | ✅ | Secure connections with auto-redirect |
-| **File Downloads** | ✅ | Save files from Packet Tracer to browser |
-| **Auto-Scaling** | ✅ | Add/remove instances on-the-fly |
-| **Health Monitoring** | ✅ | Built-in health check suite |
-
----
-
-## � Common Commands
-
-### Deploy & Manage
+### Deploy
 
 ```bash
-# Initial deployment (2 instances)
-bash deploy.sh
+# Full deployment (builds images, starts all services, launches 2 PT containers)
+bash deploy-full.sh
 
-# Clean redeploy (removes all containers/volumes)
-bash deploy.sh recreate
-
-# Add instances
-bash add-instance.sh      # Add 1
-bash add-instance.sh 5    # Add 5
-
-# Remove instances
-bash remove-instance.sh   # Remove 1
-bash remove-instance.sh 2 # Remove 2
-
-# Tune performance (RAM, CPU per container)
-bash tune_ptvnc.sh 2G 1   # 2GB RAM, 1 CPU
+# Access at http://localhost
+# Default: ptadmin / IlovePT
 ```
 
-### Test & Verify
+## 📋 Features
 
+- **🐳 Containerized PT Instances** - Multiple Packet Tracer containers running simultaneously
+- **👥 Bulk User Management** - Create/delete users in batch via CSV upload
+- **🌐 Web-Based Access** - Clientless remote desktop via Apache Guacamole
+- **🔒 Security Features** - GeoIP filtering, DNS blocking, access control lists
+- **📁 File Sharing** - Persistent `/shared` directory synced across containers
+- **⚙️ Management Dashboard** - Create containers, manage users, tune resources, view logs
+- **🔄 Health Monitoring** - Real-time container status, resource usage, health checks
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────┐
+│        Nginx (Reverse Proxy)            │
+│    GeoIP Filtering & SSL/TLS            │
+└──────────┬──────────────────────────────┘
+           │
+    ┌──────┴──────────┬─────────────┐
+    │                 │             │
+┌───▼──┐      ┌──────▼─────┐  ┌──▼──────┐
+│ PT   │      │ Guacamole   │  │   PT    │
+│ VNC1 │      │ + Guacd     │  │ VNC2... │
+└──────┘      │ (RDP/VNC)   │  └─────────┘
+              └──────┬──────┘
+                     │
+              ┌──────▼──────┐
+              │   MariaDB    │
+              │  (Guacamole) │
+              └──────────────┘
+```
+
+## 📁 Directory Structure
+
+```
+├── ptweb-vnc/              # Packet Tracer Docker image
+│   ├── Dockerfile          # Container definition
+│   ├── customizations/     # Installation scripts
+│   └── db-dump.sql         # Guacamole DB schema
+├── pt-nginx/               # Nginx config & web UI
+│   ├── conf/               # Dynamic nginx configs
+│   └── www/                # Static files
+├── pt-management/          # Flask management API
+│   ├── ptmanagement/       # Application code
+│   └── templates/          # Dashboard HTML
+├── ssl/                    # SSL/TLS certificates
+│   ├── certs/              # SSL certificate files
+│   └── keys/               # Private keys
+├── shared/                 # Persistent file storage
+├── deploy-full.sh          # Main deployment script
+├── add-instance.sh         # Add PT container
+└── remove-instance.sh      # Remove PT container
+
+```
+
+## 🎮 Management Dashboard
+
+Access at `http://localhost:5000` (after full deploy)
+
+**All operations are handled through the intuitive web interface:**
+- Create/delete users and containers
+- Bulk user provisioning (CSV import)
+- Real-time resource tuning (CPU, Memory)
+- Live logs and health checks
+- Container lifecycle management
+- Nginx configuration management
+
+No command-line tools needed—everything is accessible from the dashboard.
+
+## 🔐 Security
+
+- **GeoIP Filtering** - Restrict access by country (configurable via env vars)
+- **DNS Blocking** - Prevent unauthorized Packet Tracer signins via `127.0.0.1` DNS
+- **SSL/TLS** - HTTPS enabled by default
+- **Access Control** - Role-based permissions (ADMINISTER, READ)
+- **Firewall Rules** - Nginx-level request filtering
+
+**Environment Variables:**
 ```bash
-# Full health check (57 tests)
-bash health_check.sh
-
-# View logs
-docker logs pt-nginx1
-docker logs pt-guacamole
-```
-
----
-
-## ⚙️ Configuration
-
-Edit `.env` file before running `bash deploy.sh`:
-
-### GeoIP Filtering (Optional)
-
-```env
-# Whitelist mode: Only allow these countries
 NGINX_GEOIP_ALLOW=true
-GEOIP_ALLOW_COUNTRIES=US,CA,GB,AU
-
-# Blacklist mode: Block these countries
-NGINX_GEOIP_BLOCK=true
-GEOIP_BLOCK_COUNTRIES=CN,RU,IR
-
-# Production mode: Auto-detect public IP and add to trusted list
+GEOIP_ALLOW_COUNTRIES=FI,SL,UK,US
 PRODUCTION_MODE=true
 ```
 
-### HTTPS/SSL (Optional)
+## 📊 Database
 
-```env
-ENABLE_HTTPS=true
-SSL_CERT_PATH=/etc/ssl/certs/server.crt
-SSL_KEY_PATH=/etc/ssl/private/server.key
-
-# Generate certificates:
-bash generate-ssl-cert.sh
-```
-
-### Rate Limiting (Optional)
-
-```env
-NGINX_RATE_LIMIT_ENABLE=true
-NGINX_RATE_LIMIT_RATE=100r/s
-NGINX_RATE_LIMIT_BURST=200
-NGINX_RATE_LIMIT_ZONE_SIZE=10m
-```
-
----
-
-## 💾 Downloading Files
-
-Users can save and download Packet Tracer files:
-
-1. **Inside Packet Tracer:** File → Save As → Navigate to **"shared"** folder on desktop
-2. **Download from browser:** Visit `http://localhost/downloads/`
-3. **Files appear automatically** after saving from Packet Tracer
-
----
-
-## 🌍 GeoIP Filtering (Details)
-
-The deployment now supports **automatic GeoIP configuration** integrated into `deploy.sh`. No separate scripts needed!
-
-### Enable Allowlist (Whitelist)
-```bash
-# In .env file:
-NGINX_GEOIP_ALLOW=true
-GEOIP_ALLOW_COUNTRIES=US,CA,GB,AU
-
-bash deploy.sh
-```
-✅ Users from specified countries can access  
-❌ All other countries get connection closed
-
-### Enable Blocklist (Blacklist)
-```bash
-# In .env file:
-NGINX_GEOIP_BLOCK=true
-GEOIP_BLOCK_COUNTRIES=CN,RU,IR
-
-bash deploy.sh
-```
-✅ All users allowed except listed countries  
-❌ Listed countries get connection closed
-
-### How It Works
-
-1. **deploy.sh reads .env** for GeoIP settings
-2. **Nginx config is generated automatically** with GeoIP directives
-3. **GeoIP database is downloaded** (from MaxMind)
-4. **Database is mounted** into nginx container
-5. **Filtering starts immediately** on deployment
-
-### GeoIP Database Info
-
-- **Source:** MaxMind GeoLite2 (public, free)
-- **License:** CC BY-SA 4.0
-- **Accuracy:** ~99% country-level
-- **Size:** ~20MB uncompressed
-- **Auto-Download:** `deploy.sh` handles it
-- **Location:** `./geoip/GeoIP.dat`
-
-### Quick Enable
-
-```bash
-# In .env file:
-NGINX_RATE_LIMIT_ENABLE=true
-NGINX_RATE_LIMIT_RATE=100r/s
-NGINX_RATE_LIMIT_BURST=200
-
-bash deploy.sh
-```
-
-Protects against brute-force and DDoS attacks with per-IP request limits.
-
----
-
-## � Project Structure
-
-```
-PacketTracerWeb/
-├── deploy.sh                           # Main deployment script
-├── add-instance.sh                     # Add instances
-├── remove-instance.sh                  # Remove instances
-├── tune_ptvnc.sh                       # Performance tuning
-├── generate-dynamic-connections.sh     # Regenerate connections
-├── generate-ssl-cert.sh                # Generate SSL certs
-├── health_check.sh                     # 57 health tests
-├── test-deployment.sh                  # Full test suite
-├── README.md                           # This file
-├── .env                                # Configuration
-│
-├── Scripts/                            # Test scripts
-├── ptweb-vnc/                          # Docker image (Packet Tracer)
-├── shared/                             # User files (bind-mounted)
-└── geoip/                              # GeoIP database (auto-downloaded)
-```
-
----
+- **MariaDB** with Guacamole schema
+- Users & connections auto-created during bulk operations
+- SQL dumps in `ptweb-vnc/db-dump.sql`
+- Default credentials: `ptdbuser` / `ptdbpass`
 
 ## 🐛 Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| **Port already in use** | `docker ps` to see running containers; `docker stop <name>` |
-| **Connections not showing** | `bash generate-dynamic-connections.sh 2` |
-| **Slow performance** | `bash tune_ptvnc.sh 4G 2` (increase RAM/CPU) |
-| **Tests failing** | `bash health_check.sh` to diagnose |
-| **GeoIP not working** | Check `.env` settings; verify `geoip/GeoIP.dat` exists |
-| **HTTPS certificate errors** | Run `bash generate-ssl-cert.sh` to regenerate |
+**Database connection fails:**
+```bash
+# Verify pt-management is on pt-stack network
+docker inspect pt-management | grep pt-stack
 
----
-
-
-## 📄 License
-
-Cisco Packet Tracer installer not included. Place official `.deb` copy in repo root.  
-Using Packet Tracer implies acceptance of Cisco EULA.
-
----
-
-## 🔗 References
-
-Original project: [ptremote](https://github.com/cnkang/ptremote)  
-Docker documentation: [docker.com](https://docker.com)  
-Guacamole: [guacamole.apache.org](https://guacamole.apache.org)
-```
-├── .env                                # Configuration
-│
-├── Scripts/                            # Test scripts
-├── ptweb-vnc/                          # Docker image (Packet Tracer)
-├── shared/                             # User files (bind-mounted)
-└── geoip/                              # GeoIP database (auto-downloaded)
+# Restart pt-management with correct network
+docker rm pt-management
+docker run -d --name pt-management --network pt-stack ...
 ```
 
+**Files not appearing in `/shared`:**
+```bash
+# Check mount permissions
+docker exec ptvnc1 ls -la /shared
+
+# Verify host path permissions
+ls -la shared/
+chmod 777 shared/
+```
+
+**PT Installation incomplete:**
+```bash
+# Check container logs
+docker logs ptvnc1 | grep pt-install
+
+# Verify /opt/pt exists
+docker exec ptvnc1 ls -la /opt/pt/
+```
+
+
+## 🤝 Contributing
+
+- Create feature branches from `dev`
+- Test with `bash test-deployment.sh` before committing
+- Update documentation for significant changes
+
+## 📝 License
+
+This project includes proprietary Cisco Packet Tracer software. Ensure compliance with Cisco's End User License Agreement (EULA).
+
+## 🎓 Use Cases
+
+- **Educational Institutions** - Provide remote lab access to students
+- **Training Programs** - Scale network training across multiple trainees
+- **Certification Prep** - Practice environments for CCNA, Network+
+- **Network Administration** - Testing configurations in isolated environments
+
 ---
 
-## 🐛 Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| **Port already in use** | `docker ps` to see running containers; `docker stop <name>` |
-| **Connections not showing** | `bash generate-dynamic-connections.sh 2` |
-| **Slow performance** | `bash tune_ptvnc.sh 4G 2` (increase RAM/CPU) |
-| **Tests failing** | `bash health_check.sh` to diagnose |
-| **GeoIP not working** | Check `.env` settings; verify `geoip/GeoIP.dat` exists |
-| **HTTPS certificate errors** | Run `bash generate-ssl-cert.sh` to regenerate |
-
----
-
-
-## 🔗 References
-
-Original project: [ptremote](https://github.com/cnkang/ptremote)  
-Docker documentation: [docker.com](https://docker.com)  
-Guacamole: [guacamole.apache.org](https://guacamole.apache.org)
-
-
-## 🐛 Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Container name conflict | `docker rm -f <container_name>` |
-| Connections not showing | `bash generate-dynamic-connections.sh <count>` |
-| Slow performance | `bash tune_ptvnc.sh 2G 1` |
-| Tests failing | `bash health_check.sh` to identify issues |
-
----
-
-**📌 Key Files:**
-- **Deployment:** `deploy.sh` (main entry point)
-- **Configuration:** `.env` (environment variables)
-- **Testing:** `test-deployment.sh` (full suite), `Scripts/test-*.sh` (unit tests)
-
-## 📄 License
-
-Cisco Packet Tracer installer not included. Place official copy in repo root. Using Packet Tracer implies acceptance of Cisco EULA.
+**Project Status:** ✅ Production Ready | **Last Updated:** Nov 2025
