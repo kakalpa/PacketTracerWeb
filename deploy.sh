@@ -143,15 +143,15 @@ if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
         echo -e "\e[36m  GeoIP database not found, downloading...\e[0m"
         
         # Download from DB-IP
-        DB_IP_URL="https://download.db-ip.com/free/dbip-country-lite-2025-11.mmdb.gz"
-        TEMP_GZ="${GEOIP_DIR}/dbip-country-lite.mmdb.gz"
+        GEOIP_URL="https://mailfud.org/geoip-legacy/GeoIP.dat.gz"
+        TEMP_GZ="${GEOIP_DIR}/GeoIP.dat.gz"
         
-        if wget -q -O "$TEMP_GZ" "$DB_IP_URL" 2>/dev/null; then
+        if wget -q -O "$TEMP_GZ" "$GEOIP_URL" 2>/dev/null; then
             echo -e "\e[36m  ✓ Downloaded successfully, extracting...\e[0m"
             gunzip -f "$TEMP_GZ"
             # Rename to GeoIP.dat for nginx compatibility
-            if [ -f "${GEOIP_DIR}/dbip-country-lite.mmdb" ]; then
-                mv "${GEOIP_DIR}/dbip-country-lite.mmdb" "$GEOIP_FILE"
+            if [ -f "$GEOIP_FILE" ]; then
+                true
                 echo -e "\e[32m  ✓ GeoIP database extracted: $GEOIP_FILE\e[0m"
             fi
         else
