@@ -199,7 +199,7 @@ echo -e "\033[32m  ✓ Generated nginx.conf and ptweb.conf with GeoIP filtering\
 for ((i=1; i<=$numofPT; i++)); do
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
-      --cpus=0.1 -m 1G --ulimit nproc=2048 --ulimit nofile=1024 \
+      --cpus=0.5 -m 2G --ulimit nproc=2048 --ulimit nofile=1024 \
       --dns=127.0.0.1 \
       -v "${WORKDIR}/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \

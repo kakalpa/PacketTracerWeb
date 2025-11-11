@@ -81,7 +81,7 @@ for ((i=0; i<instances_to_add; i++)); do
     echo "Creating $container_name..."
     docker run -d \
       --name $container_name --restart unless-stopped \
-      --cpus=0.1 -m 1G --ulimit nproc=2048 --ulimit nofile=1024 \
+      --cpus=0.5 -m 2G --ulimit nproc=2048 --ulimit nofile=1024 \
       --dns=127.0.0.1 \
       -v "${WORKDIR}/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
