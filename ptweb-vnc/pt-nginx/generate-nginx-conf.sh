@@ -336,7 +336,8 @@ server {
 
 # Main HTTPS server
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;
     server_name localhost;
 
     ssl_certificate ${SSL_CERT_PATH};
