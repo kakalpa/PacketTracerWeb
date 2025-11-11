@@ -22,94 +22,78 @@ log_progress "Found PacketTracer .deb: $deb"
 log_progress "File size: $(du -h "$deb" | cut -f1)"
 export DEBIAN_FRONTEND=noninteractive
 
-# Preseed debconf to accept EULA (prevent interactive prompts)
-log_progress "Presetting debconf for EULA acceptance..."
-echo "packettracer PacketTracer_822_amd64/accept-eula boolean true" | debconf-set-selections || true
-
-# Extract .deb manually using dpkg-deb to bypass problematic preinst script
-# The preinst script tries to show an interactive EULA dialog which fails in containers
+# Extract and install manually to bypass preinst agreement prompt
+# The preinst script tries to show an EULA dialog which fails in containers
+log_progress "Extracting PacketTracer .deb (this may take 2-3 minutes)..."
 mkdir -p /tmp/pt_extract
-log_progress "Extracting .deb contents (this may take 1-2 minutes)..."
 if ! dpkg-deb -x "$deb" /tmp/pt_extract; then
-  log_progress "ERROR: dpkg-deb extraction failed"
+  log_progress "ERROR: Failed to extract .deb file"
   exit 1
 fi
-log_progress "Extraction completed successfully"
-log_progress "Extracted file count: $(find /tmp/pt_extract -type f | wc -l) files"
+log_progress "✓ Extraction completed"
 
-# Copy extracted files to their final locations
+# Copy files to final locations
+log_progress "Installing files to /opt/pt..."
 if [ -d /tmp/pt_extract/opt/pt ]; then
-  # The volume is mounted at /opt/pt, so extract and copy contents directly
-  log_progress "Copying files to /opt/pt (this may take 1-2 minutes)..."
-  cp -r /tmp/pt_extract/opt/pt/* /opt/pt/ || true
-  log_progress "Copy completed"
-  log_progress "Contents of /opt/pt: $(ls -la /opt/pt/ | head -20)"
-  
-  # Find the actual binary (could be at different locations in different versions)
-  binary_path=""
-  if [ -x /opt/pt/bin/PacketTracer ]; then
-    binary_path="/opt/pt/bin/PacketTracer"
-    log_progress "Found binary at: $binary_path"
-  elif [ -x /opt/pt/PacketTracer ]; then
-    binary_path="/opt/pt/PacketTracer"
-    log_progress "Found binary at: $binary_path"
-  else
-    # Search for any executable named PacketTracer
-    binary_path=$(find /opt/pt -name "PacketTracer" -type f -executable 2>/dev/null | head -n1 || true)
-    if [ -n "$binary_path" ]; then
-      log_progress "Found binary at: $binary_path"
-    else
-      log_progress "Searching for executable files in /opt/pt..."
-      find /opt/pt -type f -executable 2>/dev/null | head -10 | while read -r file; do
-        log_progress "  Found executable: $file"
-      done
-    fi
-  fi
-  
-  # Create wrapper script if binary was found
-  if [ -n "$binary_path" ] && [ -x "$binary_path" ]; then
-    if [ ! -e /opt/pt/packettracer ]; then
-      log_progress "Creating wrapper script for PacketTracer binary..."
-      cat > /opt/pt/packettracer << WRAPPER
-#!/bin/bash
-export LD_LIBRARY_PATH=/opt/pt/bin:\$LD_LIBRARY_PATH
-export QT_QPA_PLATFORM_PLUGIN_PATH=/opt/pt/bin
-exec $binary_path "\$@"
-WRAPPER
-      chmod +x /opt/pt/packettracer
-      log_progress "Created wrapper script /opt/pt/packettracer"
-    fi
-  fi
-fi
-
-# Check for binary with multiple fallback methods
-binary_found=false
-if [ -x /opt/pt/packettracer ]; then
-  log_progress "✓ Wrapper script found at /opt/pt/packettracer"
-  binary_found=true
-elif [ -x /opt/pt/bin/PacketTracer ]; then
-  log_progress "✓ Binary found at /opt/pt/bin/PacketTracer"
-  binary_found=true
-elif [ -x /opt/pt/PacketTracer ]; then
-  log_progress "✓ Binary found at /opt/pt/PacketTracer"
-  binary_found=true
+  cp -r /tmp/pt_extract/opt/pt/* /opt/pt/ 2>/dev/null || true
+  log_progress "✓ Files copied to /opt/pt"
 else
-  # Last resort: search for any executable
-  found_binary=$(find /opt/pt -name "PacketTracer" -type f -executable 2>/dev/null | head -n1 || true)
-  if [ -n "$found_binary" ]; then
-    log_progress "✓ Binary found at: $found_binary"
-    binary_found=true
-  fi
+  log_progress "ERROR: /opt/pt not found in extracted .deb"
+  exit 1
 fi
 
-if [ "$binary_found" = true ]; then
-  log_progress "✓ SUCCESS: PacketTracer binary ready"
+# Install system files from /usr (symlinks, desktop files, mime types)
+if [ -d /tmp/pt_extract/usr ]; then
+  log_progress "Installing system files..."
+  cp -r /tmp/pt_extract/usr/* /usr/ 2>/dev/null || true
+  log_progress "✓ System files installed"
+fi
+
+log_progress "Installation completed"
+log_progress "Contents of /opt/pt: $(find /opt/pt -type f | wc -l) files"
+
+# The 9.0.0+ .deb already contains both binaries - detect which is available
+log_progress "Checking for PacketTracer binaries..."
+
+# Version 9.0.0+ installs wrapper at /opt/pt/packettracer and binary at /opt/pt/bin/PacketTracer
+if [ -x /opt/pt/packettracer ]; then
+  log_progress "✓ Found wrapper script: /opt/pt/packettracer"
+fi
+
+if [ -x /opt/pt/bin/PacketTracer ]; then
+  log_progress "✓ Found binary: /opt/pt/bin/PacketTracer"
+fi
+
+# Final validation - check for PacketTracer wrapper script
+log_progress "Verifying PacketTracer installation..."
+
+if [ -x /opt/pt/packettracer ] || [ -x /opt/pt/bin/PacketTracer ]; then
+  log_progress "✓ SUCCESS: PacketTracer installed and ready!"
+  log_progress "✓ Wrapper: $([ -x /opt/pt/packettracer ] && echo 'YES' || echo 'NO')"
+  log_progress "✓ Binary: $([ -x /opt/pt/bin/PacketTracer ] && echo 'YES' || echo 'NO')"
   log_progress "Installation complete!"
   exit 0
 else
-  log_progress "✗ ERROR: PacketTracer binary not found at expected locations"
-  log_progress "Listing /opt/pt contents:"
-  ls -la /opt/pt 2>&1 | head -30 | while read -r line; do
+  log_progress "✗ FATAL ERROR: PacketTracer installation failed"
+  log_progress "Expected executables not found:"
+  log_progress "  - /opt/pt/packettracer (wrapper)"
+  log_progress "  - /opt/pt/bin/PacketTracer (binary)"
+  log_progress "Actual /opt/pt contents:"
+  if [ -d /opt/pt ]; then
+    ls -lhA /opt/pt 2>&1 | head -20 | while read -r line; do
+      log_progress "  $line"
+    done
+    if [ -d /opt/pt/bin ]; then
+      log_progress "Contents of /opt/pt/bin:"
+      ls -lhA /opt/pt/bin 2>&1 | head -15 | while read -r line; do
+        log_progress "    $line"
+      done
+    fi
+  else
+    log_progress "  /opt/pt directory does not exist!"
+  fi
+  log_progress "dpkg install log (last 50 lines):"
+  tail -50 /tmp/dpkg_install.log 2>/dev/null | while read -r line; do
     log_progress "  $line"
   done
   exit 1
