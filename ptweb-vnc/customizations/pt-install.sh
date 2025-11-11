@@ -43,28 +43,74 @@ if [ -d /tmp/pt_extract/opt/pt ]; then
   log_progress "Copying files to /opt/pt (this may take 1-2 minutes)..."
   cp -r /tmp/pt_extract/opt/pt/* /opt/pt/ || true
   log_progress "Copy completed"
+  log_progress "Contents of /opt/pt: $(ls -la /opt/pt/ | head -20)"
   
-  # Create a wrapper script for the main binary to set library path and Qt plugins
-  # Binary is at /opt/pt/bin/PacketTracer but start-session looks for /opt/pt/packettracer
-  if [ -x /opt/pt/bin/PacketTracer ] && [ ! -e /opt/pt/packettracer ]; then
-    log_progress "Creating wrapper script for PacketTracer binary..."
-    cat > /opt/pt/packettracer << 'WRAPPER'
+  # Find the actual binary (could be at different locations in different versions)
+  binary_path=""
+  if [ -x /opt/pt/bin/PacketTracer ]; then
+    binary_path="/opt/pt/bin/PacketTracer"
+    log_progress "Found binary at: $binary_path"
+  elif [ -x /opt/pt/PacketTracer ]; then
+    binary_path="/opt/pt/PacketTracer"
+    log_progress "Found binary at: $binary_path"
+  else
+    # Search for any executable named PacketTracer
+    binary_path=$(find /opt/pt -name "PacketTracer" -type f -executable 2>/dev/null | head -n1 || true)
+    if [ -n "$binary_path" ]; then
+      log_progress "Found binary at: $binary_path"
+    else
+      log_progress "Searching for executable files in /opt/pt..."
+      find /opt/pt -type f -executable 2>/dev/null | head -10 | while read -r file; do
+        log_progress "  Found executable: $file"
+      done
+    fi
+  fi
+  
+  # Create wrapper script if binary was found
+  if [ -n "$binary_path" ] && [ -x "$binary_path" ]; then
+    if [ ! -e /opt/pt/packettracer ]; then
+      log_progress "Creating wrapper script for PacketTracer binary..."
+      cat > /opt/pt/packettracer << WRAPPER
 #!/bin/bash
-export LD_LIBRARY_PATH=/opt/pt/bin:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/opt/pt/bin:\$LD_LIBRARY_PATH
 export QT_QPA_PLATFORM_PLUGIN_PATH=/opt/pt/bin
-exec /opt/pt/bin/PacketTracer "$@"
+exec $binary_path "\$@"
 WRAPPER
-    chmod +x /opt/pt/packettracer
-    log_progress "Created wrapper script /opt/pt/packettracer"
+      chmod +x /opt/pt/packettracer
+      log_progress "Created wrapper script /opt/pt/packettracer"
+    fi
   fi
 fi
 
-# If /opt/pt/packettracer exists, consider installation successful
+# Check for binary with multiple fallback methods
+binary_found=false
 if [ -x /opt/pt/packettracer ]; then
-  log_progress "✓ SUCCESS: PacketTracer binary ready at /opt/pt/packettracer"
+  log_progress "✓ Wrapper script found at /opt/pt/packettracer"
+  binary_found=true
+elif [ -x /opt/pt/bin/PacketTracer ]; then
+  log_progress "✓ Binary found at /opt/pt/bin/PacketTracer"
+  binary_found=true
+elif [ -x /opt/pt/PacketTracer ]; then
+  log_progress "✓ Binary found at /opt/pt/PacketTracer"
+  binary_found=true
+else
+  # Last resort: search for any executable
+  found_binary=$(find /opt/pt -name "PacketTracer" -type f -executable 2>/dev/null | head -n1 || true)
+  if [ -n "$found_binary" ]; then
+    log_progress "✓ Binary found at: $found_binary"
+    binary_found=true
+  fi
+fi
+
+if [ "$binary_found" = true ]; then
+  log_progress "✓ SUCCESS: PacketTracer binary ready"
   log_progress "Installation complete!"
   exit 0
 else
-  log_progress "✗ ERROR: PacketTracer binary not found"
+  log_progress "✗ ERROR: PacketTracer binary not found at expected locations"
+  log_progress "Listing /opt/pt contents:"
+  ls -la /opt/pt 2>&1 | head -30 | while read -r line; do
+    log_progress "  $line"
+  done
   exit 1
 fi
