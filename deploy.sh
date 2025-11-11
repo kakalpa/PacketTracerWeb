@@ -327,7 +327,7 @@ get_install_logs() {
 
 # Wait for all containers to complete installation
 all_installed=false
-timeout=600  # 10 minute timeout
+timeout=1200  # 20 minute timeout (increased from 10 to handle slower systems)
 elapsed=0
 last_log_display=0
 declare -A completed_containers
@@ -384,24 +384,45 @@ if [ "$all_installed" = true ]; then
         get_install_logs "ptvnc$i" | tail -3
         echo ""
     done
+    
+    echo ""
+    echo -e "\e[32m=== Deployment Complete ===\e[0m"
+    echo ""
+    echo "Services Status:"
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    echo ""
+    echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
+    echo -e "\e[32mAccess the web interface at: http://localhost\e[0m"
+    echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
+    echo ""
+    echo "Available Packet Tracer connections:"
+    for ((i=1; i<=$numofPT; i++)); do
+        echo "  - pt$(printf "%02d" $i)"
+    done
+    echo ""
+    echo -e "\e[32m✓ SUCCESS - Deployment and installation complete!\e[0m"
+    echo ""
 else
-    echo -e "\e[33m⚠ Timeout waiting for installation (this may be normal if still running)\e[0m"
+    echo -e "\e[31m✗ ERROR: Timeout waiting for PacketTracer installation after $timeout seconds\e[0m"
+    echo ""
+    echo -e "\e[33m⚠ Installation Status:\e[0m"
+    for ((i=1; i<=$numofPT; i++)); do
+        if check_pt_installed "ptvnc$i"; then
+            echo -e "\e[32m  ✓ ptvnc$i: Installation completed\e[0m"
+        else
+            echo -e "\e[31m  ✗ ptvnc$i: Installation NOT completed (binary not found)\e[0m"
+            echo -e "\e[33m    Recent logs:\e[0m"
+            get_install_logs "ptvnc$i" | tail -3 | sed 's/^/      /'
+        fi
+    done
+    echo ""
+    echo -e "\e[33m⚠ Recommendations:\e[0m"
+    echo "  1. Check container logs: docker logs ptvnc1 (ptvnc2, etc.)"
+    echo "  2. Check disk space: docker exec ptvnc1 df -h"
+    echo "  3. Check if .deb file is present and readable in repo root"
+    echo "  4. Increase timeout or re-run deployment"
+    echo ""
+    
+    # Exit with error code
+    exit 1
 fi
-
-echo ""
-echo -e "\e[32m=== Deployment Complete ===\e[0m"
-echo ""
-echo "Services Status:"
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-echo ""
-echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
-echo -e "\e[32mAccess the web interface at: http://localhost\e[0m"
-echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
-echo ""
-echo "Available Packet Tracer connections:"
-for ((i=1; i<=$numofPT; i++)); do
-    echo "  - pt$(printf "%02d" $i)"
-done
-echo ""
-echo -e "\e[32m✓ SUCCESS - Deployment and installation complete!\e[0m"
-echo ""
