@@ -478,6 +478,11 @@
                         <i class="bi bi-file-text"></i> Active Nginx Config
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="lockout-tab" data-bs-toggle="tab" href="#lockout-panel" role="tab">
+                        <i class="bi bi-lock"></i> User Lockouts
+                    </a>
+                </li>
             </ul>
 
             <!-- Tab Content -->
@@ -852,6 +857,73 @@
                         <div style="margin-top: 15px; padding: 10px; background: #f0f4ff; border-radius: 4px; font-size: 12px; color: #2d3748;">
                             <i class="bi bi-info-circle"></i> This shows the actual running nginx configuration inside the pt-nginx1 container.
                             <br>Changes take effect only after clicking "Apply Configuration" and restarting the container.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Lockout Management Tab -->
+                <div class="tab-pane fade" id="lockout-panel" role="tabpanel">
+                    <div class="settings-section">
+                        <h3><i class="bi bi-lock"></i> User Account Lockout Management</h3>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Manage locked user accounts.</strong>
+                            Users are locked after multiple failed login attempts. Use this panel to view and unlock accounts.
+                        </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <button class="btn btn-sm btn-info" onclick="loadLockedUsers()">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh List
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="unlockAllUsers()" id="unlock-all-btn" style="display: none;">
+                                <i class="bi bi-unlock"></i> Unlock All Selected
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="resetAllAttempts()" id="reset-all-btn" style="display: none;">
+                                <i class="bi bi-arrow-counterclockwise"></i> Reset Attempts
+                            </button>
+                            <label style="margin-left: 20px;">
+                                <input type="checkbox" id="lockout-auto-refresh" onchange="toggleLockoutAutoRefresh()">
+                                Auto-refresh (5s)
+                            </label>
+                        </div>
+
+                        <!-- Users Table -->
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="locked-users-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 30px;">
+                                            <input type="checkbox" id="select-all-users" onchange="toggleAllUserSelection()">
+                                        </th>
+                                        <th>Username</th>
+                                        <th>Failed Attempts</th>
+                                        <th>Last Failed Login</th>
+                                        <th>Locked Until</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="locked-users-tbody">
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-4">
+                                            Loading locked users...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Empty State -->
+                        <div id="empty-state" style="display: none; text-align: center; padding: 40px;">
+                            <i class="bi bi-check-circle" style="font-size: 48px; color: #48bb78; margin-bottom: 15px; display: block;"></i>
+                            <h4 style="color: #48bb78;">No Locked Users</h4>
+                            <p class="text-muted">All user accounts are active and unlocked.</p>
+                        </div>
+
+                        <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 12px; color: #856404;">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Tip:</strong> Click on a user's "Unlock" button to unlock immediately, or use "Unlock All Selected" to unlock multiple users at once.
                         </div>
                     </div>
                 </div>

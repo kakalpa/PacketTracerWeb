@@ -403,4 +403,160 @@ def create_env_config_blueprint():
             logger.error(f"✗ Error retrieving nginx config: {e}")
             return jsonify({'success': False, 'message': str(e)}), 500
     
+    # ========================================================================
+    # User Lockout Management Endpoints
+    # ========================================================================
+    
+    @env_api.route('/users/locked', methods=['GET'])
+    @require_admin
+    def get_locked_users():
+        """
+        Get all currently locked-out users
+        
+        Returns:
+            JSON with list of locked users and their lockout details
+        """
+        try:
+            locked_users = env_manager.get_locked_users()
+            
+            return jsonify({
+                'success': True,
+                'locked_users': locked_users,
+                'count': len(locked_users),
+            })
+        
+        except Exception as e:
+            logger.error(f"✗ Error retrieving locked users: {e}")
+            return jsonify({'success': False, 'message': str(e)}), 500
+    
+    @env_api.route('/users/unlock', methods=['POST'])
+    @require_admin
+    def unlock_users():
+        """
+        Unlock one or more users
+        
+        Expected JSON:
+        {
+            "user_ids": [1, 2, 3]  or "user_id": 1
+        }
+        
+        Returns:
+            JSON with unlock results
+        """
+        try:
+            data = request.json
+            if not data:
+                return jsonify({'success': False, 'message': 'No data provided'}), 400
+            
+            # Handle both single user and multiple users
+            user_ids = data.get('user_ids') or []
+            single_user = data.get('user_id')
+            if single_user:
+                user_ids = [single_user]
+            
+            if not user_ids:
+                return jsonify({'success': False, 'message': 'No user IDs provided'}), 400
+            
+            results = []
+            for user_id in user_ids:
+                success, msg = env_manager.unlock_user(int(user_id))
+                results.append({
+                    'user_id': user_id,
+                    'success': success,
+                    'message': msg,
+                })
+            
+            all_success = all(r['success'] for r in results)
+            
+            return jsonify({
+                'success': all_success,
+                'message': f'Unlocked {sum(1 for r in results if r["success"])} of {len(results)} users',
+                'results': results,
+            }), 200 if all_success else 207
+        
+        except Exception as e:
+            logger.error(f"✗ Error unlocking users: {e}")
+            return jsonify({'success': False, 'message': str(e)}), 500
+    
+    @env_api.route('/users/reset-attempts', methods=['POST'])
+    @require_admin
+    def reset_failed_attempts():
+        """
+        Reset failed login attempts for one or more users
+        
+        Expected JSON:
+        {
+            "user_ids": [1, 2, 3]  or "user_id": 1
+        }
+        
+        Returns:
+            JSON with reset results
+        """
+        try:
+            data = request.json
+            if not data:
+                return jsonify({'success': False, 'message': 'No data provided'}), 400
+            
+            # Handle both single user and multiple users
+            user_ids = data.get('user_ids') or []
+            single_user = data.get('user_id')
+            if single_user:
+                user_ids = [single_user]
+            
+            if not user_ids:
+                return jsonify({'success': False, 'message': 'No user IDs provided'}), 400
+            
+            results = []
+            for user_id in user_ids:
+                success, msg = env_manager.reset_failed_attempts(int(user_id))
+                results.append({
+                    'user_id': user_id,
+                    'success': success,
+                    'message': msg,
+                })
+            
+            all_success = all(r['success'] for r in results)
+            
+            return jsonify({
+                'success': all_success,
+                'message': f'Reset attempts for {sum(1 for r in results if r["success"])} of {len(results)} users',
+                'results': results,
+            }), 200 if all_success else 207
+        
+        except Exception as e:
+            logger.error(f"✗ Error resetting attempts: {e}")
+            return jsonify({'success': False, 'message': str(e)}), 500
+    
+    @env_api.route('/users/lockout-status/<int:user_id>', methods=['GET'])
+    @require_admin
+    def get_lockout_status(user_id):
+        """
+        Get lockout status for a specific user
+        
+        Args:
+            user_id: User ID (from URL path)
+        
+        Returns:
+            JSON with user's lockout status
+        """
+        try:
+            status = env_manager.get_user_lockout_status(user_id)
+            
+            if status is None:
+                return jsonify({
+                    'success': True,
+                    'locked': False,
+                    'message': 'User not found in lockout table (not locked)',
+                })
+            
+            return jsonify({
+                'success': True,
+                'locked': status.get('locked', False),
+                'status': status,
+            })
+        
+        except Exception as e:
+            logger.error(f"✗ Error getting lockout status: {e}")
+            return jsonify({'success': False, 'message': str(e)}), 500
+    
     return env_api

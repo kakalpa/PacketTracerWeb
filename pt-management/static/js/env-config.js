@@ -1058,4 +1058,261 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => loadNginxConfig(), 100);
         });
     }
+
+    // Add event listener for lockout tab
+    const lockoutTab = document.getElementById('lockout-tab');
+    if (lockoutTab) {
+        lockoutTab.addEventListener('click', function() {
+            setTimeout(() => loadLockedUsers(), 100);
+        });
+    }
 });
+
+// ========================================================================
+// User Lockout Management Functions
+// ========================================================================
+
+let lockoutAutoRefreshInterval = null;
+
+/**
+ * Load and display locked users from the API
+ */
+function loadLockedUsers() {
+    console.log('📋 Loading locked users...');
+    
+    fetch('/api/env/users/locked', {
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            displayLockedUsers(data.locked_users);
+            console.log(`✓ Loaded ${data.count} locked users`);
+        } else {
+            showAlert('Failed to load locked users: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('✗ Error loading locked users:', error);
+        showAlert('Error loading locked users: ' + error.message, 'danger');
+    });
+}
+
+/**
+ * Display locked users in the table
+ */
+function displayLockedUsers(users) {
+    const tbody = document.getElementById('locked-users-tbody');
+    const emptyState = document.getElementById('empty-state');
+    const unlockAllBtn = document.getElementById('unlock-all-btn');
+    const resetAllBtn = document.getElementById('reset-all-btn');
+    
+    if (!users || users.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.style.display = 'block';
+        unlockAllBtn.style.display = 'none';
+        resetAllBtn.style.display = 'none';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    unlockAllBtn.style.display = 'inline-block';
+    resetAllBtn.style.display = 'inline-block';
+    
+    tbody.innerHTML = users.map((user, index) => {
+        const lockedUntil = user.locked_until 
+            ? new Date(user.locked_until).toLocaleString() 
+            : '-';
+        const lastFailed = user.last_failed_login
+            ? new Date(user.last_failed_login).toLocaleString()
+            : '-';
+        
+        const isCurrentlyLocked = user.locked === 1;
+        const status = isCurrentlyLocked 
+            ? '<span class="badge bg-danger">Locked</span>'
+            : '<span class="badge bg-warning">Temporary</span>';
+        
+        return `
+            <tr>
+                <td>
+                    <input type="checkbox" class="user-checkbox" value="${user.user_id}">
+                </td>
+                <td><strong>${escapeHtml(user.username)}</strong></td>
+                <td>${user.failed_attempts || 0}</td>
+                <td><small>${lastFailed}</small></td>
+                <td><small>${lockedUntil}</small></td>
+                <td>${status}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="unlockUser(${user.user_id}, '${escapeHtml(user.username)}')">
+                        <i class="bi bi-unlock"></i> Unlock
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Unlock a single user
+ */
+function unlockUser(userId, username) {
+    if (!confirm(`Unlock user "${username}"?`)) return;
+    
+    console.log(`🔓 Unlocking user ${userId}...`);
+    
+    fetch('/api/env/users/unlock', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            user_id: userId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`✓ User "${username}" has been unlocked`, 'success');
+            loadLockedUsers();
+        } else {
+            showAlert(`✗ Failed to unlock user: ${data.message}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('✗ Error unlocking user:', error);
+        showAlert(`Error: ${error.message}`, 'danger');
+    });
+}
+
+/**
+ * Unlock all selected users
+ */
+function unlockAllUsers() {
+    const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('Please select at least one user');
+        return;
+    }
+    
+    const userIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if (!confirm(`Unlock ${userIds.length} selected user(s)?`)) return;
+    
+    console.log(`🔓 Unlocking ${userIds.length} users...`);
+    
+    fetch('/api/env/users/unlock', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            user_ids: userIds
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`✓ ${data.message}`, 'success');
+            loadLockedUsers();
+        } else {
+            showAlert(`✗ ${data.message}`, 'warning');
+            loadLockedUsers();
+        }
+    })
+    .catch(error => {
+        console.error('✗ Error unlocking users:', error);
+        showAlert(`Error: ${error.message}`, 'danger');
+    });
+}
+
+/**
+ * Reset failed attempts for all selected users
+ */
+function resetAllAttempts() {
+    const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('Please select at least one user');
+        return;
+    }
+    
+    const userIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if (!confirm(`Reset failed attempts for ${userIds.length} selected user(s)?`)) return;
+    
+    console.log(`↻ Resetting attempts for ${userIds.length} users...`);
+    
+    fetch('/api/env/users/reset-attempts', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            user_ids: userIds
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`✓ ${data.message}`, 'success');
+            loadLockedUsers();
+        } else {
+            showAlert(`✗ ${data.message}`, 'warning');
+            loadLockedUsers();
+        }
+    })
+    .catch(error => {
+        console.error('✗ Error resetting attempts:', error);
+        showAlert(`Error: ${error.message}`, 'danger');
+    });
+}
+
+/**
+ * Toggle selection of all users
+ */
+function toggleAllUserSelection() {
+    const selectAll = document.getElementById('select-all-users');
+    const checkboxes = document.querySelectorAll('.user-checkbox');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+}
+
+/**
+ * Toggle auto-refresh for locked users
+ */
+function toggleLockoutAutoRefresh() {
+    const checkbox = document.getElementById('lockout-auto-refresh');
+    
+    if (checkbox.checked) {
+        console.log('🔄 Enabling auto-refresh for locked users (5s)');
+        lockoutAutoRefreshInterval = setInterval(() => {
+            loadLockedUsers();
+        }, 5000);
+    } else {
+        console.log('⏹ Disabling auto-refresh for locked users');
+        if (lockoutAutoRefreshInterval) {
+            clearInterval(lockoutAutoRefreshInterval);
+            lockoutAutoRefreshInterval = null;
+        }
+    }
+}
+
+/**
+ * Escape HTML special characters
+ */
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}

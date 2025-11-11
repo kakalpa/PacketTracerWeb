@@ -565,3 +565,199 @@ class EnvConfigManager:
             else:
                 sanitized[key] = value
         return sanitized
+    
+    # ========================================================================
+    # User Lockout Management Methods
+    # ========================================================================
+    
+    def get_db_connection(self):
+        """Get a connection to the Guacamole database"""
+        try:
+            import mysql.connector
+            
+            connection = mysql.connector.connect(
+                host=os.environ.get('GUAC_DB_HOST', 'guacamole-mariadb'),
+                user=os.environ.get('GUAC_DB_USER', 'ptdbuser'),
+                password=os.environ.get('GUAC_DB_PASSWORD', 'ptdbpass'),
+                database=os.environ.get('GUAC_DB_NAME', 'guacamole_db')
+            )
+            return connection
+        except Exception as e:
+            logger.error(f"✗ Failed to connect to Guacamole database: {e}")
+            return None
+    
+    def get_locked_users(self) -> list:
+        """
+        Get all locked out users
+        
+        Returns:
+            List of dictionaries with user lockout information
+        """
+        try:
+            conn = self.get_db_connection()
+            if not conn:
+                return []
+            
+            cursor = conn.cursor(dictionary=True)
+            
+            query = """
+                SELECT 
+                    u.user_id,
+                    e.name as username,
+                    ul.failed_attempts,
+                    ul.last_failed_login,
+                    ul.locked_until,
+                    ul.locked,
+                    ul.reason,
+                    ul.updated_at
+                FROM guacamole_user_lockout ul
+                JOIN guacamole_user u ON ul.user_id = u.user_id
+                JOIN guacamole_entity e ON u.entity_id = e.entity_id
+                WHERE ul.locked = 1 OR (ul.locked_until IS NOT NULL AND ul.locked_until > NOW())
+                ORDER BY ul.updated_at DESC
+            """
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            
+            cursor.close()
+            conn.close()
+            
+            # Convert datetime objects to strings for JSON serialization
+            for row in results:
+                if row.get('last_failed_login'):
+                    row['last_failed_login'] = row['last_failed_login'].isoformat()
+                if row.get('locked_until'):
+                    row['locked_until'] = row['locked_until'].isoformat()
+                if row.get('updated_at'):
+                    row['updated_at'] = row['updated_at'].isoformat()
+            
+            logger.info(f"✓ Retrieved {len(results)} locked users")
+            return results
+        
+        except Exception as e:
+            logger.error(f"✗ Error getting locked users: {e}")
+            return []
+    
+    def unlock_user(self, user_id: int) -> Tuple[bool, str]:
+        """
+        Unlock a user account
+        
+        Args:
+            user_id: The ID of the user to unlock
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        try:
+            conn = self.get_db_connection()
+            if not conn:
+                return False, "Failed to connect to database"
+            
+            cursor = conn.cursor()
+            
+            query = """
+                UPDATE guacamole_user_lockout
+                SET locked = 0, locked_until = NULL, failed_attempts = 0, updated_at = NOW()
+                WHERE user_id = %s
+            """
+            
+            cursor.execute(query, (user_id,))
+            conn.commit()
+            
+            affected = cursor.rowcount
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"✓ Unlocked user {user_id}")
+            return True, f"User {user_id} unlocked successfully"
+        
+        except Exception as e:
+            logger.error(f"✗ Error unlocking user {user_id}: {e}")
+            return False, str(e)
+    
+    def reset_failed_attempts(self, user_id: int) -> Tuple[bool, str]:
+        """
+        Reset failed login attempts for a user
+        
+        Args:
+            user_id: The ID of the user
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        try:
+            conn = self.get_db_connection()
+            if not conn:
+                return False, "Failed to connect to database"
+            
+            cursor = conn.cursor()
+            
+            query = """
+                UPDATE guacamole_user_lockout
+                SET failed_attempts = 0, locked = 0, locked_until = NULL, updated_at = NOW()
+                WHERE user_id = %s
+            """
+            
+            cursor.execute(query, (user_id,))
+            conn.commit()
+            
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"✓ Reset failed attempts for user {user_id}")
+            return True, f"Failed attempts reset for user {user_id}"
+        
+        except Exception as e:
+            logger.error(f"✗ Error resetting attempts for user {user_id}: {e}")
+            return False, str(e)
+    
+    def get_user_lockout_status(self, user_id: int) -> Optional[dict]:
+        """
+        Get lockout status for a specific user
+        
+        Args:
+            user_id: The ID of the user
+            
+        Returns:
+            Dictionary with lockout information or None
+        """
+        try:
+            conn = self.get_db_connection()
+            if not conn:
+                return None
+            
+            cursor = conn.cursor(dictionary=True)
+            
+            query = """
+                SELECT 
+                    user_id,
+                    failed_attempts,
+                    last_failed_login,
+                    locked_until,
+                    locked,
+                    reason,
+                    updated_at
+                FROM guacamole_user_lockout
+                WHERE user_id = %s
+            """
+            
+            cursor.execute(query, (user_id,))
+            result = cursor.fetchone()
+            
+            cursor.close()
+            conn.close()
+            
+            if result:
+                if result.get('last_failed_login'):
+                    result['last_failed_login'] = result['last_failed_login'].isoformat()
+                if result.get('locked_until'):
+                    result['locked_until'] = result['locked_until'].isoformat()
+                if result.get('updated_at'):
+                    result['updated_at'] = result['updated_at'].isoformat()
+            
+            return result
+        
+        except Exception as e:
+            logger.error(f"✗ Error getting lockout status for user {user_id}: {e}")
+            return None

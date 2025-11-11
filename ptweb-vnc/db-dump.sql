@@ -486,6 +486,38 @@ LOCK TABLES `guacamole_user_attribute` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `guacamole_user_lockout`
+--
+
+DROP TABLE IF EXISTS `guacamole_user_lockout`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `guacamole_user_lockout` (
+  `user_id` int(11) NOT NULL,
+  `failed_attempts` int(11) NOT NULL DEFAULT 0,
+  `last_failed_login` datetime DEFAULT NULL,
+  `locked_until` datetime DEFAULT NULL,
+  `locked` tinyint(1) NOT NULL DEFAULT 0,
+  `reason` varchar(256) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`),
+  CONSTRAINT `guacamole_user_lockout_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `guacamole_user` (`user_id`) ON DELETE CASCADE,
+  INDEX `idx_locked` (`locked`),
+  INDEX `idx_locked_until` (`locked_until`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `guacamole_user_lockout`
+--
+
+LOCK TABLES `guacamole_user_lockout` WRITE;
+/*!40000 ALTER TABLE `guacamole_user_lockout` DISABLE KEYS */;
+/*!40000 ALTER TABLE `guacamole_user_lockout` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `guacamole_user_group`
 --
 
