@@ -712,7 +712,7 @@ def create_vnc_connection(connection_name, container_hostname, vnc_port=5901, pa
         INSERT INTO guacamole_connection 
         (connection_name, protocol, proxy_port, proxy_hostname, proxy_encryption_method, 
          max_connections, max_connections_per_user, failover_only)
-        VALUES (%s, 'vnc', 4822, 'guacd', 'NONE', 1, 1, 0)
+        VALUES (%s, 'vnc', 4822, 'pt-guacd', 'NONE', 1, 1, 0)
         """
         execute_query(query, (connection_name,))
         

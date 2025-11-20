@@ -207,7 +207,7 @@ def create_api_blueprint():
                                 '-m', '1G',
                                 '--ulimit', 'nproc=2048',
                                 '--ulimit', 'nofile=1024',
-                                '--dns=127.0.0.1',
+                                '--network', 'ptnet',
                                 '-v', f'{pt_deb}:/PacketTracer.deb:ro',
                                 '-v', 'pt_opt:/opt/pt',
                                 f'--mount=type=bind,source={shared_path},target=/shared,bind-propagation=rprivate',
@@ -220,24 +220,6 @@ def create_api_blueprint():
                             if result.returncode == 0:
                                 logger.info(f"✓ Created container {container_name}")
 
-                                # Connect container to pt-stack network for Guacamole connectivity
-                                try:
-                                    # Connect to network and preserve DNS settings
-                                    net_cmd = ['docker', 'network', 'connect', 'pt-stack', container_name]
-                                    net_result = subprocess.run(net_cmd, capture_output=True, text=True, timeout=10)
-                                    if net_result.returncode == 0:
-                                        logger.info(f"✓ Connected {container_name} to pt-stack network")
-                                        
-                                        # Verify DNS is still set after network connection
-                                        inspect_cmd = ['docker', 'inspect', container_name, '--format={{json .HostConfig.Dns}}']
-                                        inspect_result = subprocess.run(inspect_cmd, capture_output=True, text=True, timeout=5)
-                                        if inspect_result.returncode == 0:
-                                            logger.info(f"  DNS config: {inspect_result.stdout.strip()}")
-                                    else:
-                                        logger.warning(f"⚠ Failed to connect {container_name} to pt-stack: {net_result.stderr}")
-                                except Exception as e:
-                                    logger.warning(f"⚠ Error connecting to network: {e}")
-                                
                                 # Create Desktop symlink to /shared for easy file access
                                 # Also fix /shared permissions to be writable by ptuser
                                 try:
