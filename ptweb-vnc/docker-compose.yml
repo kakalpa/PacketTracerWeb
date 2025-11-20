@@ -5,6 +5,8 @@ services:
     image: mariadb:latest
     container_name: guacamole-mariadb
     restart: unless-stopped
+    networks:
+      - ptnet
     environment:
       MARIADB_RANDOM_ROOT_PASSWORD: 'yes'
       MARIADB_DATABASE: 'guacamole_db'
@@ -17,11 +19,15 @@ services:
     image: guacamole/guacd
     container_name: pt-guacd
     restart: unless-stopped
+    networks:
+      - ptnet
 
   guacamole:
     image: guacamole/guacamole
     container_name: pt-guacamole
     restart: unless-stopped
+    networks:
+      - ptnet
     depends_on:
       - mariadb
       - guacd
@@ -35,6 +41,8 @@ services:
     image: nginx:latest
     container_name: pt-nginx1
     restart: unless-stopped
+    networks:
+      - ptnet
     depends_on:
       - guacamole
     ports:
@@ -50,5 +58,8 @@ services:
       - ./shared:/shared:ro
 
 networks:
-  default:
+  ptnet:
+    name: ptnet
     driver: bridge
+    # Don't recreate if it exists - allows manual additions
+    external: false

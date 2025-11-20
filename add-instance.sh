@@ -86,7 +86,7 @@ for ((i=0; i<instances_to_add; i++)); do
     docker run -d \
       --name $container_name --restart unless-stopped \
       --cpus=0.5 -m 2G --ulimit nproc=2048 --ulimit nofile=1024 \
-      --dns=127.0.0.1 \
+      --network ptnet \
       -v "${WORKDIR}/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
       --mount type=bind,source="${WORKDIR}/shared",target=/shared,bind-propagation=rprivate \
@@ -94,10 +94,7 @@ for ((i=0; i<instances_to_add; i++)); do
       ptvnc
     
     sleep 2
-    
-    # Connect container to ptnet network for Guacamole access
-    docker network connect ptnet $container_name 2>/dev/null || true
-    echo "  ✓ Connected $container_name to ptnet network"
+    echo "  ✓ $container_name created and connected to ptnet network"
 done
 
 echo "✅ Containers started"
@@ -123,24 +120,8 @@ total_instances=$(docker ps --format "table {{.Names}}" | grep "^ptvnc" | wc -l)
 echo "Total instances now: $total_instances"
 echo ""
 
-# Step 3: Connect new instances to ptnet so guacd can reach them
-echo -e "\e[32mStep 3. Ensuring all containers are on ptnet\e[0m"
-
-# Note: guacd and guacamole are already on ptnet from initial deploy
-# New containers are already connected above, this is just for verification
-for ((i=1; i<=$total_instances; i++)); do
-    if docker ps --format "table {{.Names}}" | grep -q "^ptvnc$i$"; then
-        docker network connect ptnet ptvnc$i 2>/dev/null || true
-    fi
-done
-
-echo "✓ All containers on ptnet bridge network"
-echo "  (guacd can reach all ptvnc containers via hostname)"
-sleep 2
-
-echo "✅ Network configuration complete"
-echo ""
-echo -e "\e[32mStep 4. Generating dynamic Guacamole connections\e[0m"
+# Step 3: Generate dynamic Guacamole connections
+echo -e "\e[32mStep 3. Generating dynamic Guacamole connections\e[0m"
 bash generate-dynamic-connections.sh
 sleep 5
 
