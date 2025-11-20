@@ -73,9 +73,12 @@ This will build the Docker image (if needed), start MariaDB, guacd, guacamole an
 
 ## Gotchas & pay attention to
 
+- When You run Terminal commands make sure not to redirect the std output. The output needs to be visible in the terminal for debugging and log scanning.
+
 - The Packet Tracer installer is proprietary and must be supplied by the user; CI smoke scripts only test for the presence of the binary path after installation.
 - The code expects `/shared` to be present and writable; tests and workflows rely on this mount for file exchange and `pt-nginx/www` for HTTP downloads.
 - DB import may fail harmlessly if already applied; scripts commonly `|| true` the import step. If debugging, inspect `guacamole-mariadb` logs and `docker exec` into the container to run SQL manually.
+- Try not to redirect the stdout in the commands since the output needs to be visible in the terminal for debugging and log scanning.
 
 ## What to update in this file
 

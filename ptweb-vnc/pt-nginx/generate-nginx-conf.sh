@@ -295,7 +295,7 @@ EOF
     proxy_send_timeout 90;
     proxy_read_timeout 90;
     proxy_buffers 32 4k;
-    proxy_pass http://guacamole:8080/guacamole/;
+    proxy_pass http://pt-guacamole:8080/guacamole/;
   }
 
   location ~ \.ht {

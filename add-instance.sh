@@ -7,6 +7,10 @@
 
 set -e
 
+# CPU-based rendering - no GPU pass-through needed
+# Packet Tracer uses Mesa llvmpipe for software OpenGL rendering
+echo "ℹ️  Using CPU-based software rendering (no GPU pass-through)"
+
 PTfile="CiscoPacketTracer.deb"
 WORKDIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -91,9 +95,9 @@ for ((i=0; i<instances_to_add; i++)); do
     
     sleep 2
     
-    # Connect container to pt-stack network for Guacamole access
-    docker network connect pt-stack $container_name 2>/dev/null || true
-    echo "  ✓ Connected $container_name to pt-stack network"
+    # Connect container to ptnet network for Guacamole access
+    docker network connect ptnet $container_name 2>/dev/null || true
+    echo "  ✓ Connected $container_name to ptnet network"
 done
 
 echo "✅ Containers started"
@@ -119,71 +123,23 @@ total_instances=$(docker ps --format "table {{.Names}}" | grep "^ptvnc" | wc -l)
 echo "Total instances now: $total_instances"
 echo ""
 
-# Step 3: Restart guacamole services with updated links
-echo -e "\e[32mStep 3. Restarting Guacamole services with updated links\e[0m"
+# Step 3: Connect new instances to ptnet so guacd can reach them
+echo -e "\e[32mStep 3. Ensuring all containers are on ptnet\e[0m"
 
-# Stop and remove old guacd
-echo "Stopping pt-guacd..."
-docker stop pt-guacd 2>/dev/null || true
-docker rm pt-guacd 2>/dev/null || true
-
-# Build link string
-linkstr=""
+# Note: guacd and guacamole are already on ptnet from initial deploy
+# New containers are already connected above, this is just for verification
 for ((i=1; i<=$total_instances; i++)); do
     if docker ps --format "table {{.Names}}" | grep -q "^ptvnc$i$"; then
-        linkstr="${linkstr} --link ptvnc$i:ptvnc$i"
+        docker network connect ptnet ptvnc$i 2>/dev/null || true
     fi
 done
 
-# Start new guacd with all links
-docker run --name pt-guacd --restart always -d ${linkstr} guacamole/guacd
-sleep 20
+echo "✓ All containers on ptnet bridge network"
+echo "  (guacd can reach all ptvnc containers via hostname)"
+sleep 2
 
-# Recreate guacamole to pick up new links
-echo "Recreating pt-guacamole..."
-docker stop pt-guacamole 2>/dev/null || true
-docker rm pt-guacamole 2>/dev/null || true
-sleep 5
-docker run --name pt-guacamole --restart always \
-  --link pt-guacd:guacd \
-  --link guacamole-mariadb:mysql \
-  -e MYSQL_DATABASE=guacamole_db \
-  -e MYSQL_USER=ptdbuser \
-  -e MYSQL_PASSWORD=ptdbpass \
-  -d guacamole/guacamole
-sleep 10
-
-# Recreate nginx to re-link to guacamole
-echo "Recreating pt-nginx1..."
-docker stop pt-nginx1 2>/dev/null || true
-docker rm pt-nginx1 2>/dev/null || true
-sleep 3
-
-# Mount SSL certificates if HTTPS is enabled
-SSL_MOUNTS=""
-if [ "$ENABLE_HTTPS" = "true" ]; then
-    if [ -f "$WORKDIR/ssl/server.crt" ]; then
-        SSL_MOUNTS="$SSL_MOUNTS --mount type=bind,source=\"$WORKDIR/ssl/server.crt\",target=$SSL_CERT_PATH,readonly"
-    fi
-    if [ -f "$WORKDIR/ssl/server.key" ]; then
-        SSL_MOUNTS="$SSL_MOUNTS --mount type=bind,source=\"$WORKDIR/ssl/server.key\",target=$SSL_KEY_PATH,readonly"
-    fi
-fi
-
-eval "docker run --restart always --name pt-nginx1 \
-  --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/www\",target=/usr/share/nginx/html,readonly \
-  --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/conf\",target=/etc/nginx/conf.d,readonly \
-  --mount type=bind,source=\"${WORKDIR}/shared\",target=/shared,readonly,bind-propagation=rprivate \
-  $SSL_MOUNTS \
-  --link pt-guacamole:guacamole \
-  -p 80:80 \
-  $([ "$ENABLE_HTTPS" = "true" ] && echo "-p 443:443") \
-  -d pt-nginx"
-sleep 5
-
-echo "✅ Services restarted"
-
-# Step 4: Generate dynamic connections
+echo "✅ Network configuration complete"
+echo ""
 echo -e "\e[32mStep 4. Generating dynamic Guacamole connections\e[0m"
 bash generate-dynamic-connections.sh
 sleep 5

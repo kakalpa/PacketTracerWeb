@@ -93,27 +93,41 @@ fi
 
 echo -e "\e[32m=== Starting Packet Tracer + Guacamole Deployment ===\e[0m"
 
-# Check if .deb file exists
-if [[ ! -f "$PTfile" ]]; then
+# Check if .deb file exists (optional)
+PTfile_found=false
+if [[ -f "$PTfile" ]]; then
+    PTfile_found=true
+else
     candidate=$(ls -1 2>/dev/null | grep -E "PacketTracer|CiscoPacketTracer" | grep -E "\.deb$" | head -n1 || true)
     if [[ -n "$candidate" && -f "$candidate" ]]; then
         PTfile="$candidate"
-    else
-        echo "ERROR: Packet Tracer .deb file not found!"
-        exit 1
+        PTfile_found=true
     fi
 fi
 
-echo "Using Packet Tracer file: $PTfile"
-
-# Build ptvnc Docker image if it doesn't exist
-echo -e "\e[32mStep 0. Building Docker images\e[0m"
-if ! docker image inspect ptvnc:latest &>/dev/null; then
-    echo "Building ptvnc image..."
-    docker build -t ptvnc ptweb-vnc/
+if [ "$PTfile_found" = true ]; then
+    echo -e "\e[32m✓ Found PacketTracer .deb: $PTfile\e[0m"
 else
-    echo "ptvnc image already exists, skipping build"
+    echo -e "\e[33m⚠ No PacketTracer .deb found - will build without it\e[0m"
+    echo -e "\e[33m  To add it later, place the .deb in repo root and run: bash deploy.sh recreate\e[0m"
 fi
+
+# Build ptvnc Docker image (always rebuild to include/exclude .deb as needed)
+echo -e "\e[32mStep 0. Building Docker images\e[0m"
+
+# Copy .deb into ptweb-vnc directory for Docker COPY command (if it exists)
+if [ "$PTfile_found" = true ] && [ -f "$PTfile" ]; then
+    echo -e "\e[36mℹ️  Copying $PTfile to ptweb-vnc/ for Docker build...\e[0m"
+    cp "$PTfile" "ptweb-vnc/CiscoPacketTracer.deb"
+    echo -e "\e[32m✓ PacketTracer will be installed during Docker build\e[0m"
+fi
+
+echo "Building ptvnc image..."
+docker build -t ptvnc ptweb-vnc/
+
+# Clean up the copied .deb after build
+rm -f "ptweb-vnc/CiscoPacketTracer.deb"
+echo -e "\e[32m✓ ptvnc image built successfully\e[0m"
 
 # Build pt-nginx Docker image if it doesn't exist
 if ! docker image inspect pt-nginx:latest &>/dev/null; then
@@ -164,9 +178,15 @@ else
 fi
 echo ""
 
+# Step 0.8: Create bridge network for containers
+echo -e "\e[32mStep 0.8. Creating bridge network 'ptnet'\e[0m"
+docker network create ptnet 2>/dev/null || echo "Network ptnet already exists"
+echo ""
+
 # Step 1: Start MariaDB
 echo -e "\e[32mStep 1. Start MariaDB\e[0m"
 docker run --name guacamole-mariadb --restart unless-stopped \
+  --network ptnet \
   -v dbdump:/docker-entrypoint-initdb.d \
   -e MYSQL_ROOT_HOST=% \
   -e MYSQL_DATABASE=${dbname} \
@@ -196,15 +216,22 @@ echo -e "\033[32m  Generating dynamic nginx configuration...\033[0m"
 bash "${WORKDIR}/ptweb-vnc/pt-nginx/generate-nginx-conf.sh"
 echo -e "\033[32m  ✓ Generated nginx.conf and ptweb.conf with GeoIP filtering\033[0m"
 
+# CPU-based rendering - no GPU pass-through needed
+# Packet Tracer uses Mesa llvmpipe for software OpenGL rendering
+echo "ℹ️  Using CPU-based software rendering (no GPU pass-through)"
+
+# CPU-based rendering - no GPU pass-through needed
+# Packet Tracer uses Mesa llvmpipe for software OpenGL rendering
+echo "ℹ️  Using CPU-based software rendering (no GPU pass-through)"
+
 for ((i=1; i<=$numofPT; i++)); do
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
+      --network ptnet \
       --cpus=0.5 -m 2G --ulimit nproc=2048 --ulimit nofile=1024 \
       --dns=127.0.0.1 \
-      -v "${WORKDIR}/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
       --mount type=bind,source="${WORKDIR}/shared",target=/shared,bind-propagation=rprivate \
-      -e PT_DEB_PATH=/PacketTracer.deb \
       ptvnc
     sleep $i
 done
@@ -224,20 +251,24 @@ docker exec -i guacamole-mariadb mariadb -u${dbuser} -p${dbpass} < ptweb-vnc/db-
 
 # Step 4: Start Guacamole services
 echo -e "\e[32mStep 4. Start Guacamole services\e[0m"
-linkstr=""
-for ((i=1; i<=$numofPT; i++)); do
-    linkstr="${linkstr} --link ptvnc$i:ptvnc$i"
-done
 
-docker run --name pt-guacd --restart always -d ${linkstr} guacamole/guacd
+docker run --name pt-guacd --restart always \
+  --network ptnet \
+  -d guacamole/guacd:latest
 sleep 20
 
+# Get guacd IP for Guacamole configuration
+GUACD_IP=$(docker inspect pt-guacd --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' | tr -d ' ')
+echo -e "\e[36m  ✓ guacd IP: $GUACD_IP\e[0m"
+
 docker run --name pt-guacamole --restart always \
-  --link pt-guacd:guacd \
-  --link guacamole-mariadb:mysql \
+  --network ptnet \
+  -e MYSQL_HOSTNAME=guacamole-mariadb \
   -e MYSQL_DATABASE=${dbname} \
   -e MYSQL_USER=${dbuser} \
   -e MYSQL_PASSWORD=${dbpass} \
+  -e GUACAMOLE_GUACD_HOSTNAME=pt-guacd \
+  -e GUACAMOLE_GUACD_PORT=4822 \
   -d guacamole/guacamole
 
 # Step 5: Start Nginx
@@ -248,9 +279,7 @@ chmod 777 "${WORKDIR}/shared"
 # Query Guacamole container IP (if it wasn't already determined)
 if [ -z "$GUACAMOLE_IP" ]; then
     sleep 3
-    GUACAMOLE_IP=$(docker inspect pt-guacamole --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "172.17.0.6")
-    GUACAMOLE_IP=$(echo "$GUACAMOLE_IP" | tr -d '
-' | tr -d ' ')
+    GUACAMOLE_IP=$(docker inspect pt-guacamole --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' | tr -d ' ')
 fi
 echo -e "\033[36m  ✓ Guacamole IP: $GUACAMOLE_IP\033[0m"
 
@@ -288,141 +317,53 @@ if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
     fi
 fi
 
-# Run nginx with appropriate port and SSL mounts
+# Run nginx with appropriate port and SSL mounts on ptnet network
 eval "docker run --restart always --name pt-nginx1 \
+  --network ptnet \
   --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/nginx.conf\",target=/etc/nginx/nginx.conf,readonly \
   --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/www\",target=/usr/share/nginx/html,readonly \
   --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/conf\",target=/etc/nginx/conf.d,readonly \
   --mount type=bind,source=\"${WORKDIR}/shared\",target=/shared,readonly,bind-propagation=rprivate \
   $SSL_MOUNTS \
   $GEOIP_MOUNTS \
-  --link pt-guacamole:guacamole \
   -p 80:80 \
   $([ "$ENABLE_HTTPS" = "true" ] && echo "-p 443:443") \
   -d pt-nginx"
 
+sleep 3
+echo -e "\e[32m✓ Nginx started on ptnet network\e[0m"
+
 # Step 6: Generate dynamic connections
 echo -e "\e[32mStep 6. Generating dynamic Guacamole connections\e[0m"
-sleep 10
-bash generate-dynamic-connections.sh $numofPT
-sleep 5
+sleep 3
+bash generate-dynamic-connections.sh $numofPT || echo "Warning: generate-dynamic-connections failed (continuing)"
+sleep 2
 
-# Wait for PacketTracer installation to complete in all containers
-echo -e "\e[32m=== Waiting for PacketTracer Installation ===\e[0m"
-echo "Monitoring container logs for installation completion..."
+# Verify PacketTracer installation in containers (it was installed during Docker build if .deb was provided)
 echo ""
-
-# Function to check if PT is installed in a container
-check_pt_installed() {
-    local container=$1
-    # Check if the binary actually exists in the container 
-    docker exec "$container" test -x /opt/pt/packettracer 2>/dev/null && return 0 || return 1
-}
-
-# Function to get installation logs from a container
-get_install_logs() {
-    local container=$1
-    docker logs "$container" 2>&1 | grep "\[pt-install\]" | tail -5
-}
-
-# Wait for all containers to complete installation
-all_installed=false
-timeout=1200  # 20 minute timeout (increased from 10 to handle slower systems)
-elapsed=0
-last_log_display=0
-declare -A completed_containers
-
-while [ $elapsed -lt $timeout ]; do
-    all_installed=true
-    for ((i=1; i<=$numofPT; i++)); do
-        if ! check_pt_installed "ptvnc$i"; then
-            all_installed=false
-        fi
-    done
-    
-    if [ "$all_installed" = true ]; then
-        break
+echo -e "\e[32mStep 7. Verifying PacketTracer installation\e[0m"
+for ((i=1; i<=$numofPT; i++)); do
+    if docker exec ptvnc$i test -x /opt/pt/packettracer.AppImage 2>/dev/null || \
+       docker exec ptvnc$i test -x /opt/pt/packettracer-launcher 2>/dev/null; then
+        echo -e "\e[32m  ✓ ptvnc$i: PacketTracer ready\e[0m"
+    else
+        echo -e "\e[33m  ⚠ ptvnc$i: PacketTracer not installed (provide .deb and rebuild)\e[0m"
     fi
-    
-    # Display logs every 15 seconds
-    if [ $((elapsed - last_log_display)) -ge 15 ] || [ $elapsed -eq 0 ]; then
-        echo ""
-        echo -e "\e[36m--- Installation Progress ---\e[0m"
-        
-        # Show status and logs for each container
-        for ((i=1; i<=$numofPT; i++)); do
-            if check_pt_installed "ptvnc$i"; then
-                # Container is done - show it only once
-                if [ -z "${completed_containers[ptvnc$i]}" ]; then
-                    echo -e "\e[32m✓ ptvnc$i: Installation completed\e[0m"
-                    completed_containers[ptvnc$i]=1
-                fi
-            else
-                # Container still installing - show progress
-                echo -e "\e[33m⏳ ptvnc$i: Installing...\e[0m"
-                get_install_logs "ptvnc$i" | tail -3
-            fi
-        done
-        
-        last_log_display=$elapsed
-    fi
-    
-    sleep 5
-    elapsed=$((elapsed + 5))
-    echo -ne "\rWaiting for installation... ($elapsed/$timeout seconds)"
 done
-
-echo ""
 echo ""
 
-if [ "$all_installed" = true ]; then
-    echo -e "\e[32m✓ PacketTracer installation completed successfully in all containers\e[0m"
-    echo ""
-    echo -e "\e[36m=== Final Installation Status ===\e[0m"
-    for ((i=1; i<=$numofPT; i++)); do
-        echo -e "\e[32mptvnc$i:\e[0m"
-        get_install_logs "ptvnc$i" | tail -3
-        echo ""
-    done
-    
-    echo ""
-    echo -e "\e[32m=== Deployment Complete ===\e[0m"
-    echo ""
-    echo "Services Status:"
-    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-    echo ""
-    echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
-    echo -e "\e[32mAccess the web interface at: http://localhost\e[0m"
-    echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
-    echo ""
-    echo "Available Packet Tracer connections:"
-    for ((i=1; i<=$numofPT; i++)); do
-        echo "  - pt$(printf "%02d" $i)"
-    done
-    echo ""
-    echo -e "\e[32m✓ SUCCESS - Deployment and installation complete!\e[0m"
-    echo ""
-else
-    echo -e "\e[31m✗ ERROR: Timeout waiting for PacketTracer installation after $timeout seconds\e[0m"
-    echo ""
-    echo -e "\e[33m⚠ Installation Status:\e[0m"
-    for ((i=1; i<=$numofPT; i++)); do
-        if check_pt_installed "ptvnc$i"; then
-            echo -e "\e[32m  ✓ ptvnc$i: Installation completed\e[0m"
-        else
-            echo -e "\e[31m  ✗ ptvnc$i: Installation NOT completed (binary not found)\e[0m"
-            echo -e "\e[33m    Recent logs:\e[0m"
-            get_install_logs "ptvnc$i" | tail -3 | sed 's/^/      /'
-        fi
-    done
-    echo ""
-    echo -e "\e[33m⚠ Recommendations:\e[0m"
-    echo "  1. Check container logs: docker logs ptvnc1 (ptvnc2, etc.)"
-    echo "  2. Check disk space: docker exec ptvnc1 df -h"
-    echo "  3. Check if .deb file is present and readable in repo root"
-    echo "  4. Increase timeout or re-run deployment"
-    echo ""
-    
-    # Exit with error code
-    exit 1
-fi
+echo -e "\e[32m=== Deployment Complete (installer not waited-on) ===\e[0m"
+echo "Services Status:"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+echo ""
+echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
+echo -e "\e[32mAccess the web interface at: http://localhost\e[0m"
+echo -e "\e[36m════════════════════════════════════════════════════════════════\e[0m"
+echo ""
+echo "Available Packet Tracer connections:"
+for ((i=1; i<=$numofPT; i++)); do
+    echo "  - pt$(printf "%02d" $i)"
+done
+echo ""
+echo -e "\e[32m✓ SUCCESS - Deployment started. Run runtime installer manually if needed.\e[0m"
+echo ""

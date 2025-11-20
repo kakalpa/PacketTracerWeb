@@ -55,7 +55,7 @@ CREATE TABLE `guacamole_connection` (
 
 LOCK TABLES `guacamole_connection` WRITE;
 /*!40000 ALTER TABLE `guacamole_connection` DISABLE KEYS */;
-INSERT INTO `guacamole_connection` VALUES (1,'pt01',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0),(2,'pt02',NULL,'vnc',4822,'guacd','NONE',1,1,NULL,0);
+INSERT INTO `guacamole_connection` VALUES (1,'pt01',NULL,'vnc',4822,'pt-guacd','NONE',1,1,NULL,0),(2,'pt02',NULL,'vnc',4822,'pt-guacd','NONE',1,1,NULL,0);
 /*!40000 ALTER TABLE `guacamole_connection` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -231,7 +231,7 @@ CREATE TABLE `guacamole_connection_parameter` (
 
 LOCK TABLES `guacamole_connection_parameter` WRITE;
 /*!40000 ALTER TABLE `guacamole_connection_parameter` DISABLE KEYS */;
-INSERT INTO `guacamole_connection_parameter` VALUES (1,'hostname','ptvnc1'),(1,'password','Cisco123'),(1,'port','5901'),(2,'hostname','ptvnc2'),(2,'password','Cisco123'),(2,'port','5901');
+INSERT INTO `guacamole_connection_parameter` VALUES (1,'hostname','ptvnc1'),(1,'password','Cisco123'),(1,'port','5901'),(1,'username','ptuser'),(1,'security','tls'),(2,'hostname','ptvnc2'),(2,'password','Cisco123'),(2,'port','5901'),(2,'username','ptuser'),(2,'security','tls');
 /*!40000 ALTER TABLE `guacamole_connection_parameter` ENABLE KEYS */;
 UNLOCK TABLES;
 

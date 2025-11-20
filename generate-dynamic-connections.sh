@@ -50,15 +50,16 @@ echo "Admin entity ID: $ptadmin_id"
 
 # Generate connection entries ONLY for legacy pt01, pt02, etc. naming
 # Do NOT delete existing vnc-ptvnc* connections created by bulk-create
+# NOTE: Using VNC protocol with guacd proxy (port 4822)
 for instance_num in $ptvnc_containers; do
     connection_name="pt$(printf "%02d" $instance_num)"
     
     cat >> /tmp/dynamic_connections.sql << EOFCONN
--- Create legacy connection: $connection_name -> ptvnc$instance_num
+-- Create legacy connection: $connection_name -> ptvnc$instance_num (VNC via guacd)
 -- Only create if it doesn't already exist
 INSERT IGNORE INTO \`guacamole_connection\` 
 (\`connection_name\`, \`protocol\`, \`proxy_port\`, \`proxy_hostname\`, \`proxy_encryption_method\`, \`max_connections\`, \`max_connections_per_user\`, \`failover_only\`) 
-VALUES ('$connection_name', 'vnc', 4822, 'guacd', 'NONE', 1, 1, 0);
+VALUES ('$connection_name', 'vnc', 4822, 'pt-guacd', 'NONE', 1, 1, 0);
 
 -- Grant access to ptadmin (only if not already granted)
 INSERT IGNORE INTO \`guacamole_connection_permission\` 
@@ -71,6 +72,7 @@ INSERT IGNORE INTO \`guacamole_connection_parameter\`
 VALUES 
   ((SELECT connection_id FROM guacamole_connection WHERE connection_name = '$connection_name'), 'hostname', 'ptvnc$instance_num'),
   ((SELECT connection_id FROM guacamole_connection WHERE connection_name = '$connection_name'), 'port', '5901'),
+  ((SELECT connection_id FROM guacamole_connection WHERE connection_name = '$connection_name'), 'username', 'ptuser'),
   ((SELECT connection_id FROM guacamole_connection WHERE connection_name = '$connection_name'), 'password', 'Cisco123');
 
 EOFCONN

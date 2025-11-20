@@ -4,12 +4,12 @@
 # any .deb placed into the container (or mounted) at startup. This defers
 # installation from the image build to runtime and makes newer PacketTracer
 # versions (different filenames) transparent.
+# NOTE: We run this in the background and do NOT block on failure.
+# VNC/XFCE will start regardless, allowing manual PacketTracer launch later.
 if [ -x /runtime-install.sh ]; then
 	echo "Running runtime installer check..."
-	if ! /runtime-install.sh; then
-		echo "Runtime installer failed, exiting" >&2
-		exit 1
-	fi
+	/runtime-install.sh &>/tmp/runtime-install.log &
+	# Don't wait for it; VNC/XFCE will start immediately
 fi
 
 # disable DNS resolution for PT auth
