@@ -92,7 +92,7 @@ def create_app():
     @app.before_request
     def check_authentication():
         """Check if user is authenticated for protected routes"""
-        protected_routes = ['/dashboard', '/settings', '/api/']
+        protected_routes = ['/dashboard', '/settings', '/files', '/api/']
         
         if any(request.path.startswith(route) for route in protected_routes):
             # Allow specific endpoints without auth (internal or batch operations)
@@ -151,6 +151,11 @@ def create_app():
         """Nginx configuration settings page"""
         return render_template('env_settings.html', username=session.get('user'))
     
+    @app.route('/files')
+    def file_manager():
+        """File manager page for managing /shared folder"""
+        return render_template('file_manager.html', username=session.get('user'))
+    
     # ========================================================================
     # API Routes
     # ========================================================================
@@ -174,6 +179,14 @@ def create_app():
     from ptmanagement.api.upload_routes import create_file_upload_blueprint
     upload_api_bp = create_file_upload_blueprint()
     app.register_blueprint(upload_api_bp)  # Blueprint already has /api/upload prefix
+    
+    # ========================================================================
+    # File Manager API
+    # ========================================================================
+    
+    from ptmanagement.api.file_manager import create_file_manager_blueprint
+    fm_api_bp = create_file_manager_blueprint()
+    app.register_blueprint(fm_api_bp)  # Blueprint already has /api/files prefix
     
     # ========================================================================
     # Error Handlers

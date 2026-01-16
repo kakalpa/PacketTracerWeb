@@ -92,6 +92,7 @@ fi
 
 # Run container (use default bridge network so it can reach other containers by name)
 docker run -d --name pt-management \
+  --restart=unless-stopped \
   --network pt-stack \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$ROOT_DIR/shared:/shared" \
