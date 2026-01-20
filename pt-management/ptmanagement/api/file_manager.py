@@ -47,14 +47,16 @@ def create_file_manager_blueprint():
     @fm.route('/', methods=['GET'])
     @require_auth
     def list_files():
-        """List files and directories in /shared"""
+        """List files and directories in /shared or a subdirectory"""
         try:
             if not os.path.exists(SHARED_FOLDER):
                 os.makedirs(SHARED_FOLDER, exist_ok=True)
             
             items = []
-            for item in os.listdir(SHARED_FOLDER):
-                item_path = os.path.join(SHARED_FOLDER, item)
+            list_path = SHARED_FOLDER
+            
+            for item in os.listdir(list_path):
+                item_path = os.path.join(list_path, item)
                 is_dir = os.path.isdir(item_path)
                 
                 try:
@@ -90,7 +92,7 @@ def create_file_manager_blueprint():
     @fm.route('/<path:file_path>', methods=['GET'])
     @require_auth
     def read_file(file_path):
-        """Read file contents"""
+        """Read file contents or list directory contents"""
         try:
             safe_path = validate_path(os.path.join(SHARED_FOLDER, file_path))
             if not safe_path:
@@ -99,9 +101,44 @@ def create_file_manager_blueprint():
             if not os.path.exists(safe_path):
                 return jsonify({'error': 'File not found'}), 404
             
+            # If it's a directory, list its contents
             if os.path.isdir(safe_path):
-                return jsonify({'error': 'Path is a directory'}), 400
+                items = []
+                for item in os.listdir(safe_path):
+                    item_path = os.path.join(safe_path, item)
+                    is_dir = os.path.isdir(item_path)
+                    
+                    try:
+                        stat = os.stat(item_path)
+                        size = stat.st_size if not is_dir else 0
+                        modified = stat.st_mtime
+                    except OSError:
+                        size = 0
+                        modified = 0
+                    
+                    # Store relative path from /shared root
+                    rel_path = os.path.relpath(item_path, SHARED_FOLDER)
+                    
+                    items.append({
+                        'name': item,
+                        'path': rel_path,
+                        'type': 'directory' if is_dir else 'file',
+                        'size': size,
+                        'modified': modified,
+                        'readable': os.access(item_path, os.R_OK),
+                        'writable': os.access(item_path, os.W_OK)
+                    })
+                
+                # Sort: directories first, then alphabetically
+                items.sort(key=lambda x: (x['type'] != 'directory', x['name']))
+                
+                return jsonify({
+                    'success': True,
+                    'path': file_path,
+                    'items': items
+                }), 200
             
+            # Otherwise, read file contents
             if not os.access(safe_path, os.R_OK):
                 return jsonify({'error': 'Permission denied'}), 403
             

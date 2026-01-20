@@ -395,6 +395,7 @@
         let currentFile = null;
         let renameTarget = null;
         let deleteTarget = null;
+        let currentPath = '';
 
         // Show notification
         function showNotification(type, message, duration = 3000) {
@@ -429,16 +430,47 @@
             return date.toLocaleString();
         }
 
+        // Update breadcrumb navigation
+        function updateBreadcrumb() {
+            const breadcrumb = document.getElementById('breadcrumb');
+            breadcrumb.innerHTML = '';
+            
+            // Add root item
+            const rootItem = document.createElement('li');
+            rootItem.className = 'breadcrumb-item';
+            rootItem.innerHTML = '<a href="#" onclick="navigateTo(\'\'); return false;">/shared</a>';
+            breadcrumb.appendChild(rootItem);
+            
+            // Add path items
+            if (currentPath) {
+                const parts = currentPath.split('/').filter(p => p);
+                let pathSoFar = '';
+                parts.forEach((part, index) => {
+                    pathSoFar = (pathSoFar ? pathSoFar + '/' : '') + part;
+                    const item = document.createElement('li');
+                    item.className = index === parts.length - 1 ? 'breadcrumb-item active' : 'breadcrumb-item';
+                    if (index === parts.length - 1) {
+                        item.textContent = part;
+                    } else {
+                        item.innerHTML = `<a href="#" onclick="navigateTo('${pathSoFar}'); return false;">${part}</a>`;
+                    }
+                    breadcrumb.appendChild(item);
+                });
+            }
+        }
+
         // Refresh file list
         function refreshFileList() {
             document.getElementById('file-loading').style.display = 'block';
             document.getElementById('file-browser').style.display = 'none';
             document.getElementById('file-empty').style.display = 'none';
 
-            fetch(API_BASE)
+            const url = currentPath ? `${API_BASE}/${currentPath}` : API_BASE;
+            fetch(url)
                 .then(r => r.json())
                 .then(data => {
                     document.getElementById('file-loading').style.display = 'none';
+                    updateBreadcrumb();
                     
                     if (!data.success || !data.items || data.items.length === 0) {
                         document.getElementById('file-empty').style.display = 'block';
@@ -563,7 +595,9 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Creating...';
 
-            fetch(`${API_BASE}/${fileName}`, {
+            const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+
+            fetch(`${API_BASE}/${filePath}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content })
@@ -604,7 +638,9 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Creating...';
 
-            fetch(`${API_BASE}/mkdir/${dirName}`, { method: 'POST' })
+            const dirPath = currentPath ? `${currentPath}/${dirName}` : dirName;
+
+            fetch(`${API_BASE}/mkdir/${dirPath}`, { method: 'POST' })
                 .then(r => r.json())
                 .then(data => {
                     btn.disabled = false;
@@ -712,9 +748,16 @@
                 });
         }
 
-        // Open directory (placeholder for now)
+        // Open directory
         function openDirectory(dirPath) {
-            showNotification('info', 'Directory navigation coming soon');
+            navigateTo(dirPath);
+        }
+
+        // Navigate to directory
+        function navigateTo(dirPath) {
+            currentPath = dirPath;
+            closeEditor();
+            refreshFileList();
         }
 
         // Perform file upload
@@ -733,7 +776,7 @@
 
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('target_dir', '');
+            formData.append('target_dir', currentPath);
 
             const progressBar = document.getElementById('uploadProgress');
             const progressBarFill = document.getElementById('uploadProgressBar');
