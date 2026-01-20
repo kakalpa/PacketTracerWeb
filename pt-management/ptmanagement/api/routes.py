@@ -208,6 +208,7 @@ def create_api_blueprint():
                                 '--ulimit', 'nproc=2048',
                                 '--ulimit', 'nofile=1024',
                                 '--network', 'ptnet',
+                                '--dns=127.0.0.1',
                                 '-v', f'{pt_deb}:/PacketTracer.deb:ro',
                                 '-v', 'pt_opt:/opt/pt',
                                 f'--mount=type=bind,source={shared_path},target=/shared,bind-propagation=rprivate',

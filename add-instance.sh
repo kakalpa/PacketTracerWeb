@@ -89,6 +89,7 @@ for ((i=0; i<instances_to_add; i++)); do
       --network ptnet \
       -v "${WORKDIR}/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
+      --dns=127.0.0.1 \
       --mount type=bind,source="${WORKDIR}/shared",target=/shared,bind-propagation=rprivate \
       -e PT_DEB_PATH=/PacketTracer.deb \
       ptvnc
