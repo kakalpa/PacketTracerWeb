@@ -201,6 +201,20 @@ echo -e "\e[32mStep 2. Start Packet Tracer VNC containers\e[0m"
 mkdir -p "${WORKDIR}/shared"
 chmod 777 "${WORKDIR}/shared"
 
+# Setup templates folder with read-only permissions for students
+echo -e "\e[32mSetting up templates folder with read-only permissions\e[0m"
+mkdir -p "${WORKDIR}/shared/templates"
+
+# Set templates folder to read-only for regular users (555 = r-x r-x r-x)
+chmod 555 "${WORKDIR}/shared/templates"
+
+# Make any existing files in templates read-only (444 = r-- r-- r--)
+find "${WORKDIR}/shared/templates" -type f -exec chmod 444 {} \;
+
+echo -e "\e[32m✓ Templates folder created and set to read-only for students\e[0m"
+echo -e "\e[32m  Students can open/read templates but cannot modify/delete\e[0m"
+echo -e "\e[32m  Admins via pt-management will have full permissions\e[0m"
+
 # Query Guacamole container IP and generate ptweb.conf
 sleep 3
 GUACAMOLE_IP=$(docker inspect pt-guacamole --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "172.17.0.6")
@@ -269,6 +283,7 @@ docker run --name pt-guacamole --restart always \
   -e MYSQL_PASSWORD=${dbpass} \
   -e GUACAMOLE_GUACD_HOSTNAME=pt-guacd \
   -e GUACAMOLE_GUACD_PORT=4822 \
+  -e BAN_ENABLED="false" \
   -d guacamole/guacamole
 
 # Step 5: Start Nginx

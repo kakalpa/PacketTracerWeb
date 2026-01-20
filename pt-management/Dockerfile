@@ -3,19 +3,23 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Force rebuild - Timestamp: 1730975000
-# Install system dependencies including Docker CLI
+# Install system dependencies including Docker CLI and sudo
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     gnupg \
     lsb-release \
+    sudo \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update && apt-get install -y --no-install-recommends \
     docker-ce-cli \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists*
+
+# Allow root user to run docker commands via sudo without password
+RUN echo "root ALL=(ALL) NOPASSWD: /usr/bin/docker" >> /etc/sudoers.d/docker
 
 # Copy requirements and install Python packages
 COPY requirements.txt .

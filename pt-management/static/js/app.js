@@ -486,7 +486,7 @@ async function runHealthCheck() {
     // Show results area and hide idle message
     resultsDiv.style.display = 'block';
     idleDiv.style.display = 'none';
-    outputDiv.innerHTML = '<div class="text-center text-muted">Running health check... (this may take a minute)</div>';
+    outputDiv.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2 text-muted">Running health check...</p></div>';
     runBtn.disabled = true;
     runBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Running...';
     
@@ -494,13 +494,13 @@ async function runHealthCheck() {
         const result = await apiRequest('/health-check', 'POST');
         
         if (!result || !result.success) {
-            outputDiv.innerHTML = `<div class="text-danger">Error: ${result?.error || 'Unknown error'}</div>`;
+            outputDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Error: ${result?.error || 'Unknown error'}</div>`;
             return;
         }
         
-        // Update summary stats
-        passedDiv.textContent = result.tests_passed;
-        failedDiv.textContent = result.tests_failed;
+        // Update summary stats with icons
+        passedDiv.innerHTML = `<i class="bi bi-check-circle-fill" style="color: #28a745; margin-right: 8px;"></i>${result.tests_passed}`;
+        failedDiv.innerHTML = `<i class="bi ${result.tests_failed > 0 ? 'bi-x-circle-fill' : 'bi-check-circle-fill'}" style="color: ${result.tests_failed > 0 ? '#dc3545' : '#28a745'}; margin-right: 8px;"></i>${result.tests_failed}`;
         
         // Update status badge
         statusBadge.textContent = result.overall_status.toUpperCase();
@@ -512,21 +512,67 @@ async function runHealthCheck() {
             statusBadge.className = 'badge bg-danger';
         }
         
-        // Display full output with syntax highlighting
-        let highlightedOutput = result.output
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/✅ PASS/g, '<span style="color: #28a745;">✅ PASS</span>')
-            .replace(/❌ FAIL/g, '<span style="color: #dc3545;">❌ FAIL</span>')
-            .replace(/⚠️/g, '<span style="color: #ffc107;">⚠️</span>')
-            .replace(/ℹ️/g, '<span style="color: #17a2b8;">ℹ️</span>')
-            .replace(/━━━━━━━━━/g, '<span style="color: #6c757d;">━━━━━━━━━</span>');
+        // Parse output and collect all tests
+        const lines = result.output.split('\n');
+        let testItems = [];
         
-        outputDiv.innerHTML = highlightedOutput;
+        for (let line of lines) {
+            line = line.trim();
+            if (!line) continue;
+            
+            // Skip category headers and decorative lines
+            if (line.includes('━━━') || line.includes('───') || line.includes('===')) {
+                continue;
+            }
+            
+            // Collect test lines with ✅ or ❌
+            if (line.includes('✅') || line.includes('❌')) {
+                const isPassed = line.includes('✅');
+                let testText = line.replace(/✅|❌/g, '').trim();
+                // Remove all ANSI escape sequences
+                testText = testText.replace(/\x1b\[[0-9;]*m/g, '');
+                testText = testText.replace(/\[\d{1,2}m/g, '');
+                // Remove PASS/FAIL with surrounding characters
+                testText = testText.replace(/\s*[\.\s]*(PASS|FAIL)\s*/gi, '');
+                // Clean up multiple spaces
+                testText = testText.replace(/\s+/g, ' ').trim();
+                
+                if (testText) {
+                    testItems.push({
+                        isPassed: isPassed,
+                        text: testText
+                    });
+                }
+            }
+        }
+        
+        // Build clean, simple list
+        let html = '<div style="display: grid; gap: 8px;">';
+        
+        for (let test of testItems) {
+            const bgColor = test.isPassed ? '#f0fdf4' : '#fef2f2';
+            const borderColor = test.isPassed ? '#86efac' : '#fecaca';
+            const iconColor = test.isPassed ? '#22c55e' : '#ef4444';
+            const icon = test.isPassed ? '✓' : '✕';
+            
+            html += `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 6px; background: ${bgColor}; border-left: 3px solid ${borderColor};">
+                    <div style="width: 24px; height: 24px; border-radius: 50%; background: ${iconColor}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0;">
+                        ${icon}
+                    </div>
+                    <span style="font-size: 13px; color: #333; word-break: break-word; flex: 1;">
+                        ${test.text}
+                    </span>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        outputDiv.innerHTML = html;
+        
     } catch (error) {
         console.error('Health check error:', error);
-        outputDiv.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
+        outputDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Error: ${error.message}</div>`;
     } finally {
         runBtn.disabled = false;
         runBtn.innerHTML = '<i class="bi bi-play-circle"></i> Run Tests';

@@ -156,6 +156,11 @@ def create_app():
         """File manager page for managing /shared folder"""
         return render_template('file_manager.html', username=session.get('user'))
     
+    @app.route('/system')
+    def system_management():
+        """System management page for services and logs"""
+        return render_template('system_management.html', username=session.get('user'))
+    
     # ========================================================================
     # API Routes
     # ========================================================================
@@ -187,6 +192,14 @@ def create_app():
     from ptmanagement.api.file_manager import create_file_manager_blueprint
     fm_api_bp = create_file_manager_blueprint()
     app.register_blueprint(fm_api_bp)  # Blueprint already has /api/files prefix
+    
+    # ========================================================================
+    # System Management Blueprints
+    # ========================================================================
+    
+    from ptmanagement.api.system_management import create_system_management_blueprint
+    sm_api_bp = create_system_management_blueprint()
+    app.register_blueprint(sm_api_bp, url_prefix='/api/system')
     
     # ========================================================================
     # Error Handlers

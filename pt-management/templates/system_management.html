@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PT Management - System Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f5f7fa;
+        }
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #667eea !important;
+            font-size: 20px;
+        }
+        .nav-link {
+            color: #666;
+            padding: 12px 20px;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .nav-link:hover, .nav-link.active {
+            background: #f8f9fa;
+            color: #667eea;
+            border-left-color: #667eea;
+        }
+        .card {
+            border: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            padding: 20px;
+        }
+        .service-item {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .service-item:last-child {
+            border-bottom: none;
+        }
+        .service-name {
+            font-weight: 600;
+            color: #333;
+        }
+        .service-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .service-card.running {
+            border-left-color: #28a745;
+        }
+        .service-card.stopped {
+            border-left-color: #dc3545;
+        }
+        .service-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .service-icon {
+            font-size: 32px;
+            width: 50px;
+            text-align: center;
+        }
+        .service-icon.running {
+            color: #28a745;
+        }
+        .service-icon.stopped {
+            color: #dc3545;
+        }
+        .service-details h6 {
+            margin: 0;
+            color: #333;
+            font-weight: 600;
+        }
+        .service-details p {
+            margin: 5px 0 0 0;
+            font-size: 13px;
+            color: #999;
+        }
+        .service-badge {
+            margin-left: auto;
+        }
+        .badge-status-running {
+            background: #28a745;
+        }
+        .badge-status-stopped {
+            background: #dc3545;
+        }
+        .status-check-btn {
+            min-width: 140px;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .alert {
+            border-radius: 8px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="bi bi-diagram-3"></i> PT Management
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="bi bi-house"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('file_manager') }}">
+                            <i class="bi bi-folder"></i> File Manager
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('system_management') }}">
+                            <i class="bi bi-server"></i> System Management
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('settings') }}">
+                            <i class="bi bi-gear"></i> Nginx Configuration
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link">👤 {{ username }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid p-4">
+        <!-- Notifications -->
+        <div id="notifications"></div>
+
+        <!-- Services Status Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-heart-pulse"></i> Services Status
+                    </h5>
+                    <button class="btn btn-sm btn-primary" onclick="loadServiceHealth()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh Status
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="services-loading" class="loading">
+                    <div class="spinner-border" role="status" style="margin-bottom: 15px;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading services...</p>
+                </div>
+                <div id="services-list" style="display: none;">
+                    <!-- Services will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Actions Card -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-tools"></i> Service Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Restart Services</h6>
+                        <div class="action-buttons">
+                            <button class="btn btn-warning" onclick="restartGuacd()">
+                                <i class="bi bi-bootstrap-reboot"></i> Restart Guacd
+                            </button>
+                            <button class="btn btn-warning" onclick="restartGuacamole()">
+                                <i class="bi bi-bootstrap-reboot"></i> Restart Guacamole
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-3">View Logs</h6>
+                        <div class="action-buttons">
+                            <button class="btn btn-info" onclick="showLogsFor('guacd')">
+                                <i class="bi bi-file-text"></i> Guacd Logs
+                            </button>
+                            <button class="btn btn-info" onclick="showLogsFor('guacamole')">
+                                <i class="bi bi-file-text"></i> Guacamole Logs
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Logs Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-text"></i> <span id="logsServiceTitle">Service Logs</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3 d-flex gap-2 align-items-center">
+                    <label class="form-label mb-0">Lines to display:</label>
+                    <input type="number" id="logsLineCount" class="form-control" value="100" min="10" max="1000" style="width: 120px;">
+                    <button class="btn btn-sm btn-primary" onclick="refreshServiceLogs()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="copyLogsToClipboard()">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                </div>
+                <div id="logs-loading" class="loading">Select a service to view logs</div>
+                <div id="logs-container" style="display: none; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; max-height: 500px; overflow-y: auto;">
+                    <pre id="logsContent" style="margin: 0; font-size: 12px; color: #333; white-space: pre-wrap; word-wrap: break-word;">Loading logs...</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Health Check Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-check"></i> Health Check
+                    </h5>
+                    <button class="btn btn-sm btn-success" onclick="runHealthCheck()">
+                        <i class="bi bi-play-circle"></i> Run Tests
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="health-check-results" style="display: none;">
+                    <div class="mb-4">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <div style="font-size: 28px; font-weight: bold; color: #28a745;" id="health-tests-passed">0</div>
+                                    <small class="text-muted">Tests Passed</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <div style="font-size: 28px; font-weight: bold; color: #dc3545;" id="health-tests-failed">0</div>
+                                    <small class="text-muted">Tests Failed</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <div style="font-size: 20px; font-weight: bold;" id="health-status-badge" class="badge bg-success" style="font-size: 14px; padding: 8px 16px;">Healthy</div>
+                                    <small class="text-muted">Overall Status</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="health-check-output" style="margin-top: 20px;">
+                        <!-- Results will be displayed here -->
+                    </div>
+                </div>
+                <div id="health-check-idle" class="text-center text-muted py-4">
+                    <i class="bi bi-info-circle" style="font-size: 32px; color: #999; margin-bottom: 10px; display: block;"></i>
+                    <p>Click "Run Tests" to execute the comprehensive health check</p>
+                    <small>This will test Docker containers, database connectivity, shared folders, and network connectivity</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        let currentLogService = null;
+
+        /**
+         * Load and display service health status
+         */
+        async function loadServiceHealth() {
+            try {
+                const response = await apiRequest('/system/health');
+                if (response && response.success) {
+                    const services = response.services;
+                    const servicesList = document.getElementById('services-list');
+                    const loading = document.getElementById('services-loading');
+
+                    let html = '';
+                    const serviceNames = {
+                        'guacd': 'Guacd',
+                        'guacamole': 'Guacamole',
+                        'mariadb': 'MariaDB',
+                        'nginx': 'Nginx'
+                    };
+
+                    for (const [name, status] of Object.entries(services)) {
+                        const displayName = serviceNames[name] || name.charAt(0).toUpperCase() + name.slice(1);
+                        const isRunning = status.running;
+                        const statusClass = isRunning ? 'running' : 'stopped';
+                        const statusText = isRunning ? 'Running' : 'Stopped';
+                        const statusDescription = isRunning ? 'Service is healthy and operational' : 'Service is currently stopped';
+                        const iconClass = isRunning ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+                        
+                        html += `
+                            <div class="service-card ${statusClass}">
+                                <div class="service-info">
+                                    <div class="service-icon ${statusClass}">
+                                        <i class="bi ${iconClass}"></i>
+                                    </div>
+                                    <div class="service-details">
+                                        <h6>${displayName}</h6>
+                                        <p>${statusDescription}</p>
+                                    </div>
+                                </div>
+                                <div class="service-badge">
+                                    <span class="badge bg-${isRunning ? 'success' : 'danger'}">${statusText}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    servicesList.innerHTML = html;
+                    loading.style.display = 'none';
+                    servicesList.style.display = 'block';
+                    showNotification('Service health check completed', 'success');
+                } else {
+                    showNotification('Failed to check service health', 'error');
+                }
+            } catch (err) {
+                console.error('Failed to check service health:', err);
+                showNotification('Error: ' + err.message, 'error');
+            }
+        }
+
+        /**
+         * Restart Guacd container
+         */
+        async function restartGuacd() {
+            if (!confirm('Are you sure you want to restart Guacd? This may temporarily disconnect users.')) {
+                return;
+            }
+
+            try {
+                const response = await apiRequest('/system/restart/guacd', 'POST');
+                if (response && response.success) {
+                    showNotification('Guacd restart initiated...', 'success');
+                    setTimeout(() => loadServiceHealth(), 5000);
+                } else {
+                    showNotification(response?.error || 'Failed to restart Guacd', 'error');
+                }
+            } catch (err) {
+                console.error('Failed to restart Guacd:', err);
+                showNotification('Error: ' + err.message, 'error');
+            }
+        }
+
+        /**
+         * Restart Guacamole container
+         */
+        async function restartGuacamole() {
+            if (!confirm('Are you sure you want to restart Guacamole? This may temporarily disconnect users.')) {
+                return;
+            }
+
+            try {
+                const response = await apiRequest('/system/restart/guacamole', 'POST');
+                if (response && response.success) {
+                    showNotification('Guacamole restart initiated...', 'success');
+                    setTimeout(() => loadServiceHealth(), 5000);
+                } else {
+                    showNotification(response?.error || 'Failed to restart Guacamole', 'error');
+                }
+            } catch (err) {
+                console.error('Failed to restart Guacamole:', err);
+                showNotification('Error: ' + err.message, 'error');
+            }
+        }
+
+        /**
+         * Show logs for a specific service
+         */
+        function showLogsFor(service) {
+            currentLogService = service;
+            document.getElementById('logsServiceTitle').textContent = service.charAt(0).toUpperCase() + service.slice(1) + ' Logs';
+            document.getElementById('logs-loading').style.display = 'none';
+            document.getElementById('logs-container').style.display = 'block';
+            refreshServiceLogs();
+        }
+
+        /**
+         * Refresh current service logs
+         */
+        async function refreshServiceLogs() {
+            if (!currentLogService) {
+                showNotification('Please select a service first', 'warning');
+                return;
+            }
+
+            try {
+                const lines = document.getElementById('logsLineCount')?.value || 100;
+                const response = await apiRequest(`/system/logs/${currentLogService}?lines=${lines}`);
+
+                if (response && response.success) {
+                    const logsContent = document.getElementById('logsContent');
+                    if (logsContent) {
+                        logsContent.textContent = response.logs || 'No logs available';
+                        // Auto-scroll to bottom
+                        logsContent.parentElement.scrollTop = logsContent.parentElement.scrollHeight;
+                    }
+                } else {
+                    document.getElementById('logsContent').textContent = 'Failed to load logs: ' + (response?.error || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('Failed to load logs:', err);
+                document.getElementById('logsContent').textContent = 'Error loading logs: ' + err.message;
+            }
+        }
+
+        /**
+         * Copy logs to clipboard
+         */
+        function copyLogsToClipboard() {
+            const logsContent = document.getElementById('logsContent');
+            if (!logsContent) return;
+
+            const text = logsContent.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification('Logs copied to clipboard', 'success');
+            }).catch(err => {
+                console.error('Failed to copy to clipboard:', err);
+                showNotification('Failed to copy logs', 'error');
+            });
+        }
+
+        // Load service health on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadServiceHealth();
+        });
+    </script>
+</body>
+</html>

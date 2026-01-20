@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Shared folder path - must match the Docker mount point
 SHARED_FOLDER = '/shared'
+PROTECTED_PATHS = ['templates']  # Paths that are read-only for non-admins
 
 
 def require_auth(f):
@@ -20,6 +21,63 @@ def require_auth(f):
             return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated_function
+
+
+def is_user_admin(username):
+    """Check if user has ADMINISTER permission"""
+    try:
+        from ptmanagement.db.connection import execute_query
+        result = execute_query(
+            """
+            SELECT 1 FROM guacamole_system_permission sp
+            JOIN guacamole_entity e ON sp.entity_id = e.entity_id
+            WHERE e.name = %s AND sp.permission = 'ADMINISTER'
+            """,
+            (username,),
+            fetch_one=True
+        )
+        return result is not None
+    except Exception as e:
+        logger.warning(f"⚠ Failed to check admin status for {username}: {e}")
+        return False
+
+
+def is_path_protected(file_path):
+    """Check if path is in a protected directory"""
+    if not file_path:
+        return False
+    parts = file_path.split('/')
+    return parts[0] in PROTECTED_PATHS if parts else False
+
+
+def enforce_protected_path_permissions(file_path):
+    """
+    Enforce read-only permissions on files/directories in protected paths.
+    Files are set to 444 (read-only), directories to 555 (read-only).
+    Also re-enforces the protected parent folder to 555 (only for protected paths like templates).
+    """
+    try:
+        if is_path_protected(file_path):
+            safe_path = validate_path(os.path.join(SHARED_FOLDER, file_path))
+            if safe_path and os.path.exists(safe_path):
+                # Enforce permissions on the specific file/directory
+                if os.path.isdir(safe_path):
+                    os.chmod(safe_path, 0o555)  # Read-only directory
+                    logger.info(f"✓ Set directory permissions (555): {safe_path}")
+                else:
+                    os.chmod(safe_path, 0o444)  # Read-only file
+                    logger.info(f"✓ Set file permissions (444): {safe_path}")
+            
+            # Also re-enforce the protected folder itself (e.g., 'templates' folder)
+            # Only for paths that start with a protected folder name
+            parts = file_path.split('/')
+            if parts and parts[0] in PROTECTED_PATHS:
+                protected_folder = validate_path(os.path.join(SHARED_FOLDER, parts[0]))
+                if protected_folder and os.path.exists(protected_folder) and os.path.isdir(protected_folder):
+                    os.chmod(protected_folder, 0o555)  # Ensure protected folder stays read-only
+                    logger.info(f"✓ Re-enforced protected folder permissions (555): {protected_folder}")
+    except Exception as e:
+        logger.warning(f"⚠ Failed to enforce permissions on {file_path}: {e}")
 
 
 def validate_path(requested_path):
@@ -179,6 +237,12 @@ def create_file_manager_blueprint():
             if not safe_path:
                 return jsonify({'error': 'Invalid path'}), 400
             
+            # Check if path is protected and user is not admin
+            if is_path_protected(file_path):
+                username = session.get('user')
+                if not is_user_admin(username):
+                    return jsonify({'error': 'Protected folder: Only admins can modify templates'}), 403
+            
             data = request.get_json()
             if not data or 'content' not in data:
                 return jsonify({'error': 'Missing content'}), 400
@@ -189,15 +253,18 @@ def create_file_manager_blueprint():
             # Create parent directories if they don't exist
             safe_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Check if we're trying to overwrite without permission
+            # Check if we're trying to overwrite without permission (filesystem level)
             if safe_path.exists() and not os.access(safe_path, os.W_OK):
-                return jsonify({'error': 'Permission denied'}), 403
+                return jsonify({'error': 'Permission denied: File is read-only'}), 403
             
             # Write file
             with open(safe_path, mode, encoding='utf-8') as f:
                 f.write(content)
             
-            logger.info(f"✓ File written: {safe_path}")
+            # Enforce protected path permissions
+            enforce_protected_path_permissions(file_path)
+            
+            logger.info(f"✓ File written: {safe_path} by {session.get('user')}")
             
             return jsonify({
                 'success': True,
@@ -218,19 +285,25 @@ def create_file_manager_blueprint():
             if not safe_path:
                 return jsonify({'error': 'Invalid path'}), 400
             
+            # Check if path is protected and user is not admin
+            if is_path_protected(file_path):
+                username = session.get('user')
+                if not is_user_admin(username):
+                    return jsonify({'error': 'Protected folder: Only admins can delete from templates'}), 403
+            
             if not os.path.exists(safe_path):
                 return jsonify({'error': 'File not found'}), 404
             
             if not os.access(safe_path, os.W_OK):
-                return jsonify({'error': 'Permission denied'}), 403
+                return jsonify({'error': 'Permission denied: File is read-only'}), 403
             
             if os.path.isdir(safe_path):
                 import shutil
                 shutil.rmtree(safe_path)
-                logger.info(f"✓ Directory deleted: {safe_path}")
+                logger.info(f"✓ Directory deleted: {safe_path} by {session.get('user')}")
             else:
                 os.remove(safe_path)
-                logger.info(f"✓ File deleted: {safe_path}")
+                logger.info(f"✓ File deleted: {safe_path} by {session.get('user')}")
             
             return jsonify({
                 'success': True,
@@ -250,11 +323,21 @@ def create_file_manager_blueprint():
             if not safe_path:
                 return jsonify({'error': 'Invalid path'}), 400
             
+            # Check if path is protected and user is not admin
+            if is_path_protected(dir_path):
+                username = session.get('user')
+                if not is_user_admin(username):
+                    return jsonify({'error': 'Protected folder: Only admins can create in templates'}), 403
+            
             if os.path.exists(safe_path):
                 return jsonify({'error': 'Directory already exists'}), 409
             
             safe_path.mkdir(parents=True, exist_ok=True)
-            logger.info(f"✓ Directory created: {safe_path}")
+            
+            # Enforce protected path permissions
+            enforce_protected_path_permissions(dir_path)
+            
+            logger.info(f"✓ Directory created: {safe_path} by {session.get('user')}")
             
             return jsonify({
                 'success': True,
@@ -280,6 +363,12 @@ def create_file_manager_blueprint():
             if not old_path or not new_path:
                 return jsonify({'error': 'Invalid path'}), 400
             
+            # Check if paths are protected and user is not admin
+            if is_path_protected(data['old_path']) or is_path_protected(data['new_path']):
+                username = session.get('user')
+                if not is_user_admin(username):
+                    return jsonify({'error': 'Protected folder: Only admins can rename in templates'}), 403
+            
             if not os.path.exists(old_path):
                 return jsonify({'error': 'Source path not found'}), 404
             
@@ -287,10 +376,10 @@ def create_file_manager_blueprint():
                 return jsonify({'error': 'Destination already exists'}), 409
             
             if not os.access(old_path, os.W_OK):
-                return jsonify({'error': 'Permission denied'}), 403
+                return jsonify({'error': 'Permission denied: File is read-only'}), 403
             
             os.rename(old_path, new_path)
-            logger.info(f"✓ File renamed: {old_path} → {new_path}")
+            logger.info(f"✓ File renamed: {old_path} → {new_path} by {session.get('user')}")
             
             return jsonify({
                 'success': True,
@@ -325,6 +414,13 @@ def create_file_manager_blueprint():
             if not target_path:
                 return jsonify({'error': 'Invalid directory path'}), 400
             
+            # Check if target directory is protected and user is not admin
+            target_dir_rel = str(target_path.relative_to(SHARED_FOLDER)) if target_dir else ''
+            if target_dir_rel and is_path_protected(target_dir_rel):
+                username = session.get('user')
+                if not is_user_admin(username):
+                    return jsonify({'error': 'Protected folder: Only admins can upload to templates'}), 403
+            
             # Ensure target directory exists
             target_path.mkdir(parents=True, exist_ok=True)
             
@@ -351,7 +447,12 @@ def create_file_manager_blueprint():
             
             # Save file
             file.save(str(full_path))
-            logger.info(f"✓ File uploaded: {full_path}")
+            
+            # Enforce protected path permissions
+            relative_path = str(full_path.relative_to(SHARED_FOLDER))
+            enforce_protected_path_permissions(relative_path)
+            
+            logger.info(f"✓ File uploaded: {full_path} by {session.get('user')}")
             
             return jsonify({
                 'success': True,

@@ -152,6 +152,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('system_management') }}">
+                            <i class="bi bi-server"></i> System Management
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('settings') }}">
                             <i class="bi bi-gear"></i> Nginx Configuration
                         </a>
@@ -342,55 +347,6 @@
                     </div>
 
                     <!-- Health Check Tab -->
-                    <div class="card mt-4">
-                        <div class="card-header">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">
-                                    <i class="bi bi-shield-check"></i> Health Check
-                                </h5>
-                                <button class="btn btn-sm btn-success" onclick="runHealthCheck()">
-                                    <i class="bi bi-play-circle"></i> Run Tests
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="health-check-results" style="display: none;">
-                                <div class="mb-3">
-                                    <div class="row">
-                                        <div class="col-md-4">
-                                            <div class="text-center">
-                                                <div style="font-size: 24px; font-weight: bold; color: #28a745;" id="health-tests-passed">0</div>
-                                                <small class="text-muted">Tests Passed</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <div class="text-center">
-                                                <div style="font-size: 24px; font-weight: bold; color: #dc3545;" id="health-tests-failed">0</div>
-                                                <small class="text-muted">Tests Failed</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <div class="text-center">
-                                                <div style="font-size: 24px; font-weight: bold;" id="health-status-badge" class="badge bg-success">Healthy</div>
-                                                <small class="text-muted">Overall Status</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <hr>
-                                <div class="mb-3">
-                                    <label class="form-label">Test Output:</label>
-                                    <div id="health-check-output" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 11px; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; line-height: 1.4;">
-                                        <div class="text-center text-muted">Running health check...</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="health-check-idle" class="text-center text-muted py-4">
-                                <p>Click "Run Tests" to execute the comprehensive health check</p>
-                                <small>This will test Docker containers, database connectivity, shared folders, and network connectivity</small>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
