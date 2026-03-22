@@ -17,6 +17,16 @@ DB_PASSWORD=${DB_PASSWORD:-ptdbpass}
 DB_NAME=${DB_NAME:-guacamole_db}
 NUM_PT=${NUM_PT:-2}
 
+# HTTPS Configuration
+# Auto-enable HTTPS if certificates exist (recommended for production)
+DEFAULT_HTTPS="false"
+if [ -f "$ROOT_DIR/ssl/server.crt" ] && [ -f "$ROOT_DIR/ssl/server.key" ]; then
+    DEFAULT_HTTPS="true"
+fi
+ENABLE_HTTPS=${ENABLE_HTTPS:-$DEFAULT_HTTPS}
+SSL_CERT_PATH=${SSL_CERT_PATH:-/etc/ssl/certs/server.crt}
+SSL_KEY_PATH=${SSL_KEY_PATH:-/etc/ssl/private/server.key}
+
 usage() {
   cat <<EOF
 Usage: $0 [recreate]
@@ -91,6 +101,29 @@ if docker ps -a --format '{{.Names}}' | grep -q '^pt-management$'; then
 fi
 
 # Run container (use default bridge network so it can reach other containers by name)
+# Prepare SSL mounts if HTTPS is enabled
+SSL_MOUNTS=""
+if [ "$ENABLE_HTTPS" = "true" ]; then
+    if [ -f "./ssl/server.crt" ] && [ -f "./ssl/server.key" ]; then
+        SSL_MOUNTS="-v $ROOT_DIR/ssl/server.crt:$SSL_CERT_PATH:ro -v $ROOT_DIR/ssl/server.key:$SSL_KEY_PATH:ro"
+        echo "✓ HTTPS enabled: Mounting SSL certificates for pt-management"
+    else
+        echo "⚠ HTTPS enabled but certificates not found at ./ssl/server.crt and ./ssl/server.key"
+        echo "  pt-management will fall back to HTTP"
+    fi
+else
+    echo "ℹ HTTPS disabled for pt-management (set ENABLE_HTTPS=true to enable)"
+fi
+
+# Determine port mappings based on HTTPS
+PORT_MAPPING="-p 5000:5000"
+if [ "$ENABLE_HTTPS" = "true" ] && [ -f "./ssl/server.crt" ] && [ -f "./ssl/server.key" ]; then
+    PORT_MAPPING="-p 5000:5000 -p 5443:5443"
+    echo "✓ Port mapping: 5000 (HTTP redirect) and 5443 (HTTPS)"
+else
+    echo "ℹ Port mapping: 5000 only (HTTP)"
+fi
+
 docker run -d --name pt-management \
   --restart=unless-stopped \
   --network pt-stack \
@@ -98,7 +131,8 @@ docker run -d --name pt-management \
   -v "$ROOT_DIR/shared:/shared" \
   -v "$ROOT_DIR/.env:/app/.env" \
   -v "$ROOT_DIR:/project" \
-  -p 5000:5000 \
+  $PORT_MAPPING \
+  $SSL_MOUNTS \
   -e PTADMIN_PASSWORD="$PTADMIN_PASSWORD" \
   -e DB_HOST="$DB_HOST" \
   -e DB_USER="$DB_USER" \
@@ -106,6 +140,9 @@ docker run -d --name pt-management \
   -e DB_NAME="$DB_NAME" \
   -e PROJECT_ROOT=/project \
   -e SHARED_HOST_PATH="$ROOT_DIR/shared" \
+  -e ENABLE_HTTPS="$ENABLE_HTTPS" \
+  -e SSL_CERT_PATH="$SSL_CERT_PATH" \
+  -e SSL_KEY_PATH="$SSL_KEY_PATH" \
   pt-management:latest
 
 # 4) Wait for pt-management health endpoint
@@ -113,6 +150,11 @@ echo "=== Step 4: Waiting for pt-management to become healthy ==="
 MAX_WAIT=180
 SLEEP_INTERVAL=3
 elapsed=0
+
+# Always use HTTP for health checks (port 5000, no SSL overhead)
+# HTTPS (port 5443) is for user-facing traffic only
+HEALTH_URL="http://localhost:5000/health"
+
 while true; do
   # First check if container is still running
   if ! docker ps --format '{{.Names}}' | grep -q '^pt-management$'; then
@@ -121,8 +163,8 @@ while true; do
     exit 1
   fi
   
-  # Try health endpoint
-  http_code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/health 2>/dev/null || echo "000")
+  # Try health endpoint (HTTP only - no SSL warnings)
+  http_code=$(curl -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" 2>/dev/null || echo "000")
   
   # Accept 200, 503 (degraded but running), or 2xx
   if [[ "$http_code" =~ ^[2] ]]; then
@@ -154,6 +196,12 @@ done
 
 echo "=== Deployment complete ==="
 echo "Access the main web UI at: http://localhost"
+
+if [ "$ENABLE_HTTPS" = "true" ] && [ -f "./ssl/server.crt" ] && [ -f "./ssl/server.key" ]; then
+  echo "Access the management console at: https://localhost:5443 (admin port, HTTPS enabled)"
+else
+  echo "Access the management console at: http://localhost:5000 (admin port, HTTP)"
+fi
 
 echo "Tip: Tail pt-management logs: docker logs -f pt-management"
 

@@ -32,11 +32,18 @@ COPY . .
 COPY templates/ /app/templates/
 
 # Create necessary directories
-RUN mkdir -p logs static/js static/css templates
+RUN mkdir -p logs static/js static/css templates /app/ssl
 
-# Expose port
-EXPOSE 5000
+# Expose ports (HTTP and HTTPS)
+EXPOSE 5000 5443
 
-# Run with gunicorn on port 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "wsgi:app"]
-# Force rebuild - 1762517097600552840
+# Copy startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# Health check uses HTTP endpoint (no SSL overhead)
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Run startup script
+CMD ["/app/start.sh"]

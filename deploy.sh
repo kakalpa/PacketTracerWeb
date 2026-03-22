@@ -242,7 +242,7 @@ for ((i=1; i<=$numofPT; i++)); do
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
       --network ptnet \
-      --cpus=0.5 -m 2G --ulimit nproc=2048 --ulimit nofile=1024 \
+      --cpus=1.5 -m 3.5G --ulimit nproc=2048 --ulimit nofile=1024 \
       --dns=127.0.0.1 \
       -v pt_opt:/opt/pt \
       --mount type=bind,source="${WORKDIR}/shared",target=/shared,bind-propagation=rprivate \
