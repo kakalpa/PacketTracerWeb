@@ -25,23 +25,23 @@ RUN apt-get update && \
 
 # Download and install TurboVNC from GitHub release
 RUN cd /tmp && \
-    echo "Downloading TurboVNC 3.2.1 from GitHub..." && \
-    wget -q https://github.com/TurboVNC/turbovnc/releases/download/3.2.1/turbovnc_3.2.1_amd64.deb && \
+    echo "Downloading TurboVNC 3.3 from GitHub..." && \
+    wget -q https://github.com/TurboVNC/turbovnc/releases/download/3.3/turbovnc_3.3_amd64.deb && \
     echo "Installing TurboVNC..." && \
-    dpkg -i turbovnc_3.2.1_amd64.deb && \
-    rm -f turbovnc_3.2.1_amd64.deb && \
-    echo "✓ TurboVNC 3.2.1 installed successfully" && \
+    dpkg -i turbovnc_3.3_amd64.deb && \
+    rm -f turbovnc_3.3_amd64.deb && \
+    echo "✓ TurboVNC 3.3 installed successfully" && \
     /opt/TurboVNC/bin/vncserver --version 2>&1 | head -1
 
 # Download and install VirtualGL from GitHub release
 RUN cd /tmp && \
-    echo "Downloading VirtualGL 3.1.1 from GitHub..." && \
-    wget -q https://github.com/VirtualGL/virtualgl/releases/download/3.1.1/virtualgl_3.1.1_amd64.deb && \
+    echo "Downloading VirtualGL 3.1.4 from GitHub..." && \
+    wget -q https://github.com/VirtualGL/virtualgl/releases/download/3.1.4/virtualgl_3.1.4_amd64.deb && \
     echo "Installing VirtualGL..." && \
-    dpkg -i virtualgl_3.1.1_amd64.deb && \
-    rm -f virtualgl_3.1.1_amd64.deb && \
+    dpkg -i virtualgl_3.1.4_amd64.deb && \
+    rm -f virtualgl_3.1.4_amd64.deb && \
     /usr/bin/vglserver_config +s +f >/dev/null 2>&1 || true && \
-    echo "✓ VirtualGL 3.1.1 installed successfully with GPU support configured" && \
+    echo "✓ VirtualGL 3.1.4 installed successfully with GPU support configured" && \
     vglrun --version 2>&1 | head -1
 
 WORKDIR /
