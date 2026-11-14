@@ -15,7 +15,11 @@ echo ""
 
 # Create test users with containers
 echo "Creating 3 test users with containers..."
-curl -s -X POST http://localhost:5000/api/bulk-create-users \
+PT_PROTO="http"
+if curl -k -s https://localhost:5000/health >/dev/null 2>&1; then
+  PT_PROTO="https"
+fi
+curl -k -s -X POST ${PT_PROTO}://localhost:5000/api/bulk-create-users \
   -H "Content-Type: application/json" \
   -d '{
     "users": [

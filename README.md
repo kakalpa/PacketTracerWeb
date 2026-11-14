@@ -77,7 +77,7 @@ bash deploy-full.sh
 
 ## 🎮 Management Dashboard
 
-Access at `http://localhost:5000` (after full deploy)
+Access at `https://localhost:5000` (or `http://localhost:5000` if HTTPS is disabled, after full deploy)
 
 **All operations are handled through the intuitive web interface:**
 - Create/delete users and containers

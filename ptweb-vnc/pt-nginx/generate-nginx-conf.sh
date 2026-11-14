@@ -370,6 +370,83 @@ EOF
 }
 EOF
 
+  # ============================================================================
+  # Management Interface Server on Port 5000 (with auto HTTP -> HTTPS redirect)
+  # ============================================================================
+  if [ "$ENABLE_HTTPS" = "true" ] || [ "$ENABLE_HTTPS" = "1" ]; then
+    cat <<EOF
+
+# Management Interface HTTPS server with auto-redirection on port 5000
+server {
+    listen 5000 ssl;
+    http2 on;
+    server_name localhost;
+
+    ssl_certificate ${SSL_CERT_PATH};
+    ssl_certificate_key ${SSL_KEY_PATH};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Auto-redirect plain HTTP to HTTPS on port 5000
+    error_page 497 =301 https://\$host:5000\$request_uri;
+
+    location / {
+        set \$pt_mgmt_upstream http://pt-management:5000;
+        proxy_pass \$pt_mgmt_upstream;
+        proxy_redirect off;
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+
+        # WebSocket support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        client_max_body_size 500m;
+        client_body_buffer_size 128k;
+        proxy_connect_timeout 90;
+        proxy_send_timeout 90;
+        proxy_read_timeout 90;
+        proxy_buffers 32 4k;
+    }
+}
+EOF
+  else
+    cat <<'EOF'
+
+# Management Interface HTTP server on port 5000
+server {
+    listen 5000;
+    server_name localhost;
+
+    location / {
+        set $pt_mgmt_upstream http://pt-management:5000;
+        proxy_pass $pt_mgmt_upstream;
+        proxy_redirect off;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto http;
+
+        # WebSocket support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        client_max_body_size 500m;
+        client_body_buffer_size 128k;
+        proxy_connect_timeout 90;
+        proxy_send_timeout 90;
+        proxy_read_timeout 90;
+        proxy_buffers 32 4k;
+    }
+}
+EOF
+  fi
+
 } > "$OUT_PTWEB_CONF"
 
 echo "✓ Wrote $OUT_NGINX_CONF (http-level configuration with GeoIP maps)"

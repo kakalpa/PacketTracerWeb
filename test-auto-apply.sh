@@ -23,7 +23,11 @@ echo ""
 
 # Call the API to apply configuration
 echo "4️⃣ Calling /api/env/config to apply changes..."
-RESPONSE=$(curl -s -X POST http://localhost:5000/api/env/config \
+PT_PROTO="http"
+if curl -k -s https://localhost:5000/health >/dev/null 2>&1; then
+  PT_PROTO="https"
+fi
+RESPONSE=$(curl -k -s -X POST ${PT_PROTO}://localhost:5000/api/env/config \
   -H "Content-Type: application/json" \
   -b "session=test" \
   -d '{
