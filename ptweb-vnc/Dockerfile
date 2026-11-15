@@ -95,6 +95,8 @@ RUN chown -R ptuser /home/ptuser
 
 # Copy save hook library if available
 COPY libptsavehook.so* /usr/local/lib/
+# Copy Packet Tracer app icon
+COPY app.png* /usr/share/pixmaps/
 
 # Create /opt/pt directory for Packet Tracer installation (if not already created by .deb)
 RUN mkdir -p /opt/pt && chmod 755 /opt/pt
