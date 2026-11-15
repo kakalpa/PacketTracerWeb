@@ -151,6 +151,21 @@ def create_app():
         """File manager page for managing /shared folder"""
         return render_template('file_manager.html', username=session.get('user'))
     
+    @app.route('/my-files')
+    @app.route('/my-files/')
+    def student_my_files():
+        """Student downloads portal page"""
+        return render_template('student_downloads.html')
+    
+    @app.route('/downloads')
+    @app.route('/downloads/')
+    def downloads_redirect():
+        """Redirect browser traffic to /my-files while rejecting unauthenticated raw listings with 403"""
+        accept = request.headers.get('Accept', '')
+        if 'text/html' in accept:
+            return redirect(url_for('student_my_files'))
+        return jsonify({'error': 'Forbidden: Unauthenticated directory listing is disabled. Use /my-files to access your student files.'}), 403
+    
     # ========================================================================
     # API Routes
     # ========================================================================

@@ -299,6 +299,34 @@ EOF
     rewrite ^/files/?$ /file-manager.html break;
   }
 
+  # Student Downloads Portal
+  location ^~ /my-files {
+EOF
+  render_geoip_check
+  render_rate_limit_directive
+  cat <<'EOF'
+    proxy_pass http://pt-management:5000/my-files;
+    proxy_redirect off;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Downloads endpoint - redirects browser clients to /my-files while blocking unauthenticated raw listings
+  location ^~ /downloads {
+EOF
+  render_geoip_check
+  render_rate_limit_directive
+  cat <<'EOF'
+    proxy_pass http://pt-management:5000/downloads;
+    proxy_redirect off;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
   # Root location - proxy Guacamole at /
   location / {
 EOF
