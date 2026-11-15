@@ -1,9 +1,11 @@
 """File management API for shared folder"""
 
 import os
+import io
+import zipfile
 import logging
 from pathlib import Path
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, send_file
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -339,6 +341,95 @@ def create_file_manager_blueprint():
             }), 201
         except Exception as e:
             logger.error(f"✗ Failed to upload file: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @fm.route('/download/<path:file_path>', methods=['GET'])
+    @require_auth
+    def download_file(file_path):
+        """Download raw file as attachment"""
+        try:
+            safe_path = validate_path(os.path.join(SHARED_FOLDER, file_path))
+            if not safe_path or not safe_path.exists() or safe_path.is_dir():
+                return jsonify({'error': 'File not found'}), 404
+            
+            return send_file(
+                str(safe_path),
+                as_attachment=True,
+                download_name=safe_path.name
+            )
+        except Exception as e:
+            logger.error(f"✗ Failed to download file {file_path}: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @fm.route('/download-zip', methods=['GET'])
+    @fm.route('/download-zip/<path:sub_path>', methods=['GET'])
+    @require_auth
+    def download_zip(sub_path=''):
+        """Download a directory or the entire shared folder as a zip archive"""
+        try:
+            target_path = validate_path(os.path.join(SHARED_FOLDER, sub_path)) if sub_path else Path(SHARED_FOLDER).resolve()
+            if not target_path or not target_path.exists():
+                return jsonify({'error': 'Directory not found'}), 404
+            
+            archive_name = f"{target_path.name or 'shared'}.zip"
+            memory_file = io.BytesIO()
+            
+            with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+                if target_path.is_file():
+                    zf.write(str(target_path), arcname=target_path.name)
+                else:
+                    for root, dirs, files in os.walk(str(target_path)):
+                        for file in files:
+                            abs_file = os.path.join(root, file)
+                            rel_file = os.path.relpath(abs_file, str(target_path))
+                            zf.write(abs_file, arcname=rel_file)
+            
+            memory_file.seek(0)
+            return send_file(
+                memory_file,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=archive_name
+            )
+        except Exception as e:
+            logger.error(f"✗ Failed to create zip archive: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @fm.route('/storage', methods=['GET'])
+    @require_auth
+    def get_storage_stats():
+        """Get storage usage statistics for /shared and subdirectories"""
+        try:
+            stat = os.statvfs(SHARED_FOLDER)
+            free_bytes = stat.f_bavail * stat.f_frsize
+            total_bytes = stat.f_blocks * stat.f_frsize
+            disk_used_bytes = total_bytes - free_bytes
+
+            def dir_size(p):
+                total = 0
+                if os.path.exists(p):
+                    for entry in os.scandir(p):
+                        if entry.is_file(follow_symlinks=False):
+                            total += entry.stat().st_size
+                        elif entry.is_dir(follow_symlinks=False):
+                            total += dir_size(entry.path)
+                return total
+
+            common_bytes = dir_size(os.path.join(SHARED_FOLDER, 'common'))
+            instances_bytes = dir_size(os.path.join(SHARED_FOLDER, 'instances'))
+            total_shared_bytes = common_bytes + instances_bytes
+
+            return jsonify({
+                'success': True,
+                'total_disk_bytes': total_bytes,
+                'free_disk_bytes': free_bytes,
+                'used_disk_bytes': disk_used_bytes,
+                'shared_total_bytes': total_shared_bytes,
+                'common_bytes': common_bytes,
+                'instances_bytes': instances_bytes
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed to calculate storage stats: {e}")
             return jsonify({'error': str(e)}), 500
     
     return fm

@@ -453,13 +453,21 @@ def create_api_blueprint():
     @api.route('/containers', methods=['GET'])
     @require_auth
     def list_containers():
-        """Get all Packet Tracer containers with user assignments"""
+        """Get all Packet Tracer containers with user assignments and guacamole assist links"""
         try:
             containers = docker_mgr.list_containers(all=True)
+            from ptmanagement.db.guacamole import get_all_container_connections
+            conn_map = get_all_container_connections()
             
-            # Add user assignment info to each container
+            # Add user assignment and guacamole connection info to each container
             for container in containers:
-                container['users'] = get_users_by_container(container['name'])
+                cname = container['name']
+                container['users'] = get_users_by_container(cname)
+                guac_info = conn_map.get(cname)
+                if guac_info:
+                    container['connection_id'] = guac_info.get('connection_id')
+                    container['connection_name'] = guac_info.get('connection_name')
+                    container['guacamole_url'] = guac_info.get('guacamole_url')
             
             return jsonify({
                 'success': True,

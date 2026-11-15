@@ -299,6 +299,7 @@ function renderContainersTable(containers) {
             <td>
                 <div class="d-flex align-items-center gap-2">
                     <strong>${container.name}</strong>
+                    ${container.connection_name ? `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle font-monospace"><i class="bi bi-display me-1"></i>${container.connection_name}</span>` : ''}
                 </div>
             </td>
             <td>${statusBadge}</td>
@@ -312,6 +313,12 @@ function renderContainersTable(containers) {
             <td><span class="small text-muted">${portStr}</span></td>
             <td>
                 <div class="btn-group btn-group-sm" role="group">
+                    ${isRunning && container.guacamole_url 
+                        ? `<a href="${container.guacamole_url}" target="_blank" class="btn btn-outline-primary" title="Assist Student (Open Live Screen in Guacamole)">
+                            <i class="bi bi-display"></i>
+                        </a>` 
+                        : ''
+                    }
                     <button class="btn btn-outline-secondary" onclick="viewLogs('${container.name}')" title="View Logs">
                         <i class="bi bi-file-earmark-text"></i>
                     </button>

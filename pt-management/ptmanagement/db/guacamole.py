@@ -763,3 +763,37 @@ def create_vnc_connection(connection_name, container_hostname, vnc_port=5901, pa
     except Exception as e:
         logger.error(f"✗ Failed to create VNC connection: {e}")
         return None
+
+
+def get_all_container_connections():
+    """
+    Get mapping of container hostnames to Guacamole connections.
+    Returns dict: {hostname: {'connection_id': id, 'connection_name': name, 'guacamole_url': url}}
+    """
+    try:
+        import base64
+        query = """
+        SELECT c.connection_id, c.connection_name, p.parameter_value as hostname
+        FROM guacamole_connection c
+        JOIN guacamole_connection_parameter p ON c.connection_id = p.connection_id
+        WHERE p.parameter_name = 'hostname'
+        """
+        rows = execute_query(query, fetch_all=True)
+        res = {}
+        for r in (rows or []):
+            hostname = r.get('hostname')
+            cid = r.get('connection_id')
+            cname = r.get('connection_name')
+            if hostname and cid:
+                identifier = f"{cid}\0c\0mysql"
+                token = base64.b64encode(identifier.encode('utf-8')).decode('utf-8')
+                res[hostname] = {
+                    'connection_id': cid,
+                    'connection_name': cname,
+                    'guacamole_url': f"/guacamole/#/client/{token}"
+                }
+        return res
+    except Exception as e:
+        logger.error(f"✗ Failed to get container connections: {e}")
+        return {}
+

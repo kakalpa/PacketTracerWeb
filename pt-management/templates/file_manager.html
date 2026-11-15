@@ -11,6 +11,21 @@
         border-radius: 8px;
         border: 1px solid var(--pt-border);
     }
+    .file-dropzone {
+        background: #f8fafc;
+        border-color: #cbd5e1 !important;
+        transition: all 0.2s ease-in-out;
+        cursor: pointer;
+    }
+    .file-dropzone:hover {
+        background: #f1f5f9;
+        border-color: #94a3b8 !important;
+    }
+    .file-dropzone.dragover {
+        background: #eff6ff !important;
+        border-color: var(--pt-primary) !important;
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    }
     .file-browser {
         background: white;
         border-radius: 8px;
@@ -37,12 +52,12 @@
         gap: 12px;
         flex: 1;
         font-weight: 500;
+        cursor: pointer;
     }
     .file-icon {
-        font-size: 1.2rem;
+        font-size: 1.25rem;
         width: 32px;
         text-align: center;
-        color: var(--pt-primary);
     }
     .file-info {
         display: flex;
@@ -84,6 +99,46 @@
 <!-- Notifications placeholder -->
 <div id="notifications"></div>
 
+<!-- Storage Usage Telemetry Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card-custom h-100 p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="stat-label mb-0"><i class="bi bi-hdd-network text-primary me-1"></i> Storage Used</div>
+                <span class="badge bg-light text-dark border font-monospace" id="storage-percent">-</span>
+            </div>
+            <div class="fs-4 fw-bold text-dark mb-2" id="storage-used-display">-</div>
+            <div class="progress" style="height: 6px;">
+                <div id="storage-progress-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="d-flex justify-content-between text-muted small mt-2">
+                <span id="storage-free-display">Free: -</span>
+                <span id="storage-total-display">Total: -</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card-custom h-100 p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="stat-label mb-0"><i class="bi bi-mortarboard text-info me-1"></i> Course Materials</div>
+                <span class="badge bg-info-subtle text-info border border-info-subtle">/common</span>
+            </div>
+            <div class="fs-4 fw-bold text-dark mb-2" id="storage-common-display">-</div>
+            <div class="small text-muted">Course materials and Packet Tracer labs distributed to all student desktops.</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card-custom h-100 p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="stat-label mb-0"><i class="bi bi-people text-success me-1"></i> Student Workspaces</div>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">/instances</span>
+            </div>
+            <div class="fs-4 fw-bold text-dark mb-2" id="storage-instances-display">-</div>
+            <div class="small text-muted">Personal student work folders and Packet Tracer topology submissions.</div>
+        </div>
+    </div>
+</div>
+
 <!-- File Manager Card -->
 <div class="card-custom">
     <div class="card-header-custom">
@@ -100,6 +155,9 @@
             <button class="btn btn-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#uploadFileModal">
                 <i class="bi bi-cloud-arrow-up"></i> Upload File
             </button>
+            <button class="btn btn-outline-secondary d-flex align-items-center gap-1" onclick="downloadCurrentFolderZip()" title="Download current directory as ZIP archive">
+                <i class="bi bi-file-earmark-zip"></i> Download ZIP
+            </button>
             <button class="btn btn-outline-secondary d-flex align-items-center gap-1" onclick="refreshFileList()">
                 <i class="bi bi-arrow-clockwise"></i> Refresh
             </button>
@@ -113,6 +171,27 @@
             </ol>
         </nav>
 
+        <!-- Drag & Drop Dropzone -->
+        <div id="dropzone" class="file-dropzone mb-3 p-3 text-center border border-2 border-dashed rounded-3">
+            <div class="d-flex flex-column flex-sm-row align-items-center justify-content-center gap-3">
+                <div class="text-primary">
+                    <i class="bi bi-cloud-arrow-up fs-2"></i>
+                </div>
+                <div class="text-sm-start text-center">
+                    <div class="fw-semibold">Drag & drop files here to upload to <code id="dropzone-target" class="text-primary">/shared</code></div>
+                    <div class="small text-muted">Supports Packet Tracer files (.pkt, .pka), PDFs, images, configs, and zip archives</div>
+                </div>
+                <input type="file" id="dropzone-input" style="display: none;" multiple>
+                <button type="button" class="btn btn-sm btn-outline-primary ms-sm-auto mt-2 mt-sm-0" onclick="document.getElementById('dropzone-input').click()">
+                    <i class="bi bi-folder2-open"></i> Browse Files
+                </button>
+            </div>
+            <div id="dropzone-progress" class="progress mt-2" style="height: 6px; display: none;">
+                <div id="dropzone-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%"></div>
+            </div>
+            <div id="dropzone-status" class="small mt-2" style="display: none;"></div>
+        </div>
+
         <!-- File List -->
         <div id="file-loading" class="text-center py-4 text-muted">
             <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
@@ -124,7 +203,7 @@
         <div id="file-empty" class="empty-state" style="display: none;">
             <i class="bi bi-folder-x empty-state-icon"></i>
             <div class="empty-state-title">No files or folders</div>
-            <div class="empty-state-subtitle">Create a new file or upload course materials to get started.</div>
+            <div class="empty-state-subtitle">Create a new file, folder, or drag files into the dropzone to get started.</div>
         </div>
     </div>
 </div>
@@ -140,13 +219,13 @@
                 <button class="btn btn-outline-secondary" onclick="closeEditor()">
                     <i class="bi bi-x-circle"></i> Close
                 </button>
-                <button class="btn btn-primary" onclick="saveFile()">
+                <button class="btn btn-success" onclick="saveFile()">
                     <i class="bi bi-check-circle"></i> Save Changes
                 </button>
             </div>
         </div>
-        <textarea id="file-content" class="form-control" style="height: 400px;" placeholder="Loading..."></textarea>
-        <small class="text-muted d-block mt-2">
+        <textarea id="file-content" class="form-control" rows="18"></textarea>
+        <small class="text-muted mt-2 d-block">
             <span id="file-size-info"></span>
         </small>
     </div>
@@ -283,23 +362,20 @@
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label for="uploadDestination" class="form-label fw-semibold">Destination Folder</label>
+                    <label for="uploadDestination" class="form-label">Destination Folder</label>
                     <select class="form-select" id="uploadDestination">
-                        <option value="common" selected>Course Materials (common/ - All Students Read-Only)</option>
-                        <option value="current">Current Directory</option>
-                        <option value="">Root /shared</option>
+                        <option value="current">Current Folder (<span id="modalCurrentFolderName">root</span>)</option>
+                        <option value="common">Course Materials (/common - Available to all students)</option>
+                        <option value="root">Shared Root (/shared)</option>
                     </select>
-                    <small class="text-muted">Files uploaded to Course Materials appear instantly on all student desktops.</small>
                 </div>
                 <div class="mb-3">
-                    <label for="uploadFile" class="form-label fw-semibold">Select File</label>
+                    <label for="uploadFile" class="form-label">Choose File</label>
                     <input type="file" class="form-control" id="uploadFile">
-                    <small class="text-muted">Max file size: 100MB (.pkt, .pka, .pdf, images supported)</small>
+                    <small class="text-muted">Packet Tracer (.pkt, .pka), PDFs, images, configs, scripts, or archives</small>
                 </div>
-                <div class="mb-3">
-                    <div class="progress" id="uploadProgress" style="display: none; height: 8px;">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="uploadProgressBar" role="progressbar" style="width: 0%"></div>
-                    </div>
+                <div id="uploadProgress" class="progress mb-3" style="display: none;">
+                    <div id="uploadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
                 </div>
                 <div id="uploadFileStatus"></div>
             </div>
@@ -319,13 +395,21 @@
     const API_BASE = '/api/files';
     let currentPath = '';
     let currentFile = null;
-    let renameTarget = null;
     let deleteTarget = null;
+    let renameTarget = null;
 
-    // Show notification
-    function showNotification(type, message, duration = 3500) {
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#039;');
+    }
+
+    function showNotification(type, message, duration = 4000) {
         if (window.showToast) {
-            window.showToast(message, type, duration);
+            window.showToast(message, type);
             return;
         }
         const alertId = 'alert-' + Date.now();
@@ -344,24 +428,28 @@
         }
     }
 
-    // Format file size
     function formatFileSize(bytes) {
-        if (bytes === 0) return '0 B';
+        if (!bytes || bytes === 0) return '0 B';
         const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     }
 
-    // Format date
     function formatDate(timestamp) {
+        if (!timestamp) return '-';
         const date = new Date(timestamp * 1000);
         return date.toLocaleString();
     }
 
-    // Update Breadcrumbs
     function updateBreadcrumb(path) {
         const bc = document.getElementById('breadcrumb');
+        const dropzoneTarget = document.getElementById('dropzone-target');
+        const modalFolder = document.getElementById('modalCurrentFolderName');
+        
+        if (dropzoneTarget) dropzoneTarget.textContent = path ? `/shared/${path}` : '/shared';
+        if (modalFolder) modalFolder.textContent = path || 'root';
+
         if (!path) {
             bc.innerHTML = '<li class="breadcrumb-item active"><i class="bi bi-hdd"></i> /shared</li>';
             return;
@@ -381,7 +469,120 @@
         bc.innerHTML = html;
     }
 
-    // Refresh file list
+    function getFileInfo(name, isDirectory) {
+        if (isDirectory) {
+            if (name === 'common') {
+                return {
+                    icon: 'bi-mortarboard-fill text-primary',
+                    badge: '<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2">Course Materials</span>',
+                    isText: false
+                };
+            }
+            if (name === 'instances') {
+                return {
+                    icon: 'bi-people-fill text-success',
+                    badge: '<span class="badge bg-success-subtle text-success border border-success-subtle ms-2">Student Saves</span>',
+                    isText: false
+                };
+            }
+            return {
+                icon: 'bi-folder-fill text-warning',
+                badge: '<span class="badge bg-light text-secondary border ms-2">Folder</span>',
+                isText: false
+            };
+        }
+        
+        const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+        
+        switch (ext) {
+            case 'pkt':
+                return {
+                    icon: 'bi-diagram-3-fill text-primary',
+                    badge: '<span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace ms-2">.pkt</span>',
+                    isText: false
+                };
+            case 'pka':
+                return {
+                    icon: 'bi-patch-check-fill text-success',
+                    badge: '<span class="badge bg-success-subtle text-success border border-success-subtle font-monospace ms-2">.pka</span>',
+                    isText: false
+                };
+            case 'pkz':
+                return {
+                    icon: 'bi-file-earmark-zip-fill text-info',
+                    badge: '<span class="badge bg-info-subtle text-info border border-info-subtle font-monospace ms-2">.pkz</span>',
+                    isText: false
+                };
+            case 'pdf':
+                return {
+                    icon: 'bi-file-earmark-pdf-fill text-danger',
+                    badge: '<span class="badge bg-danger-subtle text-danger border border-danger-subtle font-monospace ms-2">PDF</span>',
+                    isText: false
+                };
+            case 'png':
+            case 'jpg':
+            case 'jpeg':
+            case 'gif':
+            case 'svg':
+                return {
+                    icon: 'bi-file-earmark-image-fill text-info',
+                    badge: `<span class="badge bg-info-subtle text-info border border-info-subtle font-monospace ms-2">${ext.toUpperCase()}</span>`,
+                    isText: false
+                };
+            case 'zip':
+            case 'tar':
+            case 'gz':
+            case 'bz2':
+            case '7z':
+                return {
+                    icon: 'bi-file-earmark-zip-fill text-secondary',
+                    badge: '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle font-monospace ms-2">ZIP</span>',
+                    isText: false
+                };
+            case 'sh':
+            case 'bash':
+            case 'zsh':
+                return {
+                    icon: 'bi-terminal-fill text-dark',
+                    badge: '<span class="badge bg-dark-subtle text-dark border border-dark-subtle font-monospace ms-2">Script</span>',
+                    isText: true
+                };
+            case 'json':
+            case 'yaml':
+            case 'yml':
+            case 'xml':
+            case 'conf':
+            case 'ini':
+            case 'cfg':
+                return {
+                    icon: 'bi-file-earmark-code-fill text-warning',
+                    badge: '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle font-monospace ms-2">Config</span>',
+                    isText: true
+                };
+            case 'txt':
+            case 'md':
+            case 'log':
+            case 'py':
+            case 'c':
+            case 'cpp':
+            case 'h':
+            case 'html':
+            case 'css':
+            case 'js':
+                return {
+                    icon: 'bi-file-earmark-text text-secondary',
+                    badge: `<span class="badge bg-light text-muted border font-monospace ms-2">${ext || 'txt'}</span>`,
+                    isText: true
+                };
+            default:
+                return {
+                    icon: 'bi-file-earmark text-secondary',
+                    badge: '',
+                    isText: false
+                };
+        }
+    }
+
     function refreshFileList(path = currentPath) {
         document.getElementById('file-loading').style.display = 'block';
         document.getElementById('file-browser').style.display = 'none';
@@ -395,20 +596,22 @@
                 
                 if (!data.success || !data.items || (data.items.length === 0 && !currentPath)) {
                     document.getElementById('file-empty').style.display = 'block';
+                    updateBreadcrumb(path);
+                    currentPath = path;
                     return;
                 }
 
                 const fileList = document.getElementById('file-list');
                 fileList.innerHTML = '';
 
-                // If inside a subdirectory, render ".." parent folder link
+                // Parent directory link if nested
                 if (currentPath) {
                     const parentDir = currentPath.includes('/') ? currentPath.substring(0, currentPath.lastIndexOf('/')) : '';
                     const upEl = document.createElement('div');
                     upEl.className = 'file-item';
                     upEl.innerHTML = `
-                        <div class="file-name" onclick="openDirectory('${parentDir}')" style="cursor: pointer;">
-                            <span class="file-icon"><i class="bi bi-arrow-up-left-circle"></i></span>
+                        <div class="file-name" onclick="openDirectory('${parentDir}')">
+                            <span class="file-icon"><i class="bi bi-arrow-up-left-circle text-primary"></i></span>
                             <span><strong>.. (Parent Directory)</strong></span>
                         </div>
                         <div class="file-info"><span class="file-size">-</span></div>
@@ -418,33 +621,48 @@
                 }
 
                 data.items.forEach(item => {
-                    const icon = item.type === 'directory' ? 'bi-folder-fill text-warning' : 'bi-file-earmark-code text-primary';
+                    const info = getFileInfo(item.name, item.type === 'directory');
                     const size = item.type === 'directory' ? '-' : formatFileSize(item.size);
                     const modified = formatDate(item.modified);
 
                     const itemEl = document.createElement('div');
                     itemEl.className = 'file-item';
+                    
+                    const clickAction = item.type === 'directory' 
+                        ? `openDirectory('${item.path}')` 
+                        : (info.isText ? `editFile('${item.path}')` : `window.location.href='${API_BASE}/download/${item.path}'`);
+
                     itemEl.innerHTML = `
-                        <div class="file-name" style="cursor: pointer;" onclick="${item.type === 'directory' ? 'openDirectory(\'' + item.path + '\')' : 'editFile(\'' + item.path + '\')'}">
-                            <span class="file-icon"><i class="bi ${icon}"></i></span>
-                            <span>${item.name}</span>
+                        <div class="file-name" onclick="${clickAction}">
+                            <span class="file-icon"><i class="bi ${info.icon}"></i></span>
+                            <span class="text-truncate" style="max-width: 320px;">${escapeHtml(item.name)}</span>
+                            ${info.badge}
                         </div>
                         <div class="file-info">
                             <span class="file-size">${size}</span>
                             <span class="file-modified">${modified}</span>
                         </div>
                         <div class="file-actions">
+                            ${item.type === 'file' ? `
+                                <a href="${API_BASE}/download/${item.path}" class="btn btn-sm btn-outline-primary" title="Download File">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                                ${info.isText ? `
+                                    <button class="btn btn-sm btn-outline-secondary" title="Edit File" onclick="editFile('${item.path}')">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                ` : ''}
+                            ` : `
+                                <a href="${API_BASE}/download-zip/${item.path}" class="btn btn-sm btn-outline-success" title="Download Folder as ZIP">
+                                    <i class="bi bi-file-earmark-zip"></i>
+                                </a>
+                            `}
                             <button class="btn btn-sm btn-outline-secondary" title="Rename" onclick="showRenameModal('${item.path}')">
                                 <i class="bi bi-pencil"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-danger" title="Delete" onclick="showDeleteModal('${item.path}')">
                                 <i class="bi bi-trash"></i>
                             </button>
-                            ${item.type === 'file' ? `
-                                <a href="${API_BASE}/download/${item.path}" class="btn btn-sm btn-outline-primary" title="Download">
-                                    <i class="bi bi-download"></i>
-                                </a>
-                            ` : ''}
                         </div>
                     `;
                     fileList.appendChild(itemEl);
@@ -460,14 +678,134 @@
             });
     }
 
-    // Open directory
     function openDirectory(path) {
         currentPath = path;
         refreshFileList(path);
         closeEditor();
     }
 
-    // Edit file
+    function downloadCurrentFolderZip() {
+        const url = currentPath ? `${API_BASE}/download-zip/${currentPath}` : `${API_BASE}/download-zip`;
+        window.location.href = url;
+    }
+
+    function loadStorageStats() {
+        fetch(`${API_BASE}/storage`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                const usedPct = data.total_disk_bytes > 0 ? ((data.used_disk_bytes / data.total_disk_bytes) * 100).toFixed(1) : 0;
+                const pctEl = document.getElementById('storage-percent');
+                const usedEl = document.getElementById('storage-used-display');
+                const freeEl = document.getElementById('storage-free-display');
+                const totalEl = document.getElementById('storage-total-display');
+                const barEl = document.getElementById('storage-progress-bar');
+                const commonEl = document.getElementById('storage-common-display');
+                const instancesEl = document.getElementById('storage-instances-display');
+
+                if (pctEl) pctEl.textContent = `${usedPct}%`;
+                if (usedEl) usedEl.textContent = formatFileSize(data.shared_total_bytes);
+                if (freeEl) freeEl.textContent = `Host Free: ${formatFileSize(data.free_disk_bytes)}`;
+                if (totalEl) totalEl.textContent = `Disk Total: ${formatFileSize(data.total_disk_bytes)}`;
+                if (barEl) barEl.style.width = `${Math.min(usedPct, 100)}%`;
+                if (commonEl) commonEl.textContent = formatFileSize(data.common_bytes || 0);
+                if (instancesEl) instancesEl.textContent = formatFileSize(data.instances_bytes || 0);
+            })
+            .catch(err => {
+                console.warn('Storage telemetry update failed:', err);
+            });
+    }
+
+    // Drag and drop implementation
+    async function uploadFiles(files, targetDir) {
+        if (!files || files.length === 0) return;
+        const progressContainer = document.getElementById('dropzone-progress');
+        const progressBar = document.getElementById('dropzone-progress-bar');
+        const statusEl = document.getElementById('dropzone-status');
+        
+        progressContainer.style.display = 'block';
+        statusEl.style.display = 'block';
+        
+        let uploadedCount = 0;
+        const totalCount = files.length;
+        
+        for (let i = 0; i < totalCount; i++) {
+            const file = files[i];
+            statusEl.innerHTML = `<span class="text-primary"><i class="bi bi-arrow-repeat spin"></i> Uploading (${i + 1}/${totalCount}): <strong>${escapeHtml(file.name)}</strong>...</span>`;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            if (targetDir) {
+                formData.append('target_dir', targetDir);
+            }
+            
+            try {
+                const resp = await fetch(`${API_BASE}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+                if (resp.status === 201 && data.success) {
+                    uploadedCount++;
+                } else {
+                    showNotification('danger', `Failed to upload ${file.name}: ${data.error || 'Server error'}`);
+                }
+            } catch (err) {
+                showNotification('danger', `Upload failed for ${file.name}: ${err.message}`);
+            }
+            
+            const pct = Math.round(((i + 1) / totalCount) * 100);
+            progressBar.style.width = pct + '%';
+        }
+        
+        if (uploadedCount > 0) {
+            showNotification('success', `Uploaded ${uploadedCount} file(s) to ${targetDir ? '/' + targetDir : '/shared'}`);
+        }
+        
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            statusEl.style.display = 'none';
+        }, 1500);
+        
+        refreshFileList(currentPath);
+        loadStorageStats();
+    }
+
+    function initDropzone() {
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('dropzone-input');
+        if (!dropzone || !fileInput) return;
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            }, false);
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            uploadFiles(files, currentPath);
+        }, false);
+
+        fileInput.addEventListener('change', (e) => {
+            uploadFiles(e.target.files, currentPath);
+            fileInput.value = '';
+        });
+    }
+
+    // Editor functions
     function editFile(path) {
         currentFile = path;
         document.getElementById('current-file-path').textContent = path;
@@ -491,13 +829,11 @@
             });
     }
 
-    // Close editor
     function closeEditor() {
         document.getElementById('editor-container').style.display = 'none';
         currentFile = null;
     }
 
-    // Save file
     function saveFile() {
         if (!currentFile) return;
 
@@ -512,6 +848,7 @@
             if (data.success) {
                 showNotification('success', 'File saved successfully');
                 refreshFileList(currentPath);
+                loadStorageStats();
             } else {
                 showNotification('danger', 'Failed to save file: ' + data.error);
             }
@@ -521,32 +858,35 @@
         });
     }
 
-    // Create new file
+    // Create file
     function createNewFile() {
-        const name = document.getElementById('newFileName').value.trim();
-        const content = document.getElementById('newFileContent').value;
+        const nameInput = document.getElementById('newFileName');
+        const contentInput = document.getElementById('newFileContent');
         const status = document.getElementById('createFileStatus');
+        const fileName = nameInput.value.trim();
 
-        if (!name) {
+        if (!fileName) {
             status.innerHTML = '<div class="alert alert-danger mt-2">File name is required</div>';
             return;
         }
 
-        const path = currentPath ? `${currentPath}/${name}` : name;
-        fetch(`${API_BASE}/create`, {
+        const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+
+        fetch(`${API_BASE}/write`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: path, type: 'file', content: content })
+            body: JSON.stringify({ path: filePath, content: contentInput.value })
         })
         .then(r => r.json())
         .then(data => {
             if (data.success) {
                 showNotification('success', 'File created successfully');
                 bootstrap.Modal.getInstance(document.getElementById('createFileModal')).hide();
-                document.getElementById('newFileName').value = '';
-                document.getElementById('newFileContent').value = '';
+                nameInput.value = '';
+                contentInput.value = '';
                 status.innerHTML = '';
                 refreshFileList(currentPath);
+                loadStorageStats();
             } else {
                 status.innerHTML = `<div class="alert alert-danger mt-2">${data.error}</div>`;
             }
@@ -556,28 +896,30 @@
         });
     }
 
-    // Create new directory
+    // Create directory
     function createNewDirectory() {
-        const name = document.getElementById('newDirName').value.trim();
+        const nameInput = document.getElementById('newDirName');
         const status = document.getElementById('createDirStatus');
+        const dirName = nameInput.value.trim();
 
-        if (!name) {
+        if (!dirName) {
             status.innerHTML = '<div class="alert alert-danger mt-2">Folder name is required</div>';
             return;
         }
 
-        const path = currentPath ? `${currentPath}/${name}` : name;
-        fetch(`${API_BASE}/create`, {
+        const dirPath = currentPath ? `${currentPath}/${dirName}` : dirName;
+
+        fetch(`${API_BASE}/mkdir`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: path, type: 'directory' })
+            body: JSON.stringify({ path: dirPath })
         })
         .then(r => r.json())
         .then(data => {
             if (data.success) {
                 showNotification('success', 'Folder created successfully');
                 bootstrap.Modal.getInstance(document.getElementById('createDirModal')).hide();
-                document.getElementById('newDirName').value = '';
+                nameInput.value = '';
                 status.innerHTML = '';
                 refreshFileList(currentPath);
             } else {
@@ -592,13 +934,13 @@
     // Show rename modal
     function showRenameModal(path) {
         renameTarget = path;
-        document.getElementById('renameOldName').value = path.split('/').pop();
-        document.getElementById('renameNewName').value = '';
+        const currentName = path.includes('/') ? path.substring(path.lastIndexOf('/') + 1) : path;
+        document.getElementById('renameOldName').value = currentName;
+        document.getElementById('renameNewName').value = currentName;
         document.getElementById('renameStatus').innerHTML = '';
         new bootstrap.Modal(document.getElementById('renameModal')).show();
     }
 
-    // Perform rename
     function performRename() {
         const newName = document.getElementById('renameNewName').value.trim();
         const status = document.getElementById('renameStatus');
@@ -631,7 +973,6 @@
         });
     }
 
-    // Show delete modal
     function showDeleteModal(path) {
         deleteTarget = path;
         document.getElementById('deleteFileName').textContent = path;
@@ -639,7 +980,6 @@
         new bootstrap.Modal(document.getElementById('deleteModal')).show();
     }
 
-    // Perform delete
     function performDelete() {
         if (!deleteTarget) return;
 
@@ -651,6 +991,7 @@
                     bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
                     if (currentFile === deleteTarget) closeEditor();
                     refreshFileList(currentPath);
+                    loadStorageStats();
                 } else {
                     document.getElementById('deleteStatus').innerHTML = 
                         `<div class="alert alert-danger mt-2">${data.error}</div>`;
@@ -662,7 +1003,6 @@
             });
     }
 
-    // Perform upload
     function performUpload() {
         const fileInput = document.getElementById('uploadFile');
         const file = fileInput.files[0];
@@ -719,6 +1059,7 @@
                     bootstrap.Modal.getInstance(document.getElementById('uploadFileModal')).hide();
                     fileInput.value = '';
                     refreshFileList(currentPath);
+                    loadStorageStats();
                 } else {
                     showNotification('danger', 'Upload error: ' + (response.error || 'Unknown error'));
                 }
@@ -739,6 +1080,10 @@
         xhr.send(formData);
     }
 
-    document.addEventListener('DOMContentLoaded', refreshFileList);
+    document.addEventListener('DOMContentLoaded', () => {
+        refreshFileList();
+        loadStorageStats();
+        initDropzone();
+    });
 </script>
 {% endblock %}
