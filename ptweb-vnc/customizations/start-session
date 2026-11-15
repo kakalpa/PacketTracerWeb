@@ -47,6 +47,54 @@ if ! kill -0 $XVFB_PID 2>/dev/null; then
 fi
 echo "✓ Xvfb started (PID $XVFB_PID)"
 
+# Ensure ptuser ownership on home, Desktop, and config
+mkdir -p /home/ptuser/Desktop /home/ptuser/.config/gtk-3.0 /home/ptuser/pt
+if [ -d /shared ]; then
+    ln -sfn /shared /home/ptuser/Desktop/Personal_Saves 2>/dev/null || true
+    ln -sfn /shared /home/ptuser/Desktop/shared 2>/dev/null || true
+    if [ -d /home/ptuser/pt/saves ] && [ ! -L /home/ptuser/pt/saves ]; then
+        cp -rn /home/ptuser/pt/saves/* /shared/ 2>/dev/null || true
+        rm -rf /home/ptuser/pt/saves
+    fi
+    ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
+    rm -f /home/ptuser/Desktop/Saved_Files 2>/dev/null || true
+fi
+if [ -d /shared_common ]; then
+    ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
+fi
+
+# Ensure Qt and GTK file dialog default paths and bookmarks
+if [ ! -f /home/ptuser/.config/QtProject.conf ]; then
+cat << 'EOF' > /home/ptuser/.config/QtProject.conf
+[FileDialog]
+history=file:///home/ptuser/Desktop/Personal_Saves, file:///home/ptuser/Desktop/Course_Materials
+lastVisited=file:///home/ptuser/Desktop/Personal_Saves
+qtVersion=6.8.7
+shortcuts=file:///home/ptuser/Desktop/Personal_Saves, file:///home/ptuser/Desktop/Course_Materials, file:///home/ptuser
+sidebarWidth=120
+viewMode=Detail
+EOF
+fi
+
+if [ ! -f /home/ptuser/.config/gtk-3.0/bookmarks ]; then
+cat << 'EOF' > /home/ptuser/.config/gtk-3.0/bookmarks
+file:///home/ptuser/Desktop/Personal_Saves Personal_Saves
+file:///home/ptuser/Desktop/Course_Materials Course_Materials
+EOF
+fi
+
+chown -R ptuser:ptuser /home/ptuser/Desktop /home/ptuser/.config /home/ptuser/pt 2>/dev/null || true
+chown -h ptuser:ptuser /home/ptuser/Desktop/* 2>/dev/null || true
+chmod 755 /home/ptuser/Desktop 2>/dev/null || true
+
+# Stage Packet Tracer icon for Desktop and menus if available
+if [ -f /tmp/squashfs-root/opt/pt/art/app.png ] && [ ! -f /opt/pt/art/app.png ]; then
+    mkdir -p /opt/pt/art /usr/share/pixmaps
+    cp /tmp/squashfs-root/opt/pt/art/app.png /opt/pt/art/app.png 2>/dev/null || true
+    cp /tmp/squashfs-root/opt/pt/art/app.png /usr/share/pixmaps/app.png 2>/dev/null || true
+    cp /tmp/squashfs-root/opt/pt/art/app.png /usr/share/pixmaps/packettracer.png 2>/dev/null || true
+fi
+
 # Start XFCE desktop on the virtual display
 echo "Starting XFCE desktop..."
 DISPLAY=:1 XAUTHORITY=/home/ptuser/.Xauthority su - ptuser -c "startxfce4" >/tmp/xfce.log 2>&1 &
@@ -67,6 +115,7 @@ if command -v x11vnc &>/dev/null; then
       -noshm \
       -threads \
       -forever \
+      -shared \
       -bg \
       -logfile /tmp/x11vnc.log || {
         echo "x11vnc failed, trying TurboVNC..."
@@ -77,6 +126,7 @@ if command -v x11vnc &>/dev/null; then
               -depth ${VNC_DEPTH} \
               -rfbport ${VNC_PORT} \
               -securitytypes none \
+              -alwaysshared \
               >/tmp/turbovnc.log 2>&1
         fi
     }
@@ -89,6 +139,7 @@ else
       -depth ${VNC_DEPTH} \
       -rfbport ${VNC_PORT} \
       -securitytypes none \
+      -alwaysshared \
       >/tmp/turbovnc.log 2>&1
     sleep 2
     echo "✓ TurboVNC server started on port ${VNC_PORT}"

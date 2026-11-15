@@ -355,12 +355,29 @@ class DockerManager:
             project_root_env = os.getenv('PROJECT_ROOT')
             logger.info(f"DEBUG container.py: SHARED_HOST_PATH={shared_host_path_env}, PROJECT_ROOT={project_root_env}")
             
-            shared_path = shared_host_path_env if shared_host_path_env else '/run/media/kalpa/9530f1e7-4f57-4bf2-b7f2-b03a2b8d4111/PT DEv/PacketTracerWeb/shared'
-            logger.info(f"DEBUG container.py: Using shared_path={shared_path}")
+            if shared_host_path_env:
+                shared_path = shared_host_path_env
+            elif project_root_env:
+                shared_path = os.path.join(project_root_env, 'shared')
+            else:
+                shared_path = os.path.abspath(os.path.join(os.getcwd(), 'shared'))
+            
+            # Partition storage per container instance
+            instance_storage_path = os.path.join(shared_path, 'instances', container_name)
+            common_storage_path = os.path.join(shared_path, 'common')
+            try:
+                os.makedirs(instance_storage_path, exist_ok=True)
+                os.chmod(instance_storage_path, 0o777)
+                os.makedirs(common_storage_path, exist_ok=True)
+                os.chmod(common_storage_path, 0o777)
+            except OSError as e:
+                logger.warning(f"Could not prepare storage paths: {e}")
+            logger.info(f"DEBUG container.py: Using instance_storage_path={instance_storage_path}, common={common_storage_path}")
             
             request_data["HostConfig"]["Binds"] = [
                 "pt_opt:/opt/pt",  # Named volume for Packet Tracer binary
-                f"{shared_path}:/shared"  # Bind mount for shared files (MUST be host path)
+                f"{instance_storage_path}:/shared",  # Isolated instance storage mount (MUST be host path)
+                f"{common_storage_path}:/shared_common:ro"  # Read-only common course materials shared across students
             ]
             
             logger.info(f"Mounting: pt_opt:/opt/pt and {shared_path}:/shared on bridge network (will connect to pt-stack after creation)")

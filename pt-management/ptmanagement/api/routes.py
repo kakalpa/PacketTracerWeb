@@ -29,24 +29,11 @@ def require_auth(f):
 
 
 def require_auth_or_internal(f):
-    """Decorator to require authentication OR internal network access"""
+    """Decorator to require authentication for API endpoints"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Allow internal network (127.0.0.1, ::1, localhost, docker internal IPs starting with 172. or 10.)
-        client_ip = request.remote_addr
-        is_internal = (
-            client_ip in ['127.0.0.1', '::1', 'localhost'] or 
-            client_ip.startswith('172.') or 
-            client_ip.startswith('10.')
-        )
-        
-        if is_internal:
-            logger.debug(f"✓ Allowing internal request from {client_ip}")
-            return f(*args, **kwargs)
-        
-        # Otherwise require session auth
         if 'user' not in session:
-            return jsonify({'error': 'Unauthorized'}), 401
+            return jsonify({'error': 'Unauthorized', 'message': 'Authentication required'}), 401
         return f(*args, **kwargs)
     return decorated_function
 
@@ -187,8 +174,8 @@ def create_api_blueprint():
                                 # Try to find it in project root or parent directories
                                 possible_paths = [
                                     os.path.join(project_root, 'CiscoPacketTracer.deb'),
-                                    '/run/media/kalpa/9530f1e7-4f57-4bf2-b7f2-b03a2b8d4111/PT DEv/PacketTracerWeb/CiscoPacketTracer.deb',
                                     '/project/CiscoPacketTracer.deb',
+                                    os.path.join(os.getcwd(), 'CiscoPacketTracer.deb'),
                                 ]
                                 for path in possible_paths:
                                     if os.path.exists(path):
@@ -198,7 +185,15 @@ def create_api_blueprint():
                             if not pt_deb:
                                 pt_deb = os.path.join(project_root, 'CiscoPacketTracer.deb')
                             
-                            # Create the container using docker CLI with /shared mount - matching deploy.sh exactly
+                            # Partition storage per container instance
+                            instance_storage_path = os.path.join(shared_path, 'instances', container_name)
+                            try:
+                                os.makedirs(instance_storage_path, exist_ok=True)
+                                os.chmod(instance_storage_path, 0o777)
+                            except OSError:
+                                pass
+
+                            # Create the container using docker CLI with isolated instance storage mount
                             cmd = [
                                 'docker', 'run', '-d',
                                 '--name', container_name,
@@ -211,7 +206,7 @@ def create_api_blueprint():
                                 '--dns=127.0.0.1',
                                 '-v', f'{pt_deb}:/PacketTracer.deb:ro',
                                 '-v', 'pt_opt:/opt/pt',
-                                f'--mount=type=bind,source={shared_path},target=/shared,bind-propagation=rprivate',
+                                f'--mount=type=bind,source={instance_storage_path},target=/shared,bind-propagation=rprivate',
                                 '-e', 'PT_DEB_PATH=/PacketTracer.deb',
                                 'ptvnc'
                             ]
@@ -221,13 +216,13 @@ def create_api_blueprint():
                             if result.returncode == 0:
                                 logger.info(f"✓ Created container {container_name}")
 
-                                # Create Desktop symlink to /shared for easy file access
+                                # Create Desktop and save symlinks to /shared for easy file access
                                 # Also fix /shared permissions to be writable by ptuser
                                 try:
                                     symlink_cmd = [
                                         'docker', 'exec', container_name,
                                         'bash', '-c',
-                                        'mkdir -p /home/ptuser/Desktop && ln -sf /shared /home/ptuser/Desktop/shared && chmod 777 /shared && chown ptuser:ptuser /shared'
+                                        'mkdir -p /home/ptuser/Desktop /home/ptuser/pt && ln -sf /shared /home/ptuser/Desktop/shared && ln -sf /shared /home/ptuser/Desktop/Personal_Saves && rm -rf /home/ptuser/pt/saves && ln -sfn /shared /home/ptuser/pt/saves && ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials && chmod 777 /shared && chown ptuser:ptuser /shared && chown -R ptuser:ptuser /home/ptuser/Desktop && chown -h ptuser:ptuser /home/ptuser/Desktop/* && chmod 755 /home/ptuser/Desktop'
                                     ]
                                     symlink_result = subprocess.run(symlink_cmd, capture_output=True, text=True, timeout=10)
                                     if symlink_result.returncode == 0:
@@ -458,13 +453,22 @@ def create_api_blueprint():
     @api.route('/containers', methods=['GET'])
     @require_auth
     def list_containers():
-        """Get all Packet Tracer containers with user assignments"""
+        """Get all Packet Tracer containers with user assignments and guacamole assist links"""
         try:
             containers = docker_mgr.list_containers(all=True)
+            from ptmanagement.db.guacamole import get_all_container_connections
+            conn_map = get_all_container_connections()
             
-            # Add user assignment info to each container
+            # Add user assignment and guacamole connection info to each container
             for container in containers:
-                container['users'] = get_users_by_container(container['name'])
+                cname = container['name']
+                container['users'] = get_users_by_container(cname)
+                guac_info = conn_map.get(cname)
+                if guac_info:
+                    container['connection_id'] = guac_info.get('connection_id')
+                    container['connection_name'] = guac_info.get('connection_name')
+                    container['client_token'] = guac_info.get('client_token')
+                    container['guacamole_url'] = guac_info.get('guacamole_url')
             
             return jsonify({
                 'success': True,
@@ -552,8 +556,13 @@ def create_api_blueprint():
                 try:
                     docker_mgr.exec_in_container(container_name, ['mkdir', '-p', '/home/ptuser/Desktop'])
                     docker_mgr.exec_in_container(container_name, ['ln', '-sf', '/shared', '/home/ptuser/Desktop/shared'])
+                    docker_mgr.exec_in_container(container_name, ['ln', '-sf', '/shared', '/home/ptuser/Desktop/Personal_Saves'])
+                    docker_mgr.exec_in_container(container_name, ['ln', '-sfn', '/shared_common', '/home/ptuser/Desktop/Course_Materials'])
                     docker_mgr.exec_in_container(container_name, ['chmod', '777', '/shared'])
                     docker_mgr.exec_in_container(container_name, ['chown', 'ptuser:ptuser', '/shared'])
+                    docker_mgr.exec_in_container(container_name, ['chown', '-R', 'ptuser:ptuser', '/home/ptuser/Desktop'])
+                    docker_mgr.exec_in_container(container_name, ['chmod', '755', '/home/ptuser/Desktop'])
+                    docker_mgr.exec_in_container(container_name, ['bash', '-c', 'chown -h ptuser:ptuser /home/ptuser/Desktop/* 2>/dev/null || true'])
                     logger.info(f"✓ Created /shared symlink and fixed permissions on {container_name} Desktop")
                 except Exception as symlink_err:
                     logger.warning(f"⚠ Failed to create /shared symlink or fix permissions: {symlink_err}")
@@ -715,6 +724,108 @@ def create_api_blueprint():
                 return jsonify({'error': 'Failed to restart container'}), 500
         except Exception as e:
             logger.error(f"✗ Failed to restart container {container_name}: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @api.route('/containers/bulk/start', methods=['POST'])
+    @require_auth
+    def bulk_start_containers():
+        """Start multiple containers or all stopped containers"""
+        try:
+            data = request.get_json(silent=True) or {}
+            names = data.get('names')
+            if not names:
+                containers = docker_mgr.list_containers(all=True)
+                names = [c['name'] for c in containers if c.get('status') != 'running' and c.get('name', '').startswith('ptvnc')]
+            
+            started = []
+            failed = []
+            for name in names:
+                try:
+                    if docker_mgr.start_container(name):
+                        started.append(name)
+                    else:
+                        failed.append(name)
+                except Exception as e:
+                    logger.error(f"Error starting {name}: {e}")
+                    failed.append(name)
+            
+            return jsonify({
+                'success': True,
+                'started': started,
+                'failed': failed,
+                'count': len(started),
+                'message': f"Started {len(started)} container(s)"
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed in bulk start containers: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @api.route('/containers/bulk/stop', methods=['POST'])
+    @require_auth
+    def bulk_stop_containers():
+        """Stop multiple containers or all running containers"""
+        try:
+            data = request.get_json(silent=True) or {}
+            names = data.get('names')
+            if not names:
+                containers = docker_mgr.list_containers(all=True)
+                names = [c['name'] for c in containers if c.get('status') == 'running' and c.get('name', '').startswith('ptvnc')]
+            
+            stopped = []
+            failed = []
+            for name in names:
+                try:
+                    if docker_mgr.stop_container(name):
+                        stopped.append(name)
+                    else:
+                        failed.append(name)
+                except Exception as e:
+                    logger.error(f"Error stopping {name}: {e}")
+                    failed.append(name)
+            
+            return jsonify({
+                'success': True,
+                'stopped': stopped,
+                'failed': failed,
+                'count': len(stopped),
+                'message': f"Stopped {len(stopped)} container(s)"
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed in bulk stop containers: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @api.route('/containers/bulk/restart', methods=['POST'])
+    @require_auth
+    def bulk_restart_containers():
+        """Restart multiple containers or all running containers"""
+        try:
+            data = request.get_json(silent=True) or {}
+            names = data.get('names')
+            if not names:
+                containers = docker_mgr.list_containers(all=True)
+                names = [c['name'] for c in containers if c.get('status') == 'running' and c.get('name', '').startswith('ptvnc')]
+            
+            restarted = []
+            failed = []
+            for name in names:
+                try:
+                    if docker_mgr.restart_container(name):
+                        restarted.append(name)
+                    else:
+                        failed.append(name)
+                except Exception as e:
+                    logger.error(f"Error restarting {name}: {e}")
+                    failed.append(name)
+            
+            return jsonify({
+                'success': True,
+                'restarted': restarted,
+                'failed': failed,
+                'count': len(restarted),
+                'message': f"Restarted {len(restarted)} container(s)"
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed in bulk restart containers: {e}")
             return jsonify({'error': str(e)}), 500
     
     @api.route('/containers/<container_name>', methods=['DELETE'])
@@ -1219,6 +1330,65 @@ def create_api_blueprint():
             return jsonify({'error': 'Health check timed out (exceeded 5 minutes)'}), 504
         except Exception as e:
             logger.error(f"✗ Failed to run health check: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @api.route('/system/stats', methods=['GET'])
+    @require_auth
+    def get_system_stats():
+        """Get live host CPU, memory, and container stats"""
+        try:
+            # Memory telemetry from /proc/meminfo
+            total_ram, used_ram, free_ram, ram_pct = 0, 0, 0, 0.0
+            if os.path.exists('/proc/meminfo'):
+                with open('/proc/meminfo') as f:
+                    lines = dict(x.strip().split(':', 1) for x in f if ':' in x)
+                total_ram = int(lines.get('MemTotal', '0').split()[0]) * 1024
+                avail_ram = int(lines.get('MemAvailable', '0').split()[0]) * 1024
+                used_ram = max(0, total_ram - avail_ram)
+                free_ram = avail_ram
+                if total_ram > 0:
+                    ram_pct = round((used_ram / total_ram) * 100, 1)
+
+            # CPU load telemetry from /proc/loadavg
+            load_1m, load_5m, load_15m = 0.0, 0.0, 0.0
+            if os.path.exists('/proc/loadavg'):
+                with open('/proc/loadavg') as f:
+                    parts = f.read().split()
+                    load_1m = float(parts[0])
+                    load_5m = float(parts[1])
+                    load_15m = float(parts[2])
+
+            cpu_cores = os.cpu_count() or 1
+            cpu_pct = min(100.0, round((load_1m / cpu_cores) * 100, 1))
+
+            # Containers status
+            containers = docker_mgr.list_containers(all=True)
+            running_cnt = sum(1 for c in containers if c.get('status') == 'running')
+            stopped_cnt = len(containers) - running_cnt
+
+            return jsonify({
+                'success': True,
+                'cpu': {
+                    'cores': cpu_cores,
+                    'load_1m': load_1m,
+                    'load_5m': load_5m,
+                    'load_15m': load_15m,
+                    'pct': cpu_pct
+                },
+                'memory': {
+                    'total': total_ram,
+                    'used': used_ram,
+                    'free': free_ram,
+                    'pct': ram_pct
+                },
+                'containers': {
+                    'total': len(containers),
+                    'running': running_cnt,
+                    'stopped': stopped_cnt
+                }
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed to get system stats: {e}")
             return jsonify({'error': str(e)}), 500
     
     return api

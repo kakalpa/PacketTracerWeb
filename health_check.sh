@@ -62,15 +62,20 @@ PTVNC_COUNT=$(echo "$PTVNC_INSTANCES" | wc -l)
 PTVNC_FIRST=$(echo "$PTVNC_INSTANCES" | head -1)
 PTVNC_SECOND=$(echo "$PTVNC_INSTANCES" | tail -1)
 
-# Determine which web host to use for HTTP checks. When running inside a container
+# Determine which web host to use for HTTP/HTTPS checks. When running inside a container
 # "localhost" refers to the container itself; prefer the pt-nginx container name
 # when it is reachable from this runtime. Fall back to localhost when container
 # hostname is not reachable (e.g., running on the host machine).
-WEB_HOST="http://localhost"
-if curl -s --connect-timeout 1 http://pt-nginx1/ >/dev/null 2>&1; then
-    WEB_HOST="http://pt-nginx1"
-elif curl -s --connect-timeout 1 http://nginx/ >/dev/null 2>&1; then
-    WEB_HOST="http://nginx"
+PROTOCOL="http"
+if [ "$ENABLE_HTTPS" = "true" ]; then
+    PROTOCOL="https"
+fi
+
+WEB_HOST="${PROTOCOL}://localhost"
+if curl -k -s --connect-timeout 1 "${PROTOCOL}://pt-nginx1/" >/dev/null 2>&1; then
+    WEB_HOST="${PROTOCOL}://pt-nginx1"
+elif curl -k -s --connect-timeout 1 "${PROTOCOL}://nginx/" >/dev/null 2>&1; then
+    WEB_HOST="${PROTOCOL}://nginx"
 fi
 
 # Test function
@@ -197,6 +202,15 @@ run_test "$PTVNC_SECOND has shared symlink on Desktop" \
 run_test "$PTVNC_SECOND shared symlink is accessible" \
     "docker exec $PTVNC_SECOND [ -d /home/ptuser/Desktop/shared ]"
 
+run_test "$PTVNC_FIRST has Course_Materials symlink on Desktop" \
+    "docker exec $PTVNC_FIRST [ -L /home/ptuser/Desktop/Course_Materials ]"
+
+run_test "$PTVNC_FIRST Course_Materials points to /shared_common" \
+    "docker exec $PTVNC_FIRST readlink /home/ptuser/Desktop/Course_Materials | grep -q '^/shared_common\$'"
+
+run_test "$PTVNC_FIRST Course_Materials is read-only" \
+    "! docker exec $PTVNC_FIRST touch /shared_common/.ro_test 2>/dev/null"
+
 # ============================================================================
 # SECTION 6: WEB ENDPOINTS
 # ============================================================================
@@ -208,41 +222,72 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 run_test "Guacamole root endpoint (HTTP 200/30x)" \
     "curl -k -L -s -I \"$WEB_HOST/\" 2>&1 | grep -q 'HTTP/1.1 200\\|HTTP/2 200\\|HTTP/1.1 30'"
 
-run_test "Downloads endpoint (HTTP 200/30x)" \
-    "curl -k -L -s -I \"$WEB_HOST/downloads/\" 2>&1 | grep -q 'HTTP/1.1 200\\|HTTP/2 200\\|HTTP/1.1 30'"
+run_test "Public /downloads/ directory listing blocked (HTTP 404/403)" \
+    "curl -k -s -o /dev/null -w '%{http_code}' \"$WEB_HOST/downloads/\" 2>&1 | grep -q -E '404|403'"
 
-run_test "Downloads directory listing works (not 404)" \
-    "curl -k -L -s -I \"$WEB_HOST/downloads/\" 2>&1 | grep -q -E 'HTTP/1.1 200|HTTP/1.1 30|HTTP/2 200'"
+run_test "Internal downloads location blocked from external access (HTTP 404)" \
+    "curl -k -s -o /dev/null -w '%{http_code}' \"$WEB_HOST/internal/downloads/\" 2>&1 | grep -q '404'"
 
 # ============================================================================
-# SECTION 7: FILE DOWNLOAD WORKFLOW
+# SECTION 7: FILE DOWNLOAD WORKFLOW & MULTI-TENANT ISOLATION
 # ============================================================================
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}SECTION 7: File Download Workflow${NC}"
+echo -e "${BLUE}SECTION 7: File Download Workflow & Isolation${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-# Create test file
+# Create test file in instance 1 directory
 TEST_FILE="test-workflow-$(date +%s).pkt"
 TEST_CONTENT="Test file created at $(date)"
+mkdir -p "$WORKDIR/shared/instances/$PTVNC_FIRST"
 
-run_test "Create test file in /shared from host" \
-    "echo '$TEST_CONTENT' > \"$WORKDIR/shared/$TEST_FILE\""
+run_test "Create test file in $PTVNC_FIRST isolated storage" \
+    "echo '$TEST_CONTENT' > \"$WORKDIR/shared/instances/$PTVNC_FIRST/$TEST_FILE\""
 
-run_test "File visible from $PTVNC_FIRST" \
+run_test "File visible from $PTVNC_FIRST (/shared)" \
     "docker exec $PTVNC_FIRST [ -f /shared/$TEST_FILE ]"
 
-run_test "File visible from $PTVNC_SECOND" \
-    "docker exec $PTVNC_SECOND [ -f /shared/$TEST_FILE ]"
+run_test "File isolated and NOT visible from $PTVNC_SECOND" \
+    "! docker exec $PTVNC_SECOND [ -f /shared/$TEST_FILE ]"
 
-run_test "File downloadable via /downloads/" \
-    "curl -k -L -s \"$WEB_HOST/downloads/$TEST_FILE\" 2>&1 | grep -q 'Test file'"
+# Retrieve signed token from student API and download
+TOKEN_JSON=$(curl -k -s "$WEB_HOST/api/student/files/token?container=$PTVNC_FIRST&file=$TEST_FILE")
+DOWNLOAD_URL=$(echo "$TOKEN_JSON" | grep -o '"download_url":"[^"]*' | cut -d'"' -f4)
 
-run_test "Downloaded file content matches" \
-    "[ \"\$(curl -k -L -s \"$WEB_HOST/downloads/$TEST_FILE\")\" = \"$TEST_CONTENT\" ]"
+run_test "Student Download API mints valid signed token" \
+    "[ -n \"$DOWNLOAD_URL\" ]"
+
+run_test "File downloadable via Student API with signed token" \
+    "curl -k -s \"$WEB_HOST$DOWNLOAD_URL\" 2>&1 | grep -q 'Test file'"
+
+run_test "Downloaded file content matches exactly" \
+    "[ \"\$(curl -k -s \"$WEB_HOST$DOWNLOAD_URL\")\" = \"$TEST_CONTENT\" ]"
+
+run_test "Path traversal attempt blocked (HTTP 403)" \
+    "curl -k -s -o /dev/null -w '%{http_code}' \"$WEB_HOST/api/student/files/download?container=$PTVNC_FIRST&file=../../etc/passwd&expires=9999999999&sig=fake\" | grep -q -E '403|401'"
+
+# Test Course Materials broadcast to all students
+COMMON_TEST_FILE="common-test-$(date +%s).pkt"
+COMMON_TEST_CONTENT="Common Course Material Content $(date)"
+mkdir -p "$WORKDIR/shared/common"
+echo "$COMMON_TEST_CONTENT" > "$WORKDIR/shared/common/$COMMON_TEST_FILE"
+
+run_test "Course material visible from $PTVNC_FIRST (Course_Materials)" \
+    "docker exec $PTVNC_FIRST [ -f /home/ptuser/Desktop/Course_Materials/$COMMON_TEST_FILE ]"
+
+run_test "Course material visible from $PTVNC_SECOND (Course_Materials)" \
+    "docker exec $PTVNC_SECOND [ -f /home/ptuser/Desktop/Course_Materials/$COMMON_TEST_FILE ]"
+
+COMMON_TOKEN_JSON=$(curl -k -s "$WEB_HOST/api/student/files/token?container=common&file=$COMMON_TEST_FILE")
+COMMON_DOWNLOAD_URL=$(echo "$COMMON_TOKEN_JSON" | grep -o '"download_url":"[^"]*' | cut -d'"' -f4)
+
+run_test "Course material downloadable via Student API" \
+    "[ \"\$(curl -k -s \"$WEB_HOST$COMMON_DOWNLOAD_URL\")\" = \"$COMMON_TEST_CONTENT\" ]"
+
+rm -f "$WORKDIR/shared/common/$COMMON_TEST_FILE" 2>/dev/null || true
 
 # Cleanup test file
-rm "$WORKDIR/shared/$TEST_FILE" 2>/dev/null || true
+rm -f "$WORKDIR/shared/instances/$PTVNC_FIRST/$TEST_FILE" 2>/dev/null || true
 
 # ============================================================================
 # SECTION 8: HELPER SCRIPTS

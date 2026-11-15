@@ -84,9 +84,10 @@ fi
 
 # Handle recreate argument
 if [[ "${1:-}" == "recreate" ]]; then
-    echo -e "\e[33m=== Recreate Mode: Cleaning up existing containers and volumes ===\e[0m"
-    docker ps -a --format "{{.Names}}" | xargs -r docker rm -f 2>/dev/null || true
-    docker volume ls --format "{{.Name}}" | xargs -r docker volume rm 2>/dev/null || true
+    echo -e "\e[33m=== Recreate Mode: Cleaning up PacketTracer containers and volumes ===\e[0m"
+    docker ps -a --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|ptvnc.*)$' | xargs -r docker rm -f 2>/dev/null || true
+    docker volume rm mariadb_data dbdump pt_opt 2>/dev/null || true
+    docker network rm ptnet pt-stack 2>/dev/null || true
     echo -e "\e[32m✓ Cleanup complete\e[0m"
     echo ""
 fi
@@ -187,6 +188,7 @@ echo ""
 echo -e "\e[32mStep 1. Start MariaDB\e[0m"
 docker run --name guacamole-mariadb --restart unless-stopped \
   --network ptnet \
+  -v mariadb_data:/var/lib/mysql \
   -v dbdump:/docker-entrypoint-initdb.d \
   -e MYSQL_ROOT_HOST=% \
   -e MYSQL_DATABASE=${dbname} \
@@ -198,8 +200,13 @@ sleep 10
 
 # Step 2: Start ptvnc containers
 echo -e "\e[32mStep 2. Start Packet Tracer VNC containers\e[0m"
-mkdir -p "${WORKDIR}/shared"
-chmod 777 "${WORKDIR}/shared"
+mkdir -p "${WORKDIR}/shared/instances"
+mkdir -p "${WORKDIR}/shared/common"
+mkdir -p "${WORKDIR}/shared/archive"
+chmod 755 "${WORKDIR}/shared"
+chmod 755 "${WORKDIR}/shared/instances"
+chmod 777 "${WORKDIR}/shared/common"
+chmod 700 "${WORKDIR}/shared/archive"
 
 # Query Guacamole container IP and generate ptweb.conf
 sleep 3
@@ -225,22 +232,36 @@ echo "ℹ️  Using CPU-based software rendering (no GPU pass-through)"
 echo "ℹ️  Using CPU-based software rendering (no GPU pass-through)"
 
 for ((i=1; i<=$numofPT; i++)); do
+    INSTANCE_DIR="${WORKDIR}/shared/instances/ptvnc$i"
+    mkdir -p "$INSTANCE_DIR"
+    chmod 777 "$INSTANCE_DIR"
+
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
       --network ptnet \
       --cpus=0.5 -m 2G --ulimit nproc=2048 --ulimit nofile=1024 \
       --dns=127.0.0.1 \
       -v pt_opt:/opt/pt \
-      --mount type=bind,source="${WORKDIR}/shared",target=/shared,bind-propagation=rprivate \
+      --mount type=bind,source="${INSTANCE_DIR}",target=/shared,bind-propagation=rprivate \
+      --mount type=bind,source="${WORKDIR}/shared/common",target=/shared_common,readonly,bind-propagation=rprivate \
       ptvnc
     sleep $i
 done
 
-# Create desktop symlinks for easy access to /shared
-echo -e "\e[32mCreating /shared symlinks on Desktop\e[0m"
+# Create desktop and save symlinks for easy access to /shared and Course_Materials
+echo -e "\e[32mCreating /shared, saves, and Course_Materials symlinks in containers\e[0m"
 for ((i=1; i<=$numofPT; i++)); do
-    docker exec ptvnc$i mkdir -p /home/ptuser/Desktop 2>/dev/null || true
+    docker exec ptvnc$i mkdir -p /home/ptuser/Desktop /home/ptuser/pt 2>/dev/null || true
     docker exec ptvnc$i ln -sf /shared /home/ptuser/Desktop/shared 2>/dev/null || true
+    docker exec ptvnc$i ln -sf /shared /home/ptuser/Desktop/Personal_Saves 2>/dev/null || true
+    docker exec ptvnc$i rm -rf /home/ptuser/pt/saves 2>/dev/null || true
+    docker exec ptvnc$i ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
+    docker exec ptvnc$i ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
+    if [ -f ptweb-vnc/libptsavehook.so ]; then
+        docker cp ptweb-vnc/libptsavehook.so ptvnc$i:/usr/local/lib/libptsavehook.so 2>/dev/null || true
+    fi
+    docker exec ptvnc$i chown -R ptuser:ptuser /home/ptuser/Desktop 2>/dev/null || true
+    docker exec ptvnc$i chown -h ptuser:ptuser /home/ptuser/Desktop/* 2>/dev/null || true
 done
 sleep 2
 

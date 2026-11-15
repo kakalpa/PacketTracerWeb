@@ -198,6 +198,12 @@ EOF
 
   # Include all server configurations from conf.d
   cat << 'NGINX_FOOTER_EOF'
+    # WebSocket connection upgrade mapping for Guacamole
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+    }
+
     # Include all server configurations from conf.d
     include /etc/nginx/conf.d/*.conf;
 }
@@ -251,15 +257,44 @@ render_common_server_block() {
   cat <<'EOF'
   charset utf-8;
 
-  # Serve shared downloads with highest priority
-  location ^~ /downloads/ {
+  # Protected internal storage serving - accessible ONLY via X-Accel-Redirect
+  location ^~ /internal/downloads/ {
+    internal;
+    alias /shared/instances/;
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    gzip off;
+    default_type application/octet-stream;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Content-Security-Policy "default-src 'none'" always;
+  }
+
+  # Protected internal course materials - accessible ONLY via X-Accel-Redirect
+  location ^~ /internal/common/ {
+    internal;
+    alias /shared/common/;
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    gzip off;
+    default_type application/octet-stream;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Content-Security-Policy "default-src 'none'" always;
+  }
+
+  # Reverse proxy for Student File Download API
+  location ^~ /api/student/files/ {
 EOF
   render_geoip_check
+  render_rate_limit_directive
   cat <<'EOF'
-    alias /shared/;
-    autoindex on;
-    autoindex_exact_size off;
-    autoindex_localtime on;
+    proxy_pass http://pt-management:5000/api/student/files/;
+    proxy_redirect off;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
   }
 
   # File manager interface
@@ -268,6 +303,34 @@ EOF
   render_geoip_check
   cat <<'EOF'
     rewrite ^/files/?$ /file-manager.html break;
+  }
+
+  # Student Downloads Portal
+  location ^~ /my-files {
+EOF
+  render_geoip_check
+  render_rate_limit_directive
+  cat <<'EOF'
+    proxy_pass http://pt-management:5000/my-files;
+    proxy_redirect off;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Downloads endpoint - redirects browser clients to /my-files while blocking unauthenticated raw listings
+  location ^~ /downloads {
+EOF
+  render_geoip_check
+  render_rate_limit_directive
+  cat <<'EOF'
+    proxy_pass http://pt-management:5000/downloads;
+    proxy_redirect off;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
   }
 
   # Root location - proxy Guacamole at /
@@ -283,8 +346,10 @@ EOF
 
     # WebSocket support for Guacamole tunneling
     proxy_http_version 1.1;
+    proxy_buffering off;
     proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
+    proxy_set_header Connection $connection_upgrade;
+    proxy_cookie_path /guacamole/ /;
 
     client_max_body_size 10m;
 EOF
@@ -294,11 +359,10 @@ EOF
     proxy_connect_timeout 90;
     proxy_send_timeout 90;
     proxy_read_timeout 90;
-    proxy_buffers 32 4k;
     proxy_pass http://pt-guacamole:8080/guacamole/;
   }
 
-  location ~ \.ht {
+  location ~ /\.ht {
     deny all;
   }
 EOF

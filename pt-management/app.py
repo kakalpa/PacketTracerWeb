@@ -5,6 +5,7 @@ Manages Packet Tracer containers and Guacamole users directly via Docker and Mar
 """
 
 import os
+import secrets
 import logging
 from flask import Flask, render_template, request, redirect, session, jsonify, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -34,7 +35,25 @@ def create_app():
     
     # Configuration
     enable_https = os.environ.get('ENABLE_HTTPS', 'false').lower() in ('true', '1', 'yes')
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
+    secret_key = os.environ.get('SECRET_KEY')
+    if not secret_key or secret_key == 'dev-key-change-in-production':
+        secret_key_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.secret_key')
+        if os.path.exists(secret_key_file):
+            try:
+                with open(secret_key_file, 'r') as f:
+                    secret_key = f.read().strip()
+            except Exception:
+                pass
+        if not secret_key:
+            secret_key = secrets.token_hex(32)
+            try:
+                with open(secret_key_file, 'w') as f:
+                    f.write(secret_key)
+                os.chmod(secret_key_file, 0o600)
+            except Exception as e:
+                logger.warning(f"Could not persist secret key to {secret_key_file}: {e}")
+            logger.info("Generated cryptographically secure random SECRET_KEY")
+    app.config['SECRET_KEY'] = secret_key
     app.config['SESSION_COOKIE_SECURE'] = enable_https
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -96,43 +115,18 @@ def create_app():
         protected_routes = ['/dashboard', '/settings', '/files', '/api/']
         
         if any(request.path.startswith(route) for route in protected_routes):
-            # Allow specific endpoints without auth (internal or batch operations)
-            if request.path.startswith('/api/containers') and request.method == 'POST':
-                return  # Skip auth
+            # Exclude student download API from admin session requirement (it handles its own auth)
+            if request.path.startswith('/api/student/files/'):
+                return
+
+            # Allow public defaults endpoint without authentication
             if request.path.startswith('/api/env/defaults') and request.method == 'GET':
-                return  # Skip auth for public defaults endpoint
-            if request.path.startswith('/api/users') and request.method == 'POST':
-                # Allow POST to /api/users for bulk create from internal network
-                client_ip = request.remote_addr
-                is_internal = (
-                    client_ip in ['127.0.0.1', '::1', 'localhost'] or 
-                    client_ip.startswith('172.') or 
-                    client_ip.startswith('10.')
-                )
-                if is_internal:
-                    return  # Allow internal requests
-            if request.path.startswith('/api/users/bulk/delete') and request.method == 'POST':
-                # Allow bulk delete from internal network
-                client_ip = request.remote_addr
-                is_internal = (
-                    client_ip in ['127.0.0.1', '::1', 'localhost'] or 
-                    client_ip.startswith('172.') or 
-                    client_ip.startswith('10.')
-                )
-                if is_internal:
-                    return  # Allow internal requests
-            if request.path.startswith('/api/users/') and request.method == 'DELETE':
-                # Allow DELETE /api/users/<username> from internal network
-                client_ip = request.remote_addr
-                is_internal = (
-                    client_ip in ['127.0.0.1', '::1', 'localhost'] or 
-                    client_ip.startswith('172.') or 
-                    client_ip.startswith('10.')
-                )
-                if is_internal:
-                    return  # Allow internal requests
-                
+                return
+            
+            # Enforce authentication for all other protected endpoints
             if 'user' not in session:
+                if request.path.startswith('/api/'):
+                    return jsonify({'error': 'Unauthorized', 'message': 'Authentication required'}), 401
                 return redirect(url_for('login'))
     
     @app.route('/')
@@ -156,6 +150,30 @@ def create_app():
     def file_manager():
         """File manager page for managing /shared folder"""
         return render_template('file_manager.html', username=session.get('user'))
+    
+    @app.route('/my-files')
+    @app.route('/my-files/')
+    def student_my_files():
+        """Student downloads portal page"""
+        return render_template('student_downloads.html')
+    
+    @app.route('/downloads')
+    @app.route('/downloads/')
+    def downloads_redirect():
+        """Redirect browser traffic to /my-files while rejecting unauthenticated raw listings with 403"""
+        accept = request.headers.get('Accept', '')
+        if 'text/html' in accept:
+            return redirect(url_for('student_my_files'))
+        return jsonify({'error': 'Forbidden: Unauthenticated directory listing is disabled. Use /my-files to access your student files.'}), 403
+
+    @app.route('/guacamole')
+    @app.route('/guacamole/')
+    @app.route('/guacamole/<path:subpath>')
+    def guacamole_redirect(subpath=''):
+        """Redirect Guacamole requests from port 5000 to primary HTTPS port 443 where Guacamole lives"""
+        host = request.host.split(':')[0]
+        target = f"https://{host}/#/{subpath}" if subpath else f"https://{host}/#/"
+        return redirect(target, code=302)
     
     # ========================================================================
     # API Routes
@@ -188,6 +206,13 @@ def create_app():
     from ptmanagement.api.file_manager import create_file_manager_blueprint
     fm_api_bp = create_file_manager_blueprint()
     app.register_blueprint(fm_api_bp)  # Blueprint already has /api/files prefix
+    
+    # ========================================================================
+    # Student File Download API
+    # ========================================================================
+    
+    from ptmanagement.api.student_routes import student_api
+    app.register_blueprint(student_api)  # Blueprint already has /api/student/files prefix
     
     # ========================================================================
     # Error Handlers

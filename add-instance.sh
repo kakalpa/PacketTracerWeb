@@ -66,8 +66,11 @@ echo "Using Packet Tracer file: $PTfile"
 echo ""
 
 # Prepare shared directory
-mkdir -p "$(pwd)/shared"
-chmod 777 "$(pwd)/shared"
+mkdir -p "${WORKDIR}/shared/instances"
+mkdir -p "${WORKDIR}/shared/common"
+mkdir -p "${WORKDIR}/shared/archive"
+chmod 755 "${WORKDIR}/shared/instances"
+chmod 777 "${WORKDIR}/shared/common"
 
 # Step 1: Start new ptvnc containers
 echo -e "\e[32mStep 1. Starting $instances_to_add new container(s)\e[0m"
@@ -82,6 +85,10 @@ for ((i=0; i<instances_to_add; i++)); do
         continue
     fi
     
+    INSTANCE_DIR="${WORKDIR}/shared/instances/${container_name}"
+    mkdir -p "$INSTANCE_DIR"
+    chmod 777 "$INSTANCE_DIR"
+
     echo "Creating $container_name..."
     docker run -d \
       --name $container_name --restart unless-stopped \
@@ -90,7 +97,8 @@ for ((i=0; i<instances_to_add; i++)); do
       -v "${WORKDIR}/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
       --dns=127.0.0.1 \
-      --mount type=bind,source="${WORKDIR}/shared",target=/shared,bind-propagation=rprivate \
+      --mount type=bind,source="${INSTANCE_DIR}",target=/shared,bind-propagation=rprivate \
+      --mount type=bind,source="${WORKDIR}/shared/common",target=/shared_common,readonly,bind-propagation=rprivate \
       -e PT_DEB_PATH=/PacketTracer.deb \
       ptvnc
     
@@ -101,16 +109,24 @@ done
 echo "✅ Containers started"
 echo ""
 
-# Create desktop symlinks for new instances
-echo -e "\e[32mStep 1b. Creating /shared symlinks on Desktop\e[0m"
+# Create desktop, save, and course materials symlinks for new instances
+echo -e "\e[32mStep 1b. Creating /shared, saves, and Course_Materials symlinks in containers\e[0m"
 for ((i=0; i<instances_to_add; i++)); do
     instance_num=$((current_max + i + 1))
     container_name="ptvnc$instance_num"
     
     if docker ps --format "table {{.Names}}" | grep -q "^${container_name}$"; then
-        docker exec $container_name mkdir -p /home/ptuser/Desktop 2>/dev/null || true
-        docker exec $container_name rm -f /home/ptuser/Desktop/shared 2>/dev/null || true
+        docker exec $container_name mkdir -p /home/ptuser/Desktop /home/ptuser/pt 2>/dev/null || true
         docker exec $container_name ln -sfn /shared /home/ptuser/Desktop/shared 2>/dev/null || true
+        docker exec $container_name ln -sfn /shared /home/ptuser/Desktop/Personal_Saves 2>/dev/null || true
+        docker exec $container_name rm -rf /home/ptuser/pt/saves 2>/dev/null || true
+        docker exec $container_name ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
+        docker exec $container_name ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
+        if [ -f ptweb-vnc/libptsavehook.so ]; then
+            docker cp ptweb-vnc/libptsavehook.so $container_name:/usr/local/lib/libptsavehook.so 2>/dev/null || true
+        fi
+        docker exec $container_name chown -R ptuser:ptuser /home/ptuser/Desktop 2>/dev/null || true
+        docker exec $container_name chown -h ptuser:ptuser /home/ptuser/Desktop/* 2>/dev/null || true
     fi
 done
 sleep 2

@@ -21,6 +21,7 @@ RUN apt-get update && \
       libglvnd0 libglvnd-dev libosmesa6 libosmesa6-dev mesa-utils \
       fonts-dejavu-core xfonts-base xfonts-100dpi xfonts-75dpi \
       wget ca-certificates pkg-config libxv1 libxvmc1 libfuse2 \
+      librsvg2-common libglu1-mesa humanity-icon-theme adwaita-icon-theme \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and install TurboVNC from GitHub release
@@ -92,15 +93,21 @@ RUN apt-get clean -y
 
 RUN chown -R ptuser /home/ptuser
 
+# Copy save hook library if available
+COPY libptsavehook.so* /usr/local/lib/
+
 # Create /opt/pt directory for Packet Tracer installation (if not already created by .deb)
 RUN mkdir -p /opt/pt && chmod 755 /opt/pt
 
 # Create wrapper script for PacketTracer that handles both AppImage and regular binary
 RUN mkdir -p /opt/pt && \
     echo '#!/bin/bash' > /opt/pt/packettracer-launcher && \
+    echo 'if [ -f /usr/local/lib/libptsavehook.so ]; then' >> /opt/pt/packettracer-launcher && \
+    echo '  export LD_PRELOAD=/usr/local/lib/libptsavehook.so' >> /opt/pt/packettracer-launcher && \
+    echo 'fi' >> /opt/pt/packettracer-launcher && \
     echo 'if [ -x /opt/pt/packettracer.AppImage ]; then' >> /opt/pt/packettracer-launcher && \
     echo '  cd /tmp' >> /opt/pt/packettracer-launcher && \
-    echo '  /opt/pt/packettracer.AppImage --appimage-extract >/dev/null 2>&1' >> /opt/pt/packettracer-launcher && \
+    echo '  LD_PRELOAD="" /opt/pt/packettracer.AppImage --appimage-extract >/dev/null 2>&1' >> /opt/pt/packettracer-launcher && \
     echo '  exec ./squashfs-root/AppRun "$@"' >> /opt/pt/packettracer-launcher && \
     echo 'elif [ -x /opt/pt/bin/PacketTracer ]; then' >> /opt/pt/packettracer-launcher && \
     echo '  exec /opt/pt/bin/PacketTracer "$@"' >> /opt/pt/packettracer-launcher && \
@@ -126,7 +133,7 @@ RUN mkdir -p /home/ptuser/Desktop && \
     echo 'StartupNotify=true' >> /home/ptuser/Desktop/PacketTracer.desktop && \
     echo 'Categories=Education;Science;' >> /home/ptuser/Desktop/PacketTracer.desktop && \
     chmod +x /home/ptuser/Desktop/PacketTracer.desktop && \
-    chown ptuser:ptuser /home/ptuser/Desktop/PacketTracer.desktop
+    chown -R ptuser:ptuser /home/ptuser/Desktop
 
 ENTRYPOINT ["/start"]
 

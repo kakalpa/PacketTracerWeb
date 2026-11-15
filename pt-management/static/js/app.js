@@ -44,6 +44,11 @@ async function apiRequest(endpoint, method = 'GET', data = null) {
  * Show notification message
  */
 function showNotification(message, type = 'info') {
+    if (window.showToast) {
+        window.showToast(message, type);
+        return;
+    }
+
     const alertType = {
         'success': 'alert-success',
         'error': 'alert-danger',
@@ -73,6 +78,103 @@ function showNotification(message, type = 'info') {
     }
 }
 
+// In-memory cache for live client-side filtering
+window._loadedUsers = [];
+window._loadedContainers = [];
+
+/**
+ * Filter users based on search input
+ */
+function filterUsers() {
+    const q = (document.getElementById('users-search')?.value || '').toLowerCase().trim();
+    if (!q) {
+        renderUsersTable(window._loadedUsers || []);
+        return;
+    }
+    const filtered = (window._loadedUsers || []).filter(u => {
+        const username = (u.username || '').toLowerCase();
+        const connections = (u.connections || []).map(c => typeof c === 'object' ? (c.connection_name || '') : c).join(' ').toLowerCase();
+        return username.includes(q) || connections.includes(q);
+    });
+    renderUsersTable(filtered);
+}
+
+/**
+ * Render users into table
+ */
+function renderUsersTable(users) {
+    const tbody = document.getElementById('users-tbody');
+    const table = document.getElementById('users-table');
+    const empty = document.getElementById('users-empty');
+    const loading = document.getElementById('users-loading');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (loading) loading.style.display = 'none';
+
+    if (!users || users.length === 0) {
+        if (table) table.style.display = 'none';
+        if (empty) {
+            empty.style.display = 'block';
+            empty.innerHTML = `
+                <div class="empty-state">
+                    <i class="bi bi-people empty-state-icon"></i>
+                    <div class="empty-state-title">No Users Found</div>
+                    <div class="empty-state-subtitle">No student or administrator accounts match your criteria.</div>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    if (empty) empty.style.display = 'none';
+    if (table) table.style.display = 'table';
+
+    users.forEach(user => {
+        const row = document.createElement('tr');
+        row.setAttribute('data-username', user.username);
+        row.style.cursor = 'pointer';
+        
+        const adminBadge = user.is_admin 
+            ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2" title="Admin user"><i class="bi bi-shield-check"></i> Admin</span>'
+            : '';
+        
+        const connectionsList = (user.connections || []).map(c => {
+            const name = typeof c === 'object' ? (c.connection_name || c.name || c.connection_id || JSON.stringify(c)) : c;
+            return `<span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="bi bi-display me-1"></i>${name}</span>`;
+        }).join('') || '<span class="text-muted small">None</span>';
+
+        row.innerHTML = `
+            <td><input type="checkbox" class="user-checkbox" onchange="updateUserSelectionCount()"></td>
+            <td><strong>${user.username}</strong>${adminBadge}</td>
+            <td>${connectionsList}</td>
+            <td class="text-end">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.username}')" title="Delete User">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        
+        // Make row clickable to open user menu
+        row.addEventListener('click', function(e) {
+            if (e.target.closest('input[type="checkbox"]') || e.target.closest('button') || e.target.closest('a')) {
+                return;
+            }
+            openUserMenu(user);
+        });
+        
+        tbody.appendChild(row);
+    });
+
+    // Update count indicator if present
+    const countBadge = document.getElementById('users-count-badge');
+    if (countBadge) {
+        countBadge.textContent = `${users.length} of ${window._loadedUsers.length}`;
+    }
+}
+
 /**
  * Load users from API and populate table
  */
@@ -86,66 +188,26 @@ async function loadUsers() {
         return;
     }
 
-    const users = result.users || [];
-    const tbody = document.getElementById('users-tbody');
-    tbody.innerHTML = '';
-
-    if (users.length === 0) {
-        document.getElementById('users-table').style.display = 'none';
-        document.getElementById('users-empty').style.display = 'block';
-        document.getElementById('users-loading').style.display = 'none';
-        return;
-    }
-
-    users.forEach(user => {
-        const row = document.createElement('tr');
-        row.setAttribute('data-username', user.username);
-        row.style.cursor = 'pointer';
-        
-        const adminBadge = user.is_admin 
-            ? '<span class="badge bg-danger ms-2" title="Admin user"><i class="bi bi-shield-check"></i> Admin</span>'
-            : '';
-        
-        row.innerHTML = `
-            <td><input type="checkbox" class="user-checkbox" onchange="updateUserSelectionCount()"></td>
-            <td><strong>${user.username}</strong>${adminBadge}</td>
-            <td><span class="badge bg-info">${(user.connections || []).length}</span></td>
-            <td>
-                <button class="btn btn-sm btn-danger" onclick="deleteUser('${user.username}')">
-                    <i class="bi bi-trash"></i> Delete
-                </button>
-            </td>
-        `;
-        
-        // Make row clickable to open user menu
-        row.addEventListener('click', function(e) {
-            if (e.target.closest('input[type="checkbox"]') || e.target.closest('button')) {
-                return; // Don't open menu if clicking checkbox or button
-            }
-            openUserMenu(user);
-        });
-        
-        tbody.appendChild(row);
-    });
-
-    document.getElementById('users-table').style.display = 'table';
-    document.getElementById('users-empty').style.display = 'none';
-    document.getElementById('users-loading').style.display = 'none';
+    window._loadedUsers = result.users || [];
+    filterUsers();
     
-    // Show bulk actions if there are users
-    if (users.length > 0) {
-        document.getElementById('users-bulk-actions').style.display = 'block';
-        // Setup select all/deselect all buttons
-        document.getElementById('users-select-all').onclick = () => {
+    // Wire up bulk actions handlers and update visibility
+    const selectAllBtn = document.getElementById('users-select-all');
+    if (selectAllBtn) {
+        selectAllBtn.onclick = () => {
             document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = true);
-            updateUserSelectionCount();
+            if (typeof updateUserSelectionCount === 'function') updateUserSelectionCount();
         };
-        document.getElementById('users-deselect-all').onclick = () => {
+    }
+    const deselectAllBtn = document.getElementById('users-deselect-all');
+    if (deselectAllBtn) {
+        deselectAllBtn.onclick = () => {
             document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
-            updateUserSelectionCount();
+            if (typeof updateUserSelectionCount === 'function') updateUserSelectionCount();
         };
-    } else {
-        document.getElementById('users-bulk-actions').style.display = 'none';
+    }
+    if (typeof updateUserSelectionCount === 'function') {
+        updateUserSelectionCount();
     }
 }
 
@@ -168,6 +230,133 @@ async function deleteUser(username) {
 }
 
 /**
+ * Filter containers based on search input & status filter
+ */
+function filterContainers() {
+    const q = (document.getElementById('containers-search')?.value || '').toLowerCase().trim();
+    const statusFilter = document.getElementById('containers-status-filter')?.value || 'all';
+    
+    let list = window._loadedContainers || [];
+    if (statusFilter !== 'all') {
+        list = list.filter(c => c.status === statusFilter);
+    }
+    if (q) {
+        list = list.filter(c => {
+            const name = (c.name || '').toLowerCase();
+            const img = (c.image || '').toLowerCase();
+            const ports = (c.ports || []).join(' ').toLowerCase();
+            return name.includes(q) || img.includes(q) || ports.includes(q);
+        });
+    }
+    renderContainersTable(list);
+}
+
+/**
+ * Render containers into table
+ */
+function renderContainersTable(containers) {
+    const tbody = document.getElementById('containers-tbody');
+    const table = document.getElementById('containers-table');
+    const empty = document.getElementById('containers-empty');
+    const loading = document.getElementById('containers-loading');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (loading) loading.style.display = 'none';
+
+    if (!containers || containers.length === 0) {
+        if (table) table.style.display = 'none';
+        if (empty) {
+            empty.style.display = 'block';
+            empty.innerHTML = `
+                <div class="empty-state">
+                    <i class="bi bi-boxes empty-state-icon"></i>
+                    <div class="empty-state-title">No Containers Found</div>
+                    <div class="empty-state-subtitle">No Packet Tracer container instances match your criteria.</div>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    if (empty) empty.style.display = 'none';
+    if (table) table.style.display = 'table';
+
+    containers.forEach(container => {
+        const isRunning = container.status === 'running';
+        const statusBadge = isRunning
+            ? '<span class="badge status-pill bg-success-subtle text-success border border-success-subtle"><span class="status-dot status-dot-running"></span> Running</span>'
+            : '<span class="badge status-pill bg-secondary-subtle text-secondary border border-secondary-subtle"><span class="status-dot status-dot-stopped"></span> Stopped</span>';
+        
+        const row = document.createElement('tr');
+        row.setAttribute('data-container-name', container.name);
+        const memory = container.memory || '512MB';
+        const cpus = container.cpus || '1.0';
+        const portStr = (container.ports && container.ports.length > 0) ? container.ports.join(', ') : '-';
+        
+        const guacAssistUrl = container.client_token 
+            ? `${window.location.protocol}//${window.location.hostname}/#/client/${container.client_token}`
+            : (container.guacamole_url ? `${window.location.protocol}//${window.location.hostname}${container.guacamole_url}` : null);
+
+        row.innerHTML = `
+            <td><input type="checkbox" class="container-checkbox" onchange="updateContainerSelectionCount()"></td>
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <strong>${container.name}</strong>
+                    ${container.connection_name ? `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle font-monospace"><i class="bi bi-display me-1"></i>${container.connection_name}</span>` : ''}
+                </div>
+            </td>
+            <td>${statusBadge}</td>
+            <td>
+                <span class="badge bg-light text-dark border">${memory}</span>
+            </td>
+            <td>
+                <span class="badge bg-light text-dark border">${cpus} CPU</span>
+            </td>
+            <td><code class="small text-secondary">${container.image}</code></td>
+            <td><span class="small text-muted">${portStr}</span></td>
+            <td>
+                <div class="btn-group btn-group-sm" role="group">
+                    ${isRunning && guacAssistUrl 
+                        ? `<a href="${guacAssistUrl}" target="_blank" class="btn btn-outline-primary" title="Assist Student (Open Live Screen in Guacamole)">
+                            <i class="bi bi-display"></i>
+                        </a>` 
+                        : ''
+                    }
+                    <button class="btn btn-outline-secondary" onclick="viewLogs('${container.name}')" title="View Logs">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </button>
+                    ${isRunning 
+                        ? `<button class="btn btn-outline-warning" onclick="stopContainer('${container.name}')" title="Stop Container">
+                            <i class="bi bi-stop-circle"></i>
+                        </button>` 
+                        : `<button class="btn btn-outline-success" onclick="startContainer('${container.name}')" title="Start Container">
+                            <i class="bi bi-play-circle"></i>
+                        </button>`
+                    }
+                    ${isRunning 
+                        ? `<button class="btn btn-outline-secondary" onclick="restartContainer('${container.name}')" title="Restart">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>` 
+                        : ''
+                    }
+                    <button class="btn btn-outline-danger" onclick="deleteContainer('${container.name}')" title="Delete">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    // Update count indicator if present
+    const countBadge = document.getElementById('containers-count-badge');
+    if (countBadge) {
+        countBadge.textContent = `${containers.length} of ${window._loadedContainers.length}`;
+    }
+}
+
+/**
  * Load containers from API and populate table
  */
 async function loadContainers() {
@@ -180,86 +369,169 @@ async function loadContainers() {
         return;
     }
 
-    const containers = result.containers || [];
-    const tbody = document.getElementById('containers-tbody');
-    tbody.innerHTML = '';
+    window._loadedContainers = result.containers || [];
+    filterContainers();
+    
+    // Wire up bulk actions handlers and update visibility
+    const selectAllBtn = document.getElementById('containers-select-all');
+    if (selectAllBtn) {
+        selectAllBtn.onclick = () => {
+            document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = true);
+            if (typeof updateContainerSelectionCount === 'function') updateContainerSelectionCount();
+        };
+    }
+    const deselectAllBtn = document.getElementById('containers-deselect-all');
+    if (deselectAllBtn) {
+        deselectAllBtn.onclick = () => {
+            document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = false);
+            if (typeof updateContainerSelectionCount === 'function') updateContainerSelectionCount();
+        };
+    }
+    if (typeof updateContainerSelectionCount === 'function') {
+        updateContainerSelectionCount();
+    }
+}
 
-    if (containers.length === 0) {
-        document.getElementById('containers-table').style.display = 'none';
-        document.getElementById('containers-empty').style.display = 'block';
-        document.getElementById('containers-loading').style.display = 'none';
+/**
+ * Get list of currently checked container names
+ */
+function getSelectedContainerNames() {
+    return Array.from(document.querySelectorAll('.container-checkbox:checked'))
+        .map(cb => cb.closest('tr')?.getAttribute('data-container-name'))
+        .filter(Boolean);
+}
+
+/**
+ * Start all stopped containers
+ */
+async function startAllContainers() {
+    const stopped = (window._loadedContainers || []).filter(c => c.status !== 'running');
+    if (stopped.length === 0) {
+        showNotification('All containers are already running', 'info');
         return;
     }
+    if (!confirm(`Start all ${stopped.length} stopped container(s)?`)) return;
 
-    containers.forEach(container => {
-        const statusBadge = container.status === 'running'
-            ? '<span class="badge badge-status-running">Running</span>'
-            : '<span class="badge badge-status-stopped">Stopped</span>';
-        
-        const row = document.createElement('tr');
-        row.setAttribute('data-container-name', container.name);
-        const users = (container.users || []).join(', ') || '-';
-        const memory = container.memory || 'N/A';
-        const cpus = container.cpus || 'N/A';
-        
-        row.innerHTML = `
-            <td><input type="checkbox" class="container-checkbox" onchange="updateContainerSelectionCount()"></td>
-            <td><strong>${container.name}</strong></td>
-            <td>${statusBadge}</td>
-            <td>
-                <span class="badge bg-info">${memory}</span>
-            </td>
-            <td>
-                <span class="badge bg-success">${cpus}</span>
-            </td>
-            <td><code>${container.image}</code></td>
-            <td>${container.ports.join(', ') || '-'}</td>
-            <td>
-                <div class="btn-group btn-group-sm" role="group">
-                    <button class="btn btn-info" onclick="viewLogs('${container.name}')" title="View Logs">
-                        <i class="bi bi-file-text"></i>
-                    </button>
-                    ${container.status === 'running' 
-                        ? `<button class="btn btn-warning" onclick="stopContainer('${container.name}')" title="Stop">
-                            <i class="bi bi-stop-circle"></i>
-                        </button>` 
-                        : `<button class="btn btn-success" onclick="startContainer('${container.name}')" title="Start">
-                            <i class="bi bi-play-circle"></i>
-                        </button>`
-                    }
-                    ${container.status === 'running' 
-                        ? `<button class="btn btn-secondary" onclick="restartContainer('${container.name}')" title="Restart">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </button>` 
-                        : ''
-                    }
-                    <button class="btn btn-danger" onclick="deleteContainer('${container.name}')" title="Delete">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(row);
+    showNotification(`Starting ${stopped.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/start', 'POST', {
+        names: stopped.map(c => c.name)
     });
-
-    document.getElementById('containers-table').style.display = 'table';
-    document.getElementById('containers-empty').style.display = 'none';
-    document.getElementById('containers-loading').style.display = 'none';
-    
-    // Show bulk actions if there are containers
-    if (containers.length > 0) {
-        document.getElementById('containers-bulk-actions').style.display = 'block';
-        // Setup select all/deselect all buttons
-        document.getElementById('containers-select-all').onclick = () => {
-            document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = true);
-            updateContainerSelectionCount();
-        };
-        document.getElementById('containers-deselect-all').onclick = () => {
-            document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = false);
-            updateContainerSelectionCount();
-        };
+    if (result && result.success) {
+        showNotification(result.message || `Started ${result.started.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
     } else {
-        document.getElementById('containers-bulk-actions').style.display = 'none';
+        showNotification('Failed to start containers', 'error');
+    }
+}
+
+/**
+ * Stop all running containers
+ */
+async function stopAllContainers() {
+    const running = (window._loadedContainers || []).filter(c => c.status === 'running');
+    if (running.length === 0) {
+        showNotification('No containers are currently running', 'info');
+        return;
+    }
+    if (!confirm(`Stop all ${running.length} running container(s)? This will pause student lab sessions.`)) return;
+
+    showNotification(`Stopping ${running.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/stop', 'POST', {
+        names: running.map(c => c.name)
+    });
+    if (result && result.success) {
+        showNotification(result.message || `Stopped ${result.stopped.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to stop containers', 'error');
+    }
+}
+
+/**
+ * Start selected containers
+ */
+async function startSelectedContainers() {
+    const names = getSelectedContainerNames();
+    if (names.length === 0) {
+        showNotification('No containers selected', 'warning');
+        return;
+    }
+    showNotification(`Starting ${names.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/start', 'POST', { names });
+    if (result && result.success) {
+        showNotification(`Started ${result.started.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to start selected containers', 'error');
+    }
+}
+
+/**
+ * Stop selected containers
+ */
+async function stopSelectedContainers() {
+    const names = getSelectedContainerNames();
+    if (names.length === 0) {
+        showNotification('No containers selected', 'warning');
+        return;
+    }
+    if (!confirm(`Stop ${names.length} selected container(s)?`)) return;
+    showNotification(`Stopping ${names.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/stop', 'POST', { names });
+    if (result && result.success) {
+        showNotification(`Stopped ${result.stopped.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to stop selected containers', 'error');
+    }
+}
+
+/**
+ * Restart all running containers
+ */
+async function restartAllContainers() {
+    const running = (window._loadedContainers || []).filter(c => c.status === 'running');
+    if (running.length === 0) {
+        showNotification('No containers are currently running to restart', 'info');
+        return;
+    }
+    if (!confirm(`Restart all ${running.length} running container(s)? This will briefly reset student lab sessions.`)) return;
+
+    showNotification(`Restarting ${running.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/restart', 'POST', {
+        names: running.map(c => c.name)
+    });
+    if (result && result.success) {
+        showNotification(result.message || `Restarted ${result.restarted.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to restart containers', 'error');
+    }
+}
+
+/**
+ * Restart selected containers
+ */
+async function restartSelectedContainers() {
+    const names = getSelectedContainerNames();
+    if (names.length === 0) {
+        showNotification('No containers selected', 'warning');
+        return;
+    }
+    if (!confirm(`Restart ${names.length} selected container(s)?`)) return;
+    showNotification(`Restarting ${names.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/restart', 'POST', { names });
+    if (result && result.success) {
+        showNotification(`Restarted ${result.restarted.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to restart selected containers', 'error');
     }
 }
 
@@ -472,6 +744,161 @@ function clearLogs() {
 }
 
 /**
+ * Convert ANSI escape sequences into styled HTML
+ */
+function ansiToHtml(text) {
+    if (!text) return '';
+
+    let escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    const colorMap = {
+        '30': '#64748b', '31': '#ef4444', '32': '#10b981', '33': '#f59e0b',
+        '34': '#3b82f6', '35': '#d946ef', '36': '#06b6d4', '37': '#f8fafc',
+        '90': '#94a3b8', '91': '#f87171', '92': '#34d399', '93': '#fde047',
+        '94': '#60a5fa', '95': '#e879f9', '96': '#67e8f9', '97': '#ffffff'
+    };
+
+    let openSpans = 0;
+    const ansiRegex = /(?:\x1b|\u001b|\\e|\\033)?\[([0-9;]*)m/g;
+
+    let html = escaped.replace(ansiRegex, (match, p1) => {
+        const codes = (p1 || '0').split(';').map(c => c.trim()).filter(Boolean);
+        if (codes.length === 0 || codes.includes('0')) {
+            let closeTags = '';
+            while (openSpans > 0) {
+                closeTags += '</span>';
+                openSpans--;
+            }
+            return closeTags;
+        }
+
+        let styles = [];
+        codes.forEach(code => {
+            if (code === '1') styles.push('font-weight: 600;');
+            else if (code === '4') styles.push('text-decoration: underline;');
+            else if (colorMap[code]) styles.push(`color: ${colorMap[code]};`);
+        });
+
+        if (styles.length > 0) {
+            openSpans++;
+            return `<span style="${styles.join(' ')}">`;
+        }
+        return '';
+    });
+
+    while (openSpans > 0) {
+        html += '</span>';
+        openSpans--;
+    }
+
+    // Clean up any remaining raw artifacts if escape byte was omitted
+    html = html.replace(/\[(?:[0-9]{1,2};?)+m/g, '');
+
+    // Highlight key pass/fail badges
+    html = html
+        .replace(/✅ PASS/g, '<span style="color: #10b981; font-weight: 600;">✅ PASS</span>')
+        .replace(/✔ PASS/g, '<span style="color: #10b981; font-weight: 600;">✔ PASS</span>')
+        .replace(/❌ FAIL/g, '<span style="color: #ef4444; font-weight: 600;">❌ FAIL</span>')
+        .replace(/━━━━━━━━━/g, '<span style="color: #475569;">━━━━━━━━━</span>');
+
+    return html;
+}
+
+/**
+ * Format bytes to readable string (B, KB, MB, GB)
+ */
+function formatBytes(bytes, decimals = 1) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+/**
+ * Load host CPU and Memory system telemetry
+ */
+async function loadSystemTelemetry() {
+    const cpuPctEl = document.getElementById('host-cpu-pct');
+    if (!cpuPctEl) return; // Not on dashboard
+
+    try {
+        const result = await apiRequest('/system/stats');
+        if (!result || !result.success) return;
+
+        // CPU Telemetry
+        const cpu = result.cpu || {};
+        const cpuPct = Math.round(cpu.pct || 0);
+        cpuPctEl.textContent = `${cpuPct}%`;
+
+        const cpuProg = document.getElementById('host-cpu-progress');
+        if (cpuProg) {
+            cpuProg.style.width = `${Math.min(100, Math.max(0, cpuPct))}%`;
+            cpuProg.className = 'progress-bar ' + (cpuPct >= 90 ? 'bg-danger' : cpuPct >= 70 ? 'bg-warning' : 'bg-primary');
+        }
+
+        const cpuCoresEl = document.getElementById('host-cpu-cores');
+        if (cpuCoresEl) cpuCoresEl.textContent = `${cpu.cores || 1} Cores`;
+
+        const cpuStatusEl = document.getElementById('host-cpu-status');
+        if (cpuStatusEl) {
+            if (cpuPct >= 90) {
+                cpuStatusEl.textContent = 'High Load';
+                cpuStatusEl.className = 'badge bg-danger-subtle text-danger border border-danger-subtle ms-1';
+            } else if (cpuPct >= 70) {
+                cpuStatusEl.textContent = 'Elevated';
+                cpuStatusEl.className = 'badge bg-warning-subtle text-warning border border-warning-subtle ms-1';
+            } else {
+                cpuStatusEl.textContent = 'Normal';
+                cpuStatusEl.className = 'badge bg-success-subtle text-success border border-success-subtle ms-1';
+            }
+        }
+
+        const c1 = document.getElementById('host-cpu-1m');
+        const c5 = document.getElementById('host-cpu-5m');
+        const c15 = document.getElementById('host-cpu-15m');
+        if (c1) c1.textContent = cpu.load_1m !== undefined ? cpu.load_1m.toFixed(2) : '-';
+        if (c5) c5.textContent = cpu.load_5m !== undefined ? cpu.load_5m.toFixed(2) : '-';
+        if (c15) c15.textContent = cpu.load_15m !== undefined ? cpu.load_15m.toFixed(2) : '-';
+
+        // Memory Telemetry
+        const mem = result.memory || {};
+        const memPct = Math.round(mem.pct || 0);
+        const ramPctEl = document.getElementById('host-ram-pct');
+        if (ramPctEl) ramPctEl.textContent = `${memPct}%`;
+
+        const ramProg = document.getElementById('host-ram-progress');
+        if (ramProg) {
+            ramProg.style.width = `${Math.min(100, Math.max(0, memPct))}%`;
+            ramProg.className = 'progress-bar ' + (memPct >= 90 ? 'bg-danger' : memPct >= 75 ? 'bg-warning' : 'bg-success');
+        }
+
+        const ramBreakdownEl = document.getElementById('host-ram-breakdown');
+        if (ramBreakdownEl) {
+            ramBreakdownEl.textContent = `${formatBytes(mem.used)} / ${formatBytes(mem.total)}`;
+        }
+
+        const ramFreeBadge = document.getElementById('host-ram-free');
+        if (ramFreeBadge) {
+            ramFreeBadge.textContent = `${formatBytes(mem.free)} Free`;
+        }
+
+        const ramUsedEl = document.getElementById('host-ram-used');
+        const ramAvailEl = document.getElementById('host-ram-avail');
+        const ramTotalEl = document.getElementById('host-ram-total');
+        if (ramUsedEl) ramUsedEl.textContent = formatBytes(mem.used);
+        if (ramAvailEl) ramAvailEl.textContent = formatBytes(mem.free);
+        if (ramTotalEl) ramTotalEl.textContent = formatBytes(mem.total);
+    } catch (e) {
+        console.error('Failed to load system telemetry:', e);
+    }
+}
+
+/**
  * Run health check and display results
  */
 async function runHealthCheck() {
@@ -512,18 +939,8 @@ async function runHealthCheck() {
             statusBadge.className = 'badge bg-danger';
         }
         
-        // Display full output with syntax highlighting
-        let highlightedOutput = result.output
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/✅ PASS/g, '<span style="color: #28a745;">✅ PASS</span>')
-            .replace(/❌ FAIL/g, '<span style="color: #dc3545;">❌ FAIL</span>')
-            .replace(/⚠️/g, '<span style="color: #ffc107;">⚠️</span>')
-            .replace(/ℹ️/g, '<span style="color: #17a2b8;">ℹ️</span>')
-            .replace(/━━━━━━━━━/g, '<span style="color: #6c757d;">━━━━━━━━━</span>');
-        
-        outputDiv.innerHTML = highlightedOutput;
+        // Display full output with proper ANSI color decoding and formatting
+        outputDiv.innerHTML = ansiToHtml(result.output);
     } catch (error) {
         console.error('Health check error:', error);
         outputDiv.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
@@ -538,6 +955,7 @@ async function runHealthCheck() {
  */
 async function refreshAll() {
     await loadStats();
+    await loadSystemTelemetry();
     await loadUsers();
     await loadContainers();
     await refreshLogs();

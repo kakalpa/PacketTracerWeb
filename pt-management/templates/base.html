@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PT Management - Lab Administration{% endblock %}</title>
+    <!-- Prevent FOUC Theme Script -->
+    <script>
+        (function() {
+            const saved = localStorage.getItem('pt_theme');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
+    <!-- Bootstrap 5 & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --pt-primary: #4f46e5;
+            --pt-primary-hover: #4338ca;
+            --pt-primary-light: #eef2ff;
+            --pt-bg: #f8fafc;
+            --pt-card-bg: #ffffff;
+            --pt-border: #e2e8f0;
+            --pt-text: #1e293b;
+            --pt-text-muted: #64748b;
+            --pt-radius: 10px;
+            --pt-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --pt-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            --pt-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+        }
+
+        [data-bs-theme="dark"] {
+            --pt-bg: #090d16;
+            --pt-card-bg: #131c2e;
+            --pt-border: #1e293b;
+            --pt-text: #f8fafc;
+            --pt-text-muted: #94a3b8;
+            --pt-primary-light: rgba(79, 70, 229, 0.15);
+            --pt-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+            --pt-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+            --pt-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6);
+        }
+
+        [data-bs-theme="dark"] body {
+            background-color: var(--pt-bg);
+            color: var(--pt-text);
+        }
+
+        [data-bs-theme="dark"] .navbar-custom,
+        [data-bs-theme="dark"] .card-custom,
+        [data-bs-theme="dark"] .card-header-custom,
+        [data-bs-theme="dark"] .stat-card,
+        [data-bs-theme="dark"] .file-browser,
+        [data-bs-theme="dark"] .breadcrumb-custom,
+        [data-bs-theme="dark"] .editor-container {
+            background: var(--pt-card-bg);
+            border-color: var(--pt-border);
+        }
+
+        [data-bs-theme="dark"] .user-pill {
+            background: #0f172a;
+            border-color: var(--pt-border);
+            color: #e2e8f0;
+        }
+
+        [data-bs-theme="dark"] .modal-content {
+            background-color: var(--pt-card-bg);
+            border-color: var(--pt-border);
+            color: var(--pt-text);
+        }
+
+        [data-bs-theme="dark"] .table {
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--pt-text);
+            border-color: var(--pt-border);
+        }
+
+        [data-bs-theme="dark"] .table-light {
+            --bs-table-bg: #19243a;
+            --bs-table-color: var(--pt-text);
+            border-color: var(--pt-border);
+        }
+
+        [data-bs-theme="dark"] .form-control,
+        [data-bs-theme="dark"] .form-select {
+            background-color: #0b101c;
+            border-color: var(--pt-border);
+            color: var(--pt-text);
+        }
+
+        [data-bs-theme="dark"] .form-control:focus,
+        [data-bs-theme="dark"] .form-select:focus {
+            background-color: #0b101c;
+            color: var(--pt-text);
+            border-color: var(--pt-primary);
+        }
+
+        [data-bs-theme="dark"] .file-item {
+            border-bottom-color: var(--pt-border);
+        }
+
+        [data-bs-theme="dark"] .file-item:hover {
+            background: #1b263b;
+        }
+
+        [data-bs-theme="dark"] .file-dropzone {
+            background: #0f172a;
+            border-color: #334155 !important;
+        }
+
+        [data-bs-theme="dark"] .file-dropzone:hover,
+        [data-bs-theme="dark"] .file-dropzone.dragover {
+            background: #1b263b !important;
+            border-color: var(--pt-primary) !important;
+        }
+
+        [data-bs-theme="dark"] .pt-toast {
+            background: var(--pt-card-bg);
+            border-color: var(--pt-border);
+            color: var(--pt-text);
+        }
+
+        [data-bs-theme="dark"] .pt-toast .text-dark {
+            color: var(--pt-text) !important;
+        }
+
+        body {
+            background-color: var(--pt-bg);
+            color: var(--pt-text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Navbar */
+        .navbar-custom {
+            background: #ffffff;
+            border-bottom: 1px solid var(--pt-border);
+            padding: 0.75rem 1.5rem;
+            box-shadow: var(--pt-shadow-sm);
+        }
+
+        .navbar-brand-custom {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-weight: 700;
+            font-size: 1.15rem;
+            color: var(--pt-primary) !important;
+            letter-spacing: -0.01em;
+            text-decoration: none;
+        }
+
+        .navbar-brand-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            background: var(--pt-primary-light);
+            color: var(--pt-primary);
+        }
+
+        .nav-link-custom {
+            color: var(--pt-text-muted);
+            font-weight: 500;
+            padding: 0.5rem 0.85rem !important;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            transition: all 0.15s ease-in-out;
+            text-decoration: none;
+        }
+
+        .nav-link-custom:hover {
+            color: var(--pt-primary);
+            background: var(--pt-primary-light);
+        }
+
+        .nav-link-custom.active {
+            color: var(--pt-primary);
+            background: var(--pt-primary-light);
+            font-weight: 600;
+        }
+
+        /* User Profile Pill */
+        .user-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.75rem;
+            background: #f1f5f9;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #334155;
+            border: 1px solid var(--pt-border);
+        }
+
+        /* Main Container */
+        .main-content {
+            flex: 1;
+            padding: 1.75rem 1.5rem 3rem 1.5rem;
+        }
+
+        /* Modern Cards */
+        .card-custom {
+            background: var(--pt-card-bg);
+            border: 1px solid var(--pt-border);
+            border-radius: var(--pt-radius);
+            box-shadow: var(--pt-shadow-sm);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+            transition: box-shadow 0.2s ease;
+        }
+
+        .card-custom:hover {
+            box-shadow: var(--pt-shadow);
+        }
+
+        .card-header-custom {
+            background: #ffffff;
+            border-bottom: 1px solid var(--pt-border);
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .card-header-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--pt-text);
+        }
+
+        .card-body-custom {
+            padding: 1.25rem;
+        }
+
+        /* Stat Cards */
+        .stat-card-custom {
+            background: #ffffff;
+            border: 1px solid var(--pt-border);
+            border-radius: var(--pt-radius);
+            padding: 1.25rem;
+            box-shadow: var(--pt-shadow-sm);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            height: 100%;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .stat-card-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--pt-shadow);
+        }
+
+        .stat-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            flex-shrink: 0;
+        }
+
+        .stat-icon-indigo { background: #e0e7ff; color: #4338ca; }
+        .stat-icon-green { background: #d1fae5; color: #047857; }
+        .stat-icon-amber { background: #fef3c7; color: #b45309; }
+        .stat-icon-slate { background: #f1f5f9; color: #475569; }
+
+        .stat-value {
+            font-size: 1.65rem;
+            font-weight: 700;
+            line-height: 1.2;
+            color: var(--pt-text);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--pt-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        /* Status Dots & Pills */
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        .status-dot-running {
+            background-color: #10b981;
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulse-green 2s infinite;
+        }
+
+        .status-dot-stopped {
+            background-color: #94a3b8;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 0.3rem 0.65rem;
+            border-radius: 9999px;
+        }
+
+        /* Search & Filter Toolbar */
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .search-input-wrapper {
+            position: relative;
+            min-width: 220px;
+        }
+
+        .search-input-wrapper i {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--pt-text-muted);
+            font-size: 0.9rem;
+            pointer-events: none;
+        }
+
+        .search-input-wrapper input {
+            padding-left: 2.2rem;
+            font-size: 0.875rem;
+            border-radius: 8px;
+            border: 1px solid var(--pt-border);
+        }
+
+        .search-input-wrapper input:focus {
+            border-color: var(--pt-primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+
+        /* Modern Table */
+        .table-custom {
+            margin-bottom: 0;
+            font-size: 0.9rem;
+            vertical-align: middle;
+        }
+
+        .table-custom thead th {
+            background: #f8fafc;
+            color: var(--pt-text-muted);
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--pt-border);
+            padding: 0.85rem 1rem;
+        }
+
+        .table-custom tbody td {
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .table-custom tbody tr:hover td {
+            background-color: #f8fafc;
+        }
+
+        /* Floating Toast Container */
+        #toast-container {
+            position: fixed;
+            top: 1.25rem;
+            right: 1.25rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-width: 380px;
+            pointer-events: none;
+        }
+
+        .pt-toast {
+            pointer-events: auto;
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 0.9rem 1.1rem;
+            box-shadow: var(--pt-shadow-lg);
+            border: 1px solid var(--pt-border);
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            animation: slideInRight 0.25s ease-out;
+            font-size: 0.88rem;
+        }
+
+        .pt-toast-success { background: #f0fdf4; border-color: #bbf7d0; }
+        .pt-toast-error { background: #fef2f2; border-color: #fecaca; }
+        .pt-toast-warning { background: #fffbeb; border-color: #fef3c7; }
+        .pt-toast-info { background: #f8fafc; border-color: var(--pt-border); }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Empty state styling */
+        .empty-state {
+            padding: 3rem 1.5rem;
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            font-size: 2.75rem;
+            color: #cbd5e1;
+            margin-bottom: 0.75rem;
+        }
+
+        .empty-state-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--pt-text);
+            margin-bottom: 0.25rem;
+        }
+
+        .empty-state-subtitle {
+            font-size: 0.875rem;
+            color: var(--pt-text-muted);
+            max-width: 360px;
+            margin: 0 auto;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand-custom" href="{{ url_for('dashboard') }}">
+                <i class="bi bi-diagram-3-fill fs-4"></i>
+                <span>PacketTracer</span>
+                <span class="navbar-brand-badge">Lab Portal</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4 gap-1">
+                    <li class="nav-item">
+                        <a class="nav-link-custom {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link-custom {% if request.endpoint == 'file_manager' %}active{% endif %}" href="{{ url_for('file_manager') }}">
+                            <i class="bi bi-folder2-open"></i> File Manager
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link-custom {% if request.endpoint == 'settings' %}active{% endif %}" href="{{ url_for('settings') }}">
+                            <i class="bi bi-shield-lock"></i> Nginx & Security
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Right Nav Section -->
+                <div class="d-flex align-items-center gap-2 mt-2 mt-lg-0">
+                    <button id="theme-toggle-btn" class="btn btn-sm btn-outline-secondary d-flex align-items-center" onclick="toggleTheme()" title="Toggle Dark / Light Mode">
+                        <i id="theme-toggle-icon" class="bi bi-moon-stars"></i>
+                    </button>
+                    <a href="#" onclick="window.open(`${window.location.protocol}//${window.location.hostname}/#/`, '_blank'); return false;" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" title="Open Guacamole Student Sessions">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                        <span>Guacamole</span>
+                    </a>
+                    <div class="user-pill">
+                        <i class="bi bi-person-circle text-primary"></i>
+                        <span>{{ username or 'ptadmin' }}</span>
+                    </div>
+                    <a href="{{ url_for('logout') }}" class="btn btn-sm btn-light border text-danger" title="Logout">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Global Floating Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Main Page Content -->
+    <main class="main-content container-fluid">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Modals Block -->
+    {% block modals %}{% endblock %}
+
+    <!-- Core Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global modern toast notification system
+        window.showToast = function(message, type = 'info', duration = 4000) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const iconMap = {
+                'success': 'bi-check-circle-fill text-success',
+                'error': 'bi-exclamation-octagon-fill text-danger',
+                'danger': 'bi-exclamation-octagon-fill text-danger',
+                'warning': 'bi-exclamation-triangle-fill text-warning',
+                'info': 'bi-info-circle-fill text-primary'
+            };
+
+            const toastType = type === 'danger' ? 'error' : type;
+            const iconClass = iconMap[type] || iconMap['info'];
+
+            const toast = document.createElement('div');
+            toast.className = `pt-toast pt-toast-${toastType}`;
+            toast.innerHTML = `
+                <i class="bi ${iconClass} fs-5 mt-n1"></i>
+                <div class="flex-grow-1">
+                    <div class="text-dark">${message}</div>
+                </div>
+                <button type="button" class="btn-close btn-sm ms-2" aria-label="Close" onclick="this.closest('.pt-toast').remove()"></button>
+            `;
+
+            container.appendChild(toast);
+
+            if (duration > 0) {
+                setTimeout(() => {
+                    toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateX(100%)';
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+        };
+
+        // Compatibility fallback for existing showNotification calls
+        window.showNotification = function(message, type = 'info') {
+            window.showToast(message, type);
+        };
+
+        // Global Theme Toggle
+        window.toggleTheme = function() {
+            const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-bs-theme', next);
+            localStorage.setItem('pt_theme', next);
+            updateThemeIcon(next);
+        };
+
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('theme-toggle-icon');
+            if (icon) {
+                icon.className = theme === 'dark' ? 'bi bi-sun-fill text-warning' : 'bi bi-moon-stars';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+            updateThemeIcon(current);
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

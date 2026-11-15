@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-PROJECT_ROOT="/run/media/kalpa/9530f1e7-4f57-4bf2-b7f2-b03a2b8d41111/PT DEv/PacketTracerWeb"
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
 
 # Test bulk user creation with containers
@@ -19,7 +19,13 @@ PT_PROTO="http"
 if curl -k -s https://localhost:5000/health >/dev/null 2>&1; then
   PT_PROTO="https"
 fi
-curl -k -s -X POST ${PT_PROTO}://localhost:5000/api/bulk-create-users \
+
+COOKIE_JAR=$(mktemp)
+trap "rm -f $COOKIE_JAR" EXIT
+curl -k -s -c "$COOKIE_JAR" -X POST "${PT_PROTO}://localhost:5000/login" \
+  -d "username=ptadmin&password=IlovePT" >/dev/null
+
+curl -k -s -b "$COOKIE_JAR" -X POST "${PT_PROTO}://localhost:5000/api/users" \
   -H "Content-Type: application/json" \
   -d '{
     "users": [

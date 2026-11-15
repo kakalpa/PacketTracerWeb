@@ -17,7 +17,7 @@ def get_db_connection():
         connection = mysql.connector.connect(
             host=os.environ.get('DB_HOST', 'guacamole-mariadb'),
             user=os.environ.get('DB_USER', 'ptdbuser'),
-            password=os.environ.get('DB_PASS', 'ptdbpass'),
+            password=os.environ.get('DB_PASSWORD') or os.environ.get('DB_PASS', 'ptdbpass'),
             database=os.environ.get('DB_NAME', 'guacamole_db'),
             raise_on_warnings=False,
             autocommit=True

@@ -1,9 +1,11 @@
 """File management API for shared folder"""
 
 import os
+import io
+import zipfile
 import logging
 from pathlib import Path
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, send_file
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -45,34 +47,48 @@ def create_file_manager_blueprint():
     fm = Blueprint('file_manager', __name__, url_prefix='/api/files')
     
     @fm.route('/', methods=['GET'])
+    @fm.route('/list', methods=['GET'])
+    @fm.route('/list/<path:sub_path>', methods=['GET'])
     @require_auth
-    def list_files():
-        """List files and directories in /shared"""
+    def list_files(sub_path=''):
+        """List files and directories in /shared or a subfolder"""
         try:
             if not os.path.exists(SHARED_FOLDER):
                 os.makedirs(SHARED_FOLDER, exist_ok=True)
             
+            # Ensure standard folders exist
+            for sub in ('common', 'instances', 'archive'):
+                os.makedirs(os.path.join(SHARED_FOLDER, sub), exist_ok=True)
+
+            target_folder = validate_path(os.path.join(SHARED_FOLDER, sub_path)) if sub_path else Path(SHARED_FOLDER).resolve()
+            if not target_folder or not target_folder.exists():
+                return jsonify({'error': 'Directory not found'}), 404
+            
+            if not target_folder.is_dir():
+                return jsonify({'error': 'Path is not a directory'}), 400
+
             items = []
-            for item in os.listdir(SHARED_FOLDER):
-                item_path = os.path.join(SHARED_FOLDER, item)
-                is_dir = os.path.isdir(item_path)
+            for item in sorted(os.listdir(str(target_folder))):
+                item_path = target_folder / item
+                is_dir = item_path.is_dir()
                 
                 try:
-                    stat = os.stat(item_path)
+                    stat = item_path.stat()
                     size = stat.st_size if not is_dir else 0
                     modified = stat.st_mtime
                 except OSError:
                     size = 0
                     modified = 0
                 
+                rel_path = str(item_path.relative_to(Path(SHARED_FOLDER).resolve()))
                 items.append({
                     'name': item,
-                    'path': item,
+                    'path': rel_path,
                     'type': 'directory' if is_dir else 'file',
                     'size': size,
                     'modified': modified,
-                    'readable': os.access(item_path, os.R_OK),
-                    'writable': os.access(item_path, os.W_OK)
+                    'readable': os.access(str(item_path), os.R_OK),
+                    'writable': os.access(str(item_path), os.W_OK)
                 })
             
             # Sort: directories first, then alphabetically
@@ -80,7 +96,7 @@ def create_file_manager_blueprint():
             
             return jsonify({
                 'success': True,
-                'path': SHARED_FOLDER,
+                'path': str(target_folder.relative_to(Path(SHARED_FOLDER).resolve())) if sub_path else '',
                 'items': items
             }), 200
         except Exception as e:
@@ -325,6 +341,95 @@ def create_file_manager_blueprint():
             }), 201
         except Exception as e:
             logger.error(f"✗ Failed to upload file: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @fm.route('/download/<path:file_path>', methods=['GET'])
+    @require_auth
+    def download_file(file_path):
+        """Download raw file as attachment"""
+        try:
+            safe_path = validate_path(os.path.join(SHARED_FOLDER, file_path))
+            if not safe_path or not safe_path.exists() or safe_path.is_dir():
+                return jsonify({'error': 'File not found'}), 404
+            
+            return send_file(
+                str(safe_path),
+                as_attachment=True,
+                download_name=safe_path.name
+            )
+        except Exception as e:
+            logger.error(f"✗ Failed to download file {file_path}: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @fm.route('/download-zip', methods=['GET'])
+    @fm.route('/download-zip/<path:sub_path>', methods=['GET'])
+    @require_auth
+    def download_zip(sub_path=''):
+        """Download a directory or the entire shared folder as a zip archive"""
+        try:
+            target_path = validate_path(os.path.join(SHARED_FOLDER, sub_path)) if sub_path else Path(SHARED_FOLDER).resolve()
+            if not target_path or not target_path.exists():
+                return jsonify({'error': 'Directory not found'}), 404
+            
+            archive_name = f"{target_path.name or 'shared'}.zip"
+            memory_file = io.BytesIO()
+            
+            with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+                if target_path.is_file():
+                    zf.write(str(target_path), arcname=target_path.name)
+                else:
+                    for root, dirs, files in os.walk(str(target_path)):
+                        for file in files:
+                            abs_file = os.path.join(root, file)
+                            rel_file = os.path.relpath(abs_file, str(target_path))
+                            zf.write(abs_file, arcname=rel_file)
+            
+            memory_file.seek(0)
+            return send_file(
+                memory_file,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=archive_name
+            )
+        except Exception as e:
+            logger.error(f"✗ Failed to create zip archive: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @fm.route('/storage', methods=['GET'])
+    @require_auth
+    def get_storage_stats():
+        """Get storage usage statistics for /shared and subdirectories"""
+        try:
+            stat = os.statvfs(SHARED_FOLDER)
+            free_bytes = stat.f_bavail * stat.f_frsize
+            total_bytes = stat.f_blocks * stat.f_frsize
+            disk_used_bytes = total_bytes - free_bytes
+
+            def dir_size(p):
+                total = 0
+                if os.path.exists(p):
+                    for entry in os.scandir(p):
+                        if entry.is_file(follow_symlinks=False):
+                            total += entry.stat().st_size
+                        elif entry.is_dir(follow_symlinks=False):
+                            total += dir_size(entry.path)
+                return total
+
+            common_bytes = dir_size(os.path.join(SHARED_FOLDER, 'common'))
+            instances_bytes = dir_size(os.path.join(SHARED_FOLDER, 'instances'))
+            total_shared_bytes = common_bytes + instances_bytes
+
+            return jsonify({
+                'success': True,
+                'total_disk_bytes': total_bytes,
+                'free_disk_bytes': free_bytes,
+                'used_disk_bytes': disk_used_bytes,
+                'shared_total_bytes': total_shared_bytes,
+                'common_bytes': common_bytes,
+                'instances_bytes': instances_bytes
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed to calculate storage stats: {e}")
             return jsonify({'error': str(e)}), 500
     
     return fm
