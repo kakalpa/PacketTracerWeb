@@ -257,6 +257,8 @@ for ((i=1; i<=$numofPT; i++)); do
     docker exec ptvnc$i rm -rf /home/ptuser/pt/saves 2>/dev/null || true
     docker exec ptvnc$i ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
     docker exec ptvnc$i ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
+    docker exec ptvnc$i chown -R ptuser:ptuser /home/ptuser/Desktop 2>/dev/null || true
+    docker exec ptvnc$i chown -h ptuser:ptuser /home/ptuser/Desktop/* 2>/dev/null || true
 done
 sleep 2
 

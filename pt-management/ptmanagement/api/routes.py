@@ -222,7 +222,7 @@ def create_api_blueprint():
                                     symlink_cmd = [
                                         'docker', 'exec', container_name,
                                         'bash', '-c',
-                                        'mkdir -p /home/ptuser/Desktop /home/ptuser/pt && ln -sf /shared /home/ptuser/Desktop/shared && ln -sf /shared /home/ptuser/Desktop/Saved_Files && rm -rf /home/ptuser/pt/saves && ln -sfn /shared /home/ptuser/pt/saves && ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials && chmod 777 /shared && chown ptuser:ptuser /shared'
+                                        'mkdir -p /home/ptuser/Desktop /home/ptuser/pt && ln -sf /shared /home/ptuser/Desktop/shared && ln -sf /shared /home/ptuser/Desktop/Saved_Files && rm -rf /home/ptuser/pt/saves && ln -sfn /shared /home/ptuser/pt/saves && ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials && chmod 777 /shared && chown ptuser:ptuser /shared && chown -R ptuser:ptuser /home/ptuser/Desktop && chown -h ptuser:ptuser /home/ptuser/Desktop/* && chmod 755 /home/ptuser/Desktop'
                                     ]
                                     symlink_result = subprocess.run(symlink_cmd, capture_output=True, text=True, timeout=10)
                                     if symlink_result.returncode == 0:
@@ -551,6 +551,9 @@ def create_api_blueprint():
                     docker_mgr.exec_in_container(container_name, ['ln', '-sfn', '/shared_common', '/home/ptuser/Desktop/Course_Materials'])
                     docker_mgr.exec_in_container(container_name, ['chmod', '777', '/shared'])
                     docker_mgr.exec_in_container(container_name, ['chown', 'ptuser:ptuser', '/shared'])
+                    docker_mgr.exec_in_container(container_name, ['chown', '-R', 'ptuser:ptuser', '/home/ptuser/Desktop'])
+                    docker_mgr.exec_in_container(container_name, ['chmod', '755', '/home/ptuser/Desktop'])
+                    docker_mgr.exec_in_container(container_name, ['bash', '-c', 'chown -h ptuser:ptuser /home/ptuser/Desktop/* 2>/dev/null || true'])
                     logger.info(f"✓ Created /shared symlink and fixed permissions on {container_name} Desktop")
                 except Exception as symlink_err:
                     logger.warning(f"⚠ Failed to create /shared symlink or fix permissions: {symlink_err}")

@@ -47,6 +47,20 @@ if ! kill -0 $XVFB_PID 2>/dev/null; then
 fi
 echo "✓ Xvfb started (PID $XVFB_PID)"
 
+# Ensure ptuser ownership on home, Desktop, and config
+mkdir -p /home/ptuser/Desktop
+chown -R ptuser:ptuser /home/ptuser/Desktop /home/ptuser/.config 2>/dev/null || true
+chown -h ptuser:ptuser /home/ptuser/Desktop/* 2>/dev/null || true
+chmod 755 /home/ptuser/Desktop 2>/dev/null || true
+
+# Stage Packet Tracer icon for Desktop and menus if available
+if [ -f /tmp/squashfs-root/opt/pt/art/app.png ] && [ ! -f /opt/pt/art/app.png ]; then
+    mkdir -p /opt/pt/art /usr/share/pixmaps
+    cp /tmp/squashfs-root/opt/pt/art/app.png /opt/pt/art/app.png 2>/dev/null || true
+    cp /tmp/squashfs-root/opt/pt/art/app.png /usr/share/pixmaps/app.png 2>/dev/null || true
+    cp /tmp/squashfs-root/opt/pt/art/app.png /usr/share/pixmaps/packettracer.png 2>/dev/null || true
+fi
+
 # Start XFCE desktop on the virtual display
 echo "Starting XFCE desktop..."
 DISPLAY=:1 XAUTHORITY=/home/ptuser/.Xauthority su - ptuser -c "startxfce4" >/tmp/xfce.log 2>&1 &

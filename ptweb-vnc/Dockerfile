@@ -21,6 +21,7 @@ RUN apt-get update && \
       libglvnd0 libglvnd-dev libosmesa6 libosmesa6-dev mesa-utils \
       fonts-dejavu-core xfonts-base xfonts-100dpi xfonts-75dpi \
       wget ca-certificates pkg-config libxv1 libxvmc1 libfuse2 \
+      librsvg2-common libglu1-mesa humanity-icon-theme adwaita-icon-theme \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and install TurboVNC from GitHub release
@@ -126,7 +127,7 @@ RUN mkdir -p /home/ptuser/Desktop && \
     echo 'StartupNotify=true' >> /home/ptuser/Desktop/PacketTracer.desktop && \
     echo 'Categories=Education;Science;' >> /home/ptuser/Desktop/PacketTracer.desktop && \
     chmod +x /home/ptuser/Desktop/PacketTracer.desktop && \
-    chown ptuser:ptuser /home/ptuser/Desktop/PacketTracer.desktop
+    chown -R ptuser:ptuser /home/ptuser/Desktop
 
 ENTRYPOINT ["/start"]
 
