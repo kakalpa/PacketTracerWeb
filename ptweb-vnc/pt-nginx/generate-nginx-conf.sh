@@ -198,6 +198,12 @@ EOF
 
   # Include all server configurations from conf.d
   cat << 'NGINX_FOOTER_EOF'
+    # WebSocket connection upgrade mapping for Guacamole
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+    }
+
     # Include all server configurations from conf.d
     include /etc/nginx/conf.d/*.conf;
 }
@@ -340,8 +346,10 @@ EOF
 
     # WebSocket support for Guacamole tunneling
     proxy_http_version 1.1;
+    proxy_buffering off;
     proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
+    proxy_set_header Connection $connection_upgrade;
+    proxy_cookie_path /guacamole/ /;
 
     client_max_body_size 10m;
 EOF
@@ -351,11 +359,10 @@ EOF
     proxy_connect_timeout 90;
     proxy_send_timeout 90;
     proxy_read_timeout 90;
-    proxy_buffers 32 4k;
     proxy_pass http://pt-guacamole:8080/guacamole/;
   }
 
-  location ~ \.ht {
+  location ~ /\.ht {
     deny all;
   }
 EOF
