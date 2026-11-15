@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PT Management - Lab Administration{% endblock %}</title>
+    <!-- Prevent FOUC Theme Script -->
+    <script>
+        (function() {
+            const saved = localStorage.getItem('pt_theme');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
     <!-- Bootstrap 5 & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
@@ -21,6 +30,101 @@
             --pt-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
             --pt-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
             --pt-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+        }
+
+        [data-bs-theme="dark"] {
+            --pt-bg: #090d16;
+            --pt-card-bg: #131c2e;
+            --pt-border: #1e293b;
+            --pt-text: #f8fafc;
+            --pt-text-muted: #94a3b8;
+            --pt-primary-light: rgba(79, 70, 229, 0.15);
+            --pt-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+            --pt-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+            --pt-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6);
+        }
+
+        [data-bs-theme="dark"] body {
+            background-color: var(--pt-bg);
+            color: var(--pt-text);
+        }
+
+        [data-bs-theme="dark"] .navbar-custom,
+        [data-bs-theme="dark"] .card-custom,
+        [data-bs-theme="dark"] .card-header-custom,
+        [data-bs-theme="dark"] .stat-card,
+        [data-bs-theme="dark"] .file-browser,
+        [data-bs-theme="dark"] .breadcrumb-custom,
+        [data-bs-theme="dark"] .editor-container {
+            background: var(--pt-card-bg);
+            border-color: var(--pt-border);
+        }
+
+        [data-bs-theme="dark"] .user-pill {
+            background: #0f172a;
+            border-color: var(--pt-border);
+            color: #e2e8f0;
+        }
+
+        [data-bs-theme="dark"] .modal-content {
+            background-color: var(--pt-card-bg);
+            border-color: var(--pt-border);
+            color: var(--pt-text);
+        }
+
+        [data-bs-theme="dark"] .table {
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--pt-text);
+            border-color: var(--pt-border);
+        }
+
+        [data-bs-theme="dark"] .table-light {
+            --bs-table-bg: #19243a;
+            --bs-table-color: var(--pt-text);
+            border-color: var(--pt-border);
+        }
+
+        [data-bs-theme="dark"] .form-control,
+        [data-bs-theme="dark"] .form-select {
+            background-color: #0b101c;
+            border-color: var(--pt-border);
+            color: var(--pt-text);
+        }
+
+        [data-bs-theme="dark"] .form-control:focus,
+        [data-bs-theme="dark"] .form-select:focus {
+            background-color: #0b101c;
+            color: var(--pt-text);
+            border-color: var(--pt-primary);
+        }
+
+        [data-bs-theme="dark"] .file-item {
+            border-bottom-color: var(--pt-border);
+        }
+
+        [data-bs-theme="dark"] .file-item:hover {
+            background: #1b263b;
+        }
+
+        [data-bs-theme="dark"] .file-dropzone {
+            background: #0f172a;
+            border-color: #334155 !important;
+        }
+
+        [data-bs-theme="dark"] .file-dropzone:hover,
+        [data-bs-theme="dark"] .file-dropzone.dragover {
+            background: #1b263b !important;
+            border-color: var(--pt-primary) !important;
+        }
+
+        [data-bs-theme="dark"] .pt-toast {
+            background: var(--pt-card-bg);
+            border-color: var(--pt-border);
+            color: var(--pt-text);
+        }
+
+        [data-bs-theme="dark"] .pt-toast .text-dark {
+            color: var(--pt-text) !important;
         }
 
         body {
@@ -390,6 +494,9 @@
 
                 <!-- Right Nav Section -->
                 <div class="d-flex align-items-center gap-2 mt-2 mt-lg-0">
+                    <button id="theme-toggle-btn" class="btn btn-sm btn-outline-secondary d-flex align-items-center" onclick="toggleTheme()" title="Toggle Dark / Light Mode">
+                        <i id="theme-toggle-icon" class="bi bi-moon-stars"></i>
+                    </button>
                     <a href="#" onclick="window.open(`${window.location.protocol}//${window.location.hostname}/#/`, '_blank'); return false;" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" title="Open Guacamole Student Sessions">
                         <i class="bi bi-box-arrow-up-right"></i>
                         <span>Guacamole</span>
@@ -462,6 +569,27 @@
         window.showNotification = function(message, type = 'info') {
             window.showToast(message, type);
         };
+
+        // Global Theme Toggle
+        window.toggleTheme = function() {
+            const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-bs-theme', next);
+            localStorage.setItem('pt_theme', next);
+            updateThemeIcon(next);
+        };
+
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('theme-toggle-icon');
+            if (icon) {
+                icon.className = theme === 'dark' ? 'bi bi-sun-fill text-warning' : 'bi bi-moon-stars';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+            updateThemeIcon(current);
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>

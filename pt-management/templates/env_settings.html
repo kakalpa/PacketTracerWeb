@@ -3,1012 +3,947 @@
 {% block title %}Nginx & Security - Packet Tracer Management{% endblock %}
 
 {% block extra_css %}
-    <style>
-        :root {
-            --primary-color: #4f46e5;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
-        }
+<style>
+    /* Categorized Vertical Navigation Pills */
+    .settings-nav-card {
+        background: var(--pt-card-bg);
+        border: 1px solid var(--pt-border);
+        border-radius: var(--pt-radius);
+        padding: 1.25rem 1rem;
+        box-shadow: var(--pt-shadow-sm);
+    }
 
-        .settings-container {
-            max-width: 1100px;
-            margin: 0 auto;
-            background: white;
-            border-radius: var(--pt-radius);
-            box-shadow: var(--pt-shadow-sm);
-            border: 1px solid var(--pt-border);
-            overflow: hidden;
-        }
+    .settings-category-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--pt-text-muted);
+        padding: 0.25rem 0.75rem;
+        margin-top: 1rem;
+        margin-bottom: 0.35rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
 
-        .settings-header {
-            background: #ffffff;
-            color: var(--pt-text);
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid var(--pt-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+    .settings-category-title:first-child {
+        margin-top: 0;
+    }
 
-        .settings-header h1 {
-            margin: 0;
-            font-size: 1.35rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: var(--pt-text);
-        }
+    .nav-pills .nav-link {
+        color: var(--pt-text);
+        font-weight: 500;
+        font-size: 0.88rem;
+        padding: 0.6rem 0.85rem;
+        border-radius: var(--pt-radius-sm);
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        transition: all 0.15s ease-in-out;
+        border: 1px solid transparent;
+        margin-bottom: 2px;
+    }
 
-        .settings-body {
-            padding: 30px;
-        }
+    .nav-pills .nav-link i {
+        font-size: 1.05rem;
+        width: 20px;
+        text-align: center;
+        color: var(--pt-text-muted);
+        transition: color 0.15s ease;
+    }
 
-        .nav-tabs {
-            border-bottom: 2px solid #e2e8f0;
-            margin-bottom: 30px;
-        }
+    .nav-pills .nav-link:hover {
+        background-color: var(--pt-primary-light);
+        color: var(--pt-primary);
+    }
 
-        .nav-link {
-            color: #718096;
-            border: none;
-            border-bottom: 3px solid transparent;
-            font-weight: 500;
-            padding: 12px 20px;
-            transition: all 0.3s ease;
-        }
+    .nav-pills .nav-link:hover i {
+        color: var(--pt-primary);
+    }
 
-        .nav-link:hover {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
-        }
+    .nav-pills .nav-link.active {
+        background-color: var(--pt-primary);
+        color: #ffffff;
+        font-weight: 600;
+        box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+    }
 
-        .nav-link.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
-            background: none;
-        }
+    .nav-pills .nav-link.active i {
+        color: #ffffff;
+    }
 
-        .settings-section {
-            margin-bottom: 30px;
-        }
+    /* Content Area */
+    .settings-content-card {
+        background: var(--pt-card-bg);
+        border: 1px solid var(--pt-border);
+        border-radius: var(--pt-radius);
+        padding: 1.75rem;
+        box-shadow: var(--pt-shadow-sm);
+        min-height: 650px;
+    }
 
-        .settings-section h3 {
-            color: var(--primary-color);
-            font-weight: 600;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #e2e8f0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+    .settings-section-header {
+        padding-bottom: 1rem;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid var(--pt-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+    .settings-section-header h3 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--pt-text);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
 
-        .form-group label {
-            font-weight: 500;
-            color: #2d3748;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+    .subsection {
+        background: var(--pt-bg);
+        border: 1px solid var(--pt-border);
+        padding: 1.25rem;
+        border-radius: var(--pt-radius-sm);
+        margin: 1.25rem 0;
+    }
 
-        .form-control, .form-select {
-            border: 1px solid #cbd5e0;
-            border-radius: 6px;
-            padding: 10px 15px;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
+    .subsection h5 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--pt-text);
+        margin-bottom: 0.35rem;
+    }
 
-        .form-control:focus, .form-select:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
+    .help-text {
+        font-size: 0.8rem;
+        color: var(--pt-text-muted);
+        margin-top: 0.35rem;
+    }
 
-        .form-check {
-            margin-bottom: 15px;
-        }
+    /* Country Chips */
+    .country-input {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 0.75rem;
+    }
 
-        .form-check-input {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            border: 1px solid #cbd5e0;
-            border-radius: 4px;
-            margin-top: 5px;
-            accent-color: var(--primary-color);
-        }
+    .country-chip {
+        background: var(--pt-primary-light);
+        color: var(--pt-primary);
+        border: 1px solid var(--pt-primary);
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: transform 0.1s;
+    }
 
-        .form-check-label {
-            margin-left: 10px;
-            cursor: pointer;
-            color: #2d3748;
-            user-select: none;
-        }
+    .country-chip .remove {
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 1rem;
+        line-height: 1;
+        opacity: 0.75;
+    }
 
-        .help-text {
-            font-size: 13px;
-            color: #718096;
-            margin-top: 6px;
-            font-style: italic;
-        }
+    .country-chip .remove:hover {
+        opacity: 1;
+    }
 
-        .subsection {
-            background: #f8fafc;
-            border: 1px solid var(--pt-border, #e2e8f0);
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-        }
+    /* Modal Backdrop / Dialog */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1050;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        justify-content: center;
+        align-items: center;
+    }
 
-        .subsection h5 {
-            color: #2d3748;
-            margin-bottom: 12px;
-        }
+    .modal.show {
+        display: flex !important;
+    }
 
-        .country-input {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 10px;
-        }
+    .modal-content {
+        background: var(--pt-card-bg);
+        color: var(--pt-text);
+        border: 1px solid var(--pt-border);
+        border-radius: var(--pt-radius);
+        width: 90%;
+        max-width: 650px;
+        max-height: 85vh;
+        box-shadow: var(--pt-shadow-lg);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
 
-        .country-chip {
-            background: var(--primary-color);
-            color: white;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
+    .modal-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--pt-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
 
-        .country-chip .remove {
-            cursor: pointer;
-            font-weight: bold;
-        }
+    .modal-header h3 {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: var(--pt-text);
+    }
 
-        .button-group {
-            display: flex;
-            gap: 12px;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #e2e8f0;
-        }
+    .modal-close {
+        background: transparent;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--pt-text-muted);
+        line-height: 1;
+    }
 
-        .btn {
-            border-radius: 6px;
-            padding: 10px 20px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: none;
-        }
+    .modal-close:hover {
+        color: var(--pt-text);
+    }
 
-        .btn-primary {
-            background: var(--primary-color);
-            color: white;
-        }
+    .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+    }
 
-        .btn-primary:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
+    .modal-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--pt-border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
 
-        .btn-success {
-            background: var(--success-color);
-            color: white;
-        }
+    .change-item {
+        background: var(--pt-bg);
+        padding: 10px 14px;
+        margin-bottom: 8px;
+        border-radius: var(--pt-radius-sm);
+        border: 1px solid var(--pt-border);
+    }
 
-        .btn-success:hover {
-            background: #38a169;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
-        }
+    .change-item .key {
+        font-weight: 600;
+        color: var(--pt-text);
+    }
 
-        .btn-secondary {
-            background: #718096;
-            color: white;
-        }
+    .change-item .from {
+        color: #ef4444;
+        font-size: 0.8rem;
+    }
 
-        .btn-secondary:hover {
-            background: #4a5568;
-            transform: translateY(-2px);
-        }
+    .change-item .to {
+        color: #10b981;
+        font-size: 0.8rem;
+    }
 
-        .btn-danger {
-            background: var(--danger-color);
-            color: white;
-        }
+    /* Terminal Styling */
+    .terminal-window {
+        background: #0d1117;
+        color: #58a6ff;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        border: 1px solid var(--pt-border);
+        border-radius: var(--pt-radius-sm);
+        overflow: hidden;
+    }
 
-        .btn-danger:hover {
-            background: #e53e3e;
-        }
+    .terminal-header {
+        background: #161b22;
+        border-bottom: 1px solid #30363d;
+        padding: 8px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
 
-        .alert {
-            border-radius: 6px;
-            border: none;
-            margin-bottom: 20px;
-            padding: 15px;
-        }
+    .terminal-dots {
+        display: flex;
+        gap: 6px;
+    }
 
-        .alert-success {
-            background: #c6f6d5;
-            color: #22543d;
-        }
+    .terminal-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
 
-        .alert-danger {
-            background: #fed7d7;
-            color: #742a2a;
-        }
+    .terminal-dot.red { background: #ff5f56; }
+    .terminal-dot.yellow { background: #ffbd2e; }
+    .terminal-dot.green { background: #27c93f; }
 
-        .alert-warning {
-            background: #feebc8;
-            color: #7c2d12;
-        }
-
-        .alert-info {
-            background: #bee3f8;
-            color: #2c5282;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal.show {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            margin: 50px auto;
-            padding: 30px;
-            border-radius: 10px;
-            width: 90%;
-            max-width: 600px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .modal-header h3 {
-            margin: 0;
-            color: var(--primary-color);
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: #718096;
-        }
-
-        .modal-close:hover {
-            color: #2d3748;
-        }
-
-        .modal-body {
-            max-height: 500px;
-            overflow-y: auto;
-            margin-bottom: 20px;
-        }
-
-        .modal-footer {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            padding-top: 15px;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .change-item {
-            background: #f8fafc;
-            padding: 12px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-            border: 1px solid var(--pt-border, #e2e8f0);
-        }
-
-        .change-item .key {
-            font-weight: 600;
-            color: #2d3748;
-        }
-
-        .change-item .from {
-            color: #e53e3e;
-            font-size: 12px;
-        }
-
-        .change-item .to {
-            color: #38a169;
-            font-size: 12px;
-        }
-
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .status-badge.enabled {
-            background: #c6f6d5;
-            color: #22543d;
-        }
-
-        .status-badge.disabled {
-            background: #fed7d7;
-            color: #742a2a;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(102, 126, 234, 0.3);
-            border-top-color: var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .loading {
-            opacity: 0.6;
-            pointer-events: none;
-        }
-
-        @media (max-width: 768px) {
-            .settings-header {
-                flex-direction: column;
-                gap: 15px;
-            }
-
-            .nav-tabs {
-                flex-wrap: nowrap;
-                overflow-x: auto;
-            }
-
-            .button-group {
-                flex-direction: column;
-            }
-
-            .btn {
-                width: 100%;
-            }
-        }
-    </style>
+    .terminal-body {
+        padding: 14px;
+        height: 480px;
+        overflow-y: auto;
+        font-size: 0.82rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        color: #3fb950;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-    <div class="settings-container">
-        <!-- Header -->
-        <div class="settings-header">
-            <h1>
-                <i class="bi bi-gear"></i>
-                Nginx Configuration Manager
-            </h1>
-            <div>
-                <span id="config-status" class="status-badge disabled">
-                    <i class="bi bi-circle"></i>
-                    Loading...
-                </span>
+<!-- Page Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 d-flex align-items-center gap-2">
+            <i class="bi bi-shield-lock-fill text-primary"></i>
+            Nginx &amp; Security Configuration
+        </h4>
+        <div class="text-muted small">Manage perimeter defense, TLS certificates, rate limiting, and reverse proxy routing.</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <span id="config-status" class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-2">
+            <i class="bi bi-circle"></i> Loading...
+        </span>
+        <button class="btn btn-sm btn-outline-primary" onclick="previewChanges()">
+            <i class="bi bi-eye me-1"></i> Preview Changes
+        </button>
+        <button class="btn btn-sm btn-success" onclick="applyConfiguration()">
+            <i class="bi bi-check-circle me-1"></i> Apply Configuration
+        </button>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: Categorized Navigation Sidebar -->
+    <div class="col-lg-3 col-md-4">
+        <div class="settings-nav-card sticky-top" style="top: 80px; z-index: 10;">
+            <!-- Category 1 -->
+            <div class="settings-category-title">
+                <i class="bi bi-shield-check text-primary"></i> Security &amp; Traffic
+            </div>
+            <div class="nav flex-column nav-pills" role="tablist">
+                <a class="nav-link active" id="https-tab" data-bs-toggle="tab" href="#https-panel" role="tab">
+                    <i class="bi bi-shield-lock"></i>
+                    <span>HTTPS / SSL</span>
+                </a>
+                <a class="nav-link" id="geoip-tab" data-bs-toggle="tab" href="#geoip-panel" role="tab">
+                    <i class="bi bi-globe"></i>
+                    <span>GeoIP Filtering</span>
+                </a>
+                <a class="nav-link" id="ratelimit-tab" data-bs-toggle="tab" href="#ratelimit-panel" role="tab">
+                    <i class="bi bi-lightning-charge"></i>
+                    <span>Rate Limiting</span>
+                </a>
+                <a class="nav-link" id="lockout-tab" data-bs-toggle="tab" href="#lockout-panel" role="tab">
+                    <i class="bi bi-person-x"></i>
+                    <span>User Lockouts</span>
+                </a>
+            </div>
+
+            <!-- Category 2 -->
+            <div class="settings-category-title mt-3">
+                <i class="bi bi-gear-wide-connected text-primary"></i> Operations &amp; Storage
+            </div>
+            <div class="nav flex-column nav-pills" role="tablist">
+                <a class="nav-link" id="production-tab" data-bs-toggle="tab" href="#production-panel" role="tab">
+                    <i class="bi bi-cloud-check"></i>
+                    <span>Production Mode</span>
+                </a>
+                <a class="nav-link" id="ssl-tab" data-bs-toggle="tab" href="#ssl-panel" role="tab">
+                    <i class="bi bi-file-earmark-lock"></i>
+                    <span>SSL Certificates</span>
+                </a>
+                <a class="nav-link" id="backups-tab" data-bs-toggle="tab" href="#backups-panel" role="tab">
+                    <i class="bi bi-archive"></i>
+                    <span>Config Backups</span>
+                </a>
+            </div>
+
+            <!-- Category 3 -->
+            <div class="settings-category-title mt-3">
+                <i class="bi bi-activity text-primary"></i> Observability
+            </div>
+            <div class="nav flex-column nav-pills" role="tablist">
+                <a class="nav-link" id="nginx-console-tab" data-bs-toggle="tab" href="#nginx-console-panel" role="tab">
+                    <i class="bi bi-terminal"></i>
+                    <span>Nginx Console</span>
+                </a>
+                <a class="nav-link" id="nginx-config-tab" data-bs-toggle="tab" href="#nginx-config-panel" role="tab">
+                    <i class="bi bi-file-code"></i>
+                    <span>Active Nginx Config</span>
+                </a>
             </div>
         </div>
+    </div>
 
-        <!-- Body -->
-        <div class="settings-body">
-            <!-- Alerts -->
+    <!-- Right Column: Settings Content Panels -->
+    <div class="col-lg-9 col-md-8">
+        <div class="settings-content-card">
+            <!-- Dynamic Alerts -->
             <div id="alerts-container"></div>
 
-            <!-- Tabs -->
-            <ul class="nav nav-tabs" role="tablist">
-                <li class="nav-item">
-                    <a class="nav-link active" id="https-tab" data-bs-toggle="tab" href="#https-panel" role="tab">
-                        <i class="bi bi-shield-lock"></i> HTTPS
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="geoip-tab" data-bs-toggle="tab" href="#geoip-panel" role="tab">
-                        <i class="bi bi-globe"></i> GeoIP Filtering
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="ratelimit-tab" data-bs-toggle="tab" href="#ratelimit-panel" role="tab">
-                        <i class="bi bi-lightning"></i> Rate Limiting
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="production-tab" data-bs-toggle="tab" href="#production-panel" role="tab">
-                        <i class="bi bi-cloud"></i> Production
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="ssl-tab" data-bs-toggle="tab" href="#ssl-panel" role="tab">
-                        <i class="bi bi-key"></i> SSL Certificates
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="backups-tab" data-bs-toggle="tab" href="#backups-panel" role="tab">
-                        <i class="bi bi-archive"></i> Backups
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="nginx-console-tab" data-bs-toggle="tab" href="#nginx-console-panel" role="tab">
-                        <i class="bi bi-terminal"></i> Nginx Console
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="nginx-config-tab" data-bs-toggle="tab" href="#nginx-config-panel" role="tab">
-                        <i class="bi bi-file-text"></i> Active Nginx Config
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="lockout-tab" data-bs-toggle="tab" href="#lockout-panel" role="tab">
-                        <i class="bi bi-lock"></i> User Lockouts
-                    </a>
-                </li>
-            </ul>
-
-            <!-- Tab Content -->
             <div class="tab-content">
-                <!-- HTTPS Tab -->
+                <!-- 1. HTTPS / SSL Panel -->
                 <div class="tab-pane fade show active" id="https-panel" role="tabpanel">
-                    <div class="settings-section">
-                        <h3><i class="bi bi-shield-lock"></i> HTTPS / SSL Configuration</h3>
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-shield-lock text-primary"></i> HTTPS &amp; SSL Enforcement</h3>
+                    </div>
 
-                        <div class="form-group">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="https-enabled">
-                                <label class="form-check-label" for="https-enabled">
-                                    Enable HTTPS (HTTP → HTTPS redirect)
-                                </label>
-                            </div>
-                            <div class="help-text">
-                                When enabled, all HTTP traffic will be automatically redirected to HTTPS
-                            </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="https-enabled" style="cursor: pointer;">
+                        <label class="form-check-label fw-semibold" for="https-enabled">
+                            Enable Strict HTTPS (HTTP → HTTPS 301 Redirect)
+                        </label>
+                    </div>
+                    <div class="help-text mb-4">When enabled, all incoming unencrypted HTTP requests will be permanently redirected to secure HTTPS port 443.</div>
+
+                    <div id="https-options" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="https-cert">SSL Certificate Path</label>
+                            <input type="text" class="form-control" id="https-cert" placeholder="/etc/ssl/certs/server.crt">
+                            <div class="help-text">Absolute path to the certificate inside the Nginx container filesystem.</div>
                         </div>
 
-                        <div id="https-options" style="display: none;">
-                            <div class="form-group">
-                                <label for="https-cert">SSL Certificate Path</label>
-                                <input type="text" class="form-control" id="https-cert" 
-                                       placeholder="/etc/ssl/certs/server.crt">
-                                <div class="help-text">Path inside the nginx container</div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="https-key">SSL Key Path</label>
-                                <input type="text" class="form-control" id="https-key" 
-                                       placeholder="/etc/ssl/private/server.key">
-                                <div class="help-text">Path inside the nginx container</div>
-                            </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="https-key">SSL Private Key Path</label>
+                            <input type="text" class="form-control" id="https-key" placeholder="/etc/ssl/private/server.key">
+                            <div class="help-text">Absolute path to the private key inside the Nginx container filesystem.</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- GeoIP Tab -->
+                <!-- 2. GeoIP Filtering Panel -->
                 <div class="tab-pane fade" id="geoip-panel" role="tabpanel">
-                    <div class="settings-section">
-                        <h3><i class="bi bi-globe"></i> GeoIP Filtering Configuration</h3>
-
-                        <!-- ALLOW Mode -->
-                        <div class="subsection">
-                            <h5>Whitelist Mode (ALLOW)</h5>
-                            <p style="font-size: 13px; color: #718096;">Only allow traffic from specific countries</p>
-
-                            <div class="form-group">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="geoip-allow-enabled">
-                                    <label class="form-check-label" for="geoip-allow-enabled">
-                                        Enable whitelist mode
-                                    </label>
-                                </div>
-                                <div class="help-text">
-                                    All other countries will be blocked (444 No Response)
-                                </div>
-                            </div>
-
-                            <div id="geoip-allow-options" style="display: none;">
-                                <div class="form-group">
-                                    <label for="geoip-allow-countries">Allowed Countries</label>
-                                    <input type="text" class="form-control" id="geoip-allow-countries"
-                                           placeholder="US,CA,GB,AU,FI">
-                                    <div class="help-text">
-                                        Comma-separated ISO 3166-1 alpha-2 codes (e.g., US, CA, GB, AU, FI)
-                                    </div>
-                                </div>
-                                <div class="country-input" id="geoip-allow-tags"></div>
-                            </div>
-                        </div>
-
-                        <!-- BLOCK Mode -->
-                        <div class="subsection">
-                            <h5>Blacklist Mode (BLOCK)</h5>
-                            <p style="font-size: 13px; color: #718096;">Block traffic from specific countries</p>
-
-                            <div class="form-group">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="geoip-block-enabled">
-                                    <label class="form-check-label" for="geoip-block-enabled">
-                                        Enable blacklist mode
-                                    </label>
-                                </div>
-                                <div class="help-text">
-                                    Specified countries will be blocked (444 No Response)
-                                </div>
-                            </div>
-
-                            <div id="geoip-block-options" style="display: none;">
-                                <div class="form-group">
-                                    <label for="geoip-block-countries">Blocked Countries</label>
-                                    <input type="text" class="form-control" id="geoip-block-countries"
-                                           placeholder="CN,RU,IR">
-                                    <div class="help-text">
-                                        Comma-separated ISO 3166-1 alpha-2 codes (e.g., CN, RU, IR, KP)
-                                    </div>
-                                </div>
-                                <div class="country-input" id="geoip-block-tags"></div>
-                            </div>
-                        </div>
-
-                        <div class="alert alert-info">
-                            <strong>ℹ️ Note:</strong> If both modes are enabled, ALLOW mode takes precedence.
-                            Trusted IPs (127.x, 10.x, 172.x, 192.x) always bypass GeoIP filtering.
-                        </div>
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-globe text-primary"></i> GeoIP Perimeter Defense</h3>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">MaxMind Legacy GeoIP</span>
                     </div>
-                </div>
 
-                <!-- Rate Limiting Tab -->
-                <div class="tab-pane fade" id="ratelimit-panel" role="tabpanel">
-                    <div class="settings-section">
-                        <h3><i class="bi bi-lightning"></i> Rate Limiting Configuration</h3>
-
-                        <div class="form-group">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="ratelimit-enabled">
-                                <label class="form-check-label" for="ratelimit-enabled">
-                                    Enable per-IP request rate limiting
-                                </label>
-                            </div>
-                            <div class="help-text">
-                                Limits requests from individual IPs, useful for DDoS protection
-                            </div>
+                    <!-- Whitelist Mode -->
+                    <div class="subsection">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h5><i class="bi bi-shield-check text-success me-1"></i> Whitelist Mode (ALLOW)</h5>
+                            <span class="badge bg-success-subtle text-success">Strict Access</span>
                         </div>
+                        <p class="small text-muted mb-3">Only traffic originating from specified country ISO codes will be permitted; all others receive HTTP 444.</p>
 
-                        <div id="ratelimit-options" style="display: none;">
-                            <div class="form-group">
-                                <label for="ratelimit-rate">Rate Limit</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="ratelimit-rate" 
-                                           placeholder="100r/s">
-                                    <select class="form-select" id="ratelimit-rate-example" 
-                                            style="max-width: 150px;">
-                                        <option value="">Examples...</option>
-                                        <option value="10r/s">10 req/sec</option>
-                                        <option value="100r/s">100 req/sec</option>
-                                        <option value="1000r/s">1000 req/sec</option>
-                                        <option value="10r/m">10 req/min</option>
-                                        <option value="100r/m">100 req/min</option>
-                                    </select>
-                                </div>
-                                <div class="help-text">
-                                    Format: <code>&lt;number&gt;r/&lt;s|m|h&gt;</code> 
-                                    (e.g., 100r/s, 10r/m, 1000r/h)
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="ratelimit-burst">Burst</label>
-                                <input type="number" class="form-control" id="ratelimit-burst" 
-                                       value="200" min="1">
-                                <div class="help-text">
-                                    Number of requests that can temporarily exceed the rate limit
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="ratelimit-zone">Zone Size</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="ratelimit-zone" 
-                                           placeholder="10m">
-                                    <select class="form-select" id="ratelimit-zone-example" 
-                                            style="max-width: 150px;">
-                                        <option value="">Examples...</option>
-                                        <option value="10m">10 MB</option>
-                                        <option value="20m">20 MB</option>
-                                        <option value="50m">50 MB</option>
-                                    </select>
-                                </div>
-                                <div class="help-text">
-                                    Memory zone size (1MB ≈ 16k unique IPs)
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Production Tab -->
-                <div class="tab-pane fade" id="production-panel" role="tabpanel">
-                    <div class="settings-section">
-                        <h3><i class="bi bi-cloud"></i> Production Settings</h3>
-
-                        <div class="form-group">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="production-mode">
-                                <label class="form-check-label" for="production-mode">
-                                    Enable Production Mode
-                                </label>
-                            </div>
-                            <div class="help-text">
-                                When enabled, your server's public IP will be auto-detected and added to trusted IPs
-                                (bypassing GeoIP filtering)
-                            </div>
-                        </div>
-
-                        <div id="production-options" style="display: none;">
-                            <div class="form-group">
-                                <label for="production-ip">Public IP Address</label>
-                                <input type="text" class="form-control" id="production-ip" 
-                                       placeholder="(auto-detected or enter manually)">
-                                <div class="help-text">
-                                    Leave empty to auto-detect, or enter manually
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- SSL Certificates Tab -->
-                <div class="tab-pane fade" id="ssl-panel" role="tabpanel">
-                    <div class="settings-section">
-                        <h3><i class="bi bi-key"></i> SSL Certificates Management</h3>
-                        
-                        <div class="alert alert-info mb-4">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>Manage your SSL certificates and private keys.</strong>
-                            Upload server.crt (certificate) and server.key (private key) files.
-                            Automatic backups are created before each upload.
-                        </div>
-
-                        <!-- Certificate Section -->
-                        <div class="card mb-4">
-                            <div class="card-header bg-light">
-                                <h5 class="mb-0"><i class="bi bi-shield-check"></i> Server Certificate (server.crt)</h5>
-                            </div>
-                            <div class="card-body">
-                                <div id="cert-info" class="mb-3">
-                                    <p class="text-muted">Loading certificate info...</p>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label class="form-label">Upload Certificate</label>
-                                    <input type="file" id="cert-file" class="form-control" accept=".crt,.cert,.pem" />
-                                    <small class="text-muted">Accepted formats: .crt, .cert, .pem</small>
-                                </div>
-                                
-                                <button class="btn btn-primary" onclick="uploadCertificate()">
-                                    <i class="bi bi-cloud-upload"></i> Upload Certificate
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Private Key Section -->
-                        <div class="card mb-4">
-                            <div class="card-header bg-light">
-                                <h5 class="mb-0"><i class="bi bi-key-fill"></i> Server Private Key (server.key)</h5>
-                            </div>
-                            <div class="card-body">
-                                <div id="key-info" class="mb-3">
-                                    <p class="text-muted">Loading key info...</p>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label class="form-label">Upload Private Key</label>
-                                    <input type="file" id="key-file" class="form-control" accept=".key,.pem" />
-                                    <small class="text-muted">Accepted formats: .key, .pem</small>
-                                </div>
-                                
-                                <button class="btn btn-primary" onclick="uploadKey()">
-                                    <i class="bi bi-cloud-upload"></i> Upload Private Key
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Backups Section -->
-                        <div class="card">
-                            <div class="card-header bg-light">
-                                <h5 class="mb-0"><i class="bi bi-archive"></i> Certificate Backups</h5>
-                            </div>
-                            <div class="card-body">
-                                <div id="ssl-backups-list" style="margin-top: 15px;">
-                                    <p class="text-muted">Loading backups...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Backups Tab -->
-                <div class="tab-pane fade" id="backups-panel" role="tabpanel">
-                    <div class="settings-section">
-                        <h3><i class="bi bi-archive"></i> Configuration Backups</h3>
-
-                        <button class="btn btn-secondary" onclick="createBackup()">
-                            <i class="bi bi-download"></i> Create Backup Now
-                        </button>
-
-                        <div style="margin-top: 30px;">
-                            <h5>Recent Backups</h5>
-                            <div id="backups-list" style="margin-top: 15px;">
-                                <p class="text-muted">Loading backups...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Nginx Console Tab -->
-                <div class="tab-pane fade" id="nginx-console-panel" role="tabpanel">
-                    <div class="settings-section">
-                        <h3><i class="bi bi-terminal"></i> Nginx Container Logs</h3>
-                        
-                        <div style="margin-bottom: 15px;">
-                            <button class="btn btn-sm btn-info" onclick="loadNginxLogs()">
-                                <i class="bi bi-arrow-clockwise"></i> Refresh Logs
-                            </button>
-                            <button class="btn btn-sm btn-secondary" onclick="clearNginxLogs()">
-                                <i class="bi bi-trash"></i> Clear
-                            </button>
-                            <label style="margin-left: 20px;">
-                                <input type="checkbox" id="nginx-auto-refresh" onchange="toggleNginxAutoRefresh()">
-                                Auto-refresh (5s)
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="geoip-allow-enabled">
+                            <label class="form-check-label fw-semibold" for="geoip-allow-enabled">
+                                Enable Country Whitelist Mode
                             </label>
                         </div>
 
-                        <div id="nginx-console" style="
-                            background: #1e1e1e;
-                            color: #00ff00;
-                            font-family: 'Courier New', monospace;
-                            font-size: 12px;
-                            padding: 15px;
-                            border-radius: 4px;
-                            height: 500px;
-                            overflow-y: auto;
-                            border: 1px solid #333;
-                            line-height: 1.5;
-                            white-space: pre-wrap;
-                            word-wrap: break-word;
-                        ">Loading logs...</div>
+                        <div id="geoip-allow-options" style="display: none;">
+                            <label class="form-label fw-semibold" for="geoip-allow-countries">Allowed Countries</label>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="geoip-allow-countries" placeholder="US,FI,SL,GB,DE">
+                                <select class="form-select" id="quick-add-allow-select" style="max-width: 170px;">
+                                    <option value="">+ Quick Add...</option>
+                                    <option value="FI">🇫🇮 Finland (FI)</option>
+                                    <option value="SL">🇸🇱 Sierra Leone (SL)</option>
+                                    <option value="GB">🇬🇧 United Kingdom (GB)</option>
+                                    <option value="US">🇺🇸 United States (US)</option>
+                                    <option value="SE">🇸🇪 Sweden (SE)</option>
+                                    <option value="NO">🇳🇴 Norway (NO)</option>
+                                    <option value="DE">🇩🇪 Germany (DE)</option>
+                                    <option value="FR">🇫🇷 France (FR)</option>
+                                    <option value="CA">🇨🇦 Canada (CA)</option>
+                                    <option value="AU">🇦🇺 Australia (AU)</option>
+                                </select>
+                            </div>
+                            <div class="help-text">Comma-separated ISO 3166-1 alpha-2 codes (e.g., FI, SL, UK, US). Click chips below to remove.</div>
+                            <div class="country-input" id="geoip-allow-tags"></div>
+                        </div>
+                    </div>
+
+                    <!-- Blacklist Mode -->
+                    <div class="subsection">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h5><i class="bi bi-slash-circle text-danger me-1"></i> Blacklist Mode (BLOCK)</h5>
+                            <span class="badge bg-danger-subtle text-danger">Targeted Block</span>
+                        </div>
+                        <p class="small text-muted mb-3">Traffic from specific high-risk jurisdictions will be dropped immediately (HTTP 444 No Response).</p>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="geoip-block-enabled">
+                            <label class="form-check-label fw-semibold" for="geoip-block-enabled">
+                                Enable Country Blacklist Mode
+                            </label>
+                        </div>
+
+                        <div id="geoip-block-options" style="display: none;">
+                            <label class="form-label fw-semibold" for="geoip-block-countries">Blocked Countries</label>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="geoip-block-countries" placeholder="CN,RU,IR,KP">
+                                <select class="form-select" id="quick-add-block-select" style="max-width: 170px;">
+                                    <option value="">+ Quick Add...</option>
+                                    <option value="CN">🇨🇳 China (CN)</option>
+                                    <option value="RU">🇷🇺 Russia (RU)</option>
+                                    <option value="IR">🇮🇷 Iran (IR)</option>
+                                    <option value="KP">🇰🇵 North Korea (KP)</option>
+                                </select>
+                            </div>
+                            <div class="help-text">Comma-separated ISO 3166-1 alpha-2 codes. Click chips below to remove.</div>
+                            <div class="country-input" id="geoip-block-tags"></div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info border-0 d-flex align-items-start gap-2 mb-0">
+                        <i class="bi bi-info-circle-fill mt-1 fs-5"></i>
+                        <div>
+                            <strong>GeoIP Resolution Rules:</strong> If Whitelist mode is active, it takes absolute precedence over Blacklist mode. Local loopback and private subnets (<code>127.0.0.1</code>, <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>) always bypass GeoIP inspection.
+                        </div>
                     </div>
                 </div>
 
-                <!-- Active Nginx Config Tab -->
+                <!-- 3. Rate Limiting Panel -->
+                <div class="tab-pane fade" id="ratelimit-panel" role="tabpanel">
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-lightning-charge text-primary"></i> Request Rate Limiting</h3>
+                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">DDoS Mitigation</span>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="ratelimit-enabled">
+                        <label class="form-check-label fw-semibold" for="ratelimit-enabled">
+                            Enable Per-IP Request Rate Limiting
+                        </label>
+                    </div>
+                    <div class="help-text mb-4">Throttles burst requests from individual IP addresses using a shared in-memory token bucket.</div>
+
+                    <div id="ratelimit-options" style="display: none;">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" for="ratelimit-rate">Steady-State Rate</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="ratelimit-rate" placeholder="100r/s">
+                                    <select class="form-select" id="ratelimit-rate-example" style="max-width: 140px;">
+                                        <option value="">Presets...</option>
+                                        <option value="10r/s">10 req/s</option>
+                                        <option value="50r/s">50 req/s</option>
+                                        <option value="100r/s">100 req/s</option>
+                                        <option value="200r/s">200 req/s</option>
+                                        <option value="10r/m">10 req/m</option>
+                                    </select>
+                                </div>
+                                <div class="help-text">Standard rate in <code>&lt;number&gt;r/s</code> or <code>&lt;number&gt;r/m</code>.</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" for="ratelimit-burst">Burst Tolerance</label>
+                                <input type="number" class="form-control" id="ratelimit-burst" value="200" min="1">
+                                <div class="help-text">Max client requests allowed to spike over the limit before queuing or rejection.</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" for="ratelimit-zone">Shared Zone Size</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="ratelimit-zone" placeholder="10m">
+                                    <select class="form-select" id="ratelimit-zone-example" style="max-width: 140px;">
+                                        <option value="">Presets...</option>
+                                        <option value="10m">10 MB (~160k IPs)</option>
+                                        <option value="20m">20 MB (~320k IPs)</option>
+                                        <option value="50m">50 MB (~800k IPs)</option>
+                                    </select>
+                                </div>
+                                <div class="help-text">Nginx shared memory allocation for tracking client IP states.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Production Mode Panel -->
+                <div class="tab-pane fade" id="production-panel" role="tabpanel">
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-cloud-check text-primary"></i> Production Environment</h3>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="production-mode">
+                        <label class="form-check-label fw-semibold" for="production-mode">
+                            Enable Production Mode
+                        </label>
+                    </div>
+                    <div class="help-text mb-4">When enabled, the server's public IP address will be auto-detected and added to the trusted IP whitelist to prevent accidental self-lockout.</div>
+
+                    <div id="production-options" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="production-ip">Public Server IP Address</label>
+                            <input type="text" class="form-control" id="production-ip" placeholder="(auto-detected or enter manually)">
+                            <div class="help-text">Leave blank to allow auto-detection via external STUN/HTTP resolver, or specify fixed WAN IPv4.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. SSL Certificates Panel -->
+                <div class="tab-pane fade" id="ssl-panel" role="tabpanel">
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-file-earmark-lock text-primary"></i> SSL Certificates &amp; Keys</h3>
+                        <span class="badge bg-secondary-subtle text-secondary border">x509 PEM</span>
+                    </div>
+
+                    <div class="alert alert-info border-0 mb-4">
+                        <i class="bi bi-info-circle-fill me-1"></i>
+                        Upload <code>server.crt</code> (Certificate Chain) and <code>server.key</code> (Private Key). Automatic timestamped backups are generated prior to file replacement.
+                    </div>
+
+                    <div class="row g-4">
+                        <!-- Server Certificate -->
+                        <div class="col-md-6">
+                            <div class="card-custom p-3 h-100">
+                                <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                                    <i class="bi bi-shield-check text-success"></i> Certificate (server.crt)
+                                </h6>
+                                <div id="cert-info" class="p-3 mb-3 rounded bg-light border font-monospace small">
+                                    <p class="text-muted mb-0">Loading certificate info...</p>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-semibold">Upload New Certificate</label>
+                                    <input type="file" id="cert-file" class="form-control form-control-sm" accept=".crt,.cert,.pem">
+                                    <div class="help-text">Accepted extensions: .crt, .cert, .pem</div>
+                                </div>
+                                <button class="btn btn-sm btn-primary w-100" onclick="uploadCertificate()">
+                                    <i class="bi bi-cloud-upload me-1"></i> Upload Certificate
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Private Key -->
+                        <div class="col-md-6">
+                            <div class="card-custom p-3 h-100">
+                                <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                                    <i class="bi bi-key-fill text-warning"></i> Private Key (server.key)
+                                </h6>
+                                <div id="key-info" class="p-3 mb-3 rounded bg-light border font-monospace small">
+                                    <p class="text-muted mb-0">Loading key info...</p>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-semibold">Upload New Private Key</label>
+                                    <input type="file" id="key-file" class="form-control form-control-sm" accept=".key,.pem">
+                                    <div class="help-text">Accepted extensions: .key, .pem</div>
+                                </div>
+                                <button class="btn btn-sm btn-primary w-100" onclick="uploadKey()">
+                                    <i class="bi bi-cloud-upload me-1"></i> Upload Private Key
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SSL Backups -->
+                    <div class="mt-4">
+                        <h6 class="fw-bold mb-2"><i class="bi bi-archive me-1"></i> Certificate Backups</h6>
+                        <div id="ssl-backups-list">
+                            <p class="text-muted small">Loading backups...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Backups Panel -->
+                <div class="tab-pane fade" id="backups-panel" role="tabpanel">
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-archive text-primary"></i> Configuration Backups</h3>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="createBackup()">
+                            <i class="bi bi-plus-circle me-1"></i> Create Snapshot Now
+                        </button>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="fw-semibold text-muted text-uppercase small">Saved Rollback Snapshots</h6>
+                        <div id="backups-list" class="mt-2">
+                            <p class="text-muted small">Loading backups...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. Nginx Console Panel -->
+                <div class="tab-pane fade" id="nginx-console-panel" role="tabpanel">
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-terminal text-primary"></i> Live Nginx Container Logs</h3>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="nginx-auto-refresh" onchange="toggleNginxAutoRefresh()">
+                                <label class="form-check-label small" for="nginx-auto-refresh">Auto-refresh (5s)</label>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadNginxLogs()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="clearNginxLogs()">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Console Filter Bar -->
+                    <div class="input-group input-group-sm mb-2">
+                        <span class="input-group-text bg-body border"><i class="bi bi-search"></i></span>
+                        <input type="text" id="nginx-log-search" class="form-control" placeholder="Search log lines (e.g. GET, 404, error, POST)..." oninput="filterNginxLogs()">
+                        <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('nginx-log-search').value=''; filterNginxLogs();">Clear Filter</button>
+                    </div>
+
+                    <div class="terminal-window">
+                        <div class="terminal-header">
+                            <div class="terminal-dots">
+                                <div class="terminal-dot red"></div>
+                                <div class="terminal-dot yellow"></div>
+                                <div class="terminal-dot green"></div>
+                            </div>
+                            <div class="small text-secondary font-monospace">pt-nginx1 (stdout / stderr)</div>
+                        </div>
+                        <div id="nginx-console" class="terminal-body">Loading logs...</div>
+                    </div>
+                </div>
+
+                <!-- 8. Active Nginx Config Panel -->
                 <div class="tab-pane fade" id="nginx-config-panel" role="tabpanel">
-                    <div class="settings-section">
-                        <h3><i class="bi bi-file-text"></i> Active Nginx Configuration</h3>
-                        
-                        <div style="margin-bottom: 15px;">
-                            <button class="btn btn-sm btn-info" onclick="loadNginxConfig()">
-                                <i class="bi bi-arrow-clockwise"></i> Refresh Config
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-file-code text-primary"></i> Active Running Nginx Configuration</h3>
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadNginxConfig()">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Refresh
                             </button>
-                            <button class="btn btn-sm btn-secondary" onclick="copyNginxConfig()">
-                                <i class="bi bi-clipboard"></i> Copy to Clipboard
+                            <button class="btn btn-sm btn-outline-primary" onclick="copyNginxConfig()">
+                                <i class="bi bi-clipboard me-1"></i> Copy
                             </button>
-                            <span id="copy-status" style="margin-left: 20px; display: none; color: green;">
-                                ✓ Copied!
+                            <span id="copy-status" class="badge bg-success-subtle text-success border border-success-subtle" style="display: none;">
+                                ✓ Copied
                             </span>
                         </div>
+                    </div>
 
-                        <div style="margin-bottom: 10px; font-size: 12px; color: #718096;">
-                            <strong>Main Config:</strong>
-                            <div id="main-config-path" style="background: #f7fafc; padding: 8px; border-radius: 4px; font-family: monospace; margin-top: 5px;"></div>
+                    <div class="mb-2 small text-muted">
+                        <strong>Config Path:</strong>
+                        <span id="main-config-path" class="font-monospace text-body ms-1"></span>
+                    </div>
+
+                    <div class="terminal-window">
+                        <div class="terminal-header">
+                            <div class="terminal-dots">
+                                <div class="terminal-dot red"></div>
+                                <div class="terminal-dot yellow"></div>
+                                <div class="terminal-dot green"></div>
+                            </div>
+                            <div class="small text-secondary font-monospace">/etc/nginx/nginx.conf</div>
                         </div>
-
-                        <div id="nginx-config" style="
-                            background: #1e1e1e;
-                            color: #e0e0e0;
-                            font-family: 'Courier New', monospace;
-                            font-size: 11px;
-                            padding: 15px;
-                            border-radius: 4px;
-                            height: 600px;
-                            overflow-y: auto;
-                            border: 1px solid #333;
-                            line-height: 1.5;
-                            white-space: pre;
-                            word-wrap: break-word;
-                        ">Loading configuration...</div>
-
-                        <div style="margin-top: 15px; padding: 10px; background: #f0f4ff; border-radius: 4px; font-size: 12px; color: #2d3748;">
-                            <i class="bi bi-info-circle"></i> This shows the actual running nginx configuration inside the pt-nginx1 container.
-                            <br>Changes take effect only after clicking "Apply Configuration" and restarting the container.
-                        </div>
+                        <div id="nginx-config" class="terminal-body" style="color: #e0e0e0; font-size: 0.8rem; height: 520px; white-space: pre;">Loading configuration...</div>
                     </div>
                 </div>
 
-                <!-- User Lockout Management Tab -->
+                <!-- 9. User Lockout Management Panel -->
                 <div class="tab-pane fade" id="lockout-panel" role="tabpanel">
-                    <div class="settings-section">
-                        <h3><i class="bi bi-lock"></i> User Account Lockout Management</h3>
-                        
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>Manage locked user accounts.</strong>
-                            Users are locked after multiple failed login attempts. Use this panel to view and unlock accounts.
-                        </div>
-
-                        <div style="margin-bottom: 20px;">
-                            <button class="btn btn-sm btn-info" onclick="loadLockedUsers()">
-                                <i class="bi bi-arrow-clockwise"></i> Refresh List
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-person-x text-primary"></i> Account Lockout Management</h3>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="lockout-auto-refresh" onchange="toggleLockoutAutoRefresh()">
+                                <label class="form-check-label small" for="lockout-auto-refresh">Auto-refresh (5s)</label>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadLockedUsers()">
+                                <i class="bi bi-arrow-clockwise"></i>
                             </button>
                             <button class="btn btn-sm btn-danger" onclick="unlockAllUsers()" id="unlock-all-btn" style="display: none;">
-                                <i class="bi bi-unlock"></i> Unlock All Selected
+                                <i class="bi bi-unlock me-1"></i> Unlock Selected
                             </button>
                             <button class="btn btn-sm btn-warning" onclick="resetAllAttempts()" id="reset-all-btn" style="display: none;">
-                                <i class="bi bi-arrow-counterclockwise"></i> Reset Attempts
+                                <i class="bi bi-arrow-counterclockwise me-1"></i> Reset Attempts
                             </button>
-                            <label style="margin-left: 20px;">
-                                <input type="checkbox" id="lockout-auto-refresh" onchange="toggleLockoutAutoRefresh()">
-                                Auto-refresh (5s)
-                            </label>
                         </div>
+                    </div>
 
-                        <!-- Users Table -->
-                        <div class="table-responsive">
-                            <table class="table table-hover" id="locked-users-table">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th style="width: 30px;">
-                                            <input type="checkbox" id="select-all-users" onchange="toggleAllUserSelection()">
-                                        </th>
-                                        <th>Username</th>
-                                        <th>Failed Attempts</th>
-                                        <th>Last Failed Login</th>
-                                        <th>Locked Until</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="locked-users-tbody">
-                                    <tr>
-                                        <td colspan="7" class="text-center text-muted py-4">
-                                            Loading locked users...
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="alert alert-info border-0 mb-3 small">
+                        <i class="bi bi-info-circle-fill me-1"></i>
+                        Accounts are automatically locked after exceeding the maximum failed login attempts threshold. Unlock individual students or perform bulk resets below.
+                    </div>
 
-                        <!-- Empty State -->
-                        <div id="empty-state" style="display: none; text-align: center; padding: 40px;">
-                            <i class="bi bi-check-circle" style="font-size: 48px; color: #48bb78; margin-bottom: 15px; display: block;"></i>
-                            <h4 style="color: #48bb78;">No Locked Users</h4>
-                            <p class="text-muted">All user accounts are active and unlocked.</p>
-                        </div>
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0" id="locked-users-table">
+                            <thead>
+                                <tr>
+                                    <th width="40"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>
+                                    <th>Username</th>
+                                    <th>Failed Attempts</th>
+                                    <th>Locked At</th>
+                                    <th>Locked Until</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="locked-users-tbody">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        Loading locked users...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
 
-                        <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 12px; color: #856404;">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            <strong>Tip:</strong> Click on a user's "Unlock" button to unlock immediately, or use "Unlock All Selected" to unlock multiple users at once.
-                        </div>
+                    <!-- Empty State -->
+                    <div id="empty-state" style="display: none;" class="text-center py-5">
+                        <i class="bi bi-shield-check text-success display-4 mb-2 d-block"></i>
+                        <h5 class="fw-semibold">No Locked Users</h5>
+                        <p class="text-muted small">All user accounts are in good standing and unlocked.</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="button-group">
-                <button class="btn btn-primary" onclick="previewChanges()">
-                    <i class="bi bi-eye"></i> Preview Changes
+            <!-- Bottom Action Footer -->
+            <div class="d-flex align-items-center justify-content-between pt-4 mt-4 border-top flex-wrap gap-2">
+                <button class="btn btn-outline-secondary" onclick="resetForm()">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Reset to Defaults
                 </button>
-                <button class="btn btn-success" onclick="applyConfiguration()">
-                    <i class="bi bi-check-circle"></i> Apply Configuration
-                </button>
-                <button class="btn btn-secondary" onclick="resetForm()">
-                    <i class="bi bi-arrow-counterclockwise"></i> Reset
-                </button>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="previewChanges()">
+                        <i class="bi bi-eye me-1"></i> Preview Changes
+                    </button>
+                    <button class="btn btn-success" onclick="applyConfiguration()">
+                        <i class="bi bi-check-circle me-1"></i> Apply Configuration
+                    </button>
+                </div>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Preview Modal -->
-    <div id="preview-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Preview Changes</h3>
-                <button class="modal-close" onclick="closePreviewModal()">&times;</button>
-            </div>
-            <div class="modal-body" id="preview-content">
-                <p>Loading preview...</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closePreviewModal()">Cancel</button>
-                <button class="btn btn-success" onclick="confirmAndApply()">Apply Changes</button>
-            </div>
+<!-- Preview Modal -->
+<div id="preview-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Preview Configuration Changes</h3>
+            <button class="modal-close" onclick="closePreviewModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="preview-content">
+            <p class="text-muted">Loading preview...</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closePreviewModal()">Cancel</button>
+            <button class="btn btn-success" onclick="confirmAndApply()">Apply Changes</button>
         </div>
     </div>
+</div>
 {% endblock %}
 
 {% block modals %}
-    <!-- Apply Log Modal -->
-    <div id="apply-log-modal" class="modal">
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header">
-                <h3>📋 Configuration Application Log</h3>
-                <button class="modal-close" onclick="closeApplyLog()">&times;</button>
-            </div>
-            <div class="modal-body" style="padding: 0;">
-                <div id="apply-log-content" style="
-                    background: #1e1e1e;
-                    color: #e0e0e0;
-                    font-family: 'Courier New', monospace;
-                    font-size: 12px;
-                    padding: 15px;
-                    border-radius: 4px;
-                    max-height: 400px;
-                    overflow-y: auto;
-                    line-height: 1.6;
-                    border: 1px solid #333;
-                "></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeApplyLog()">Close</button>
-            </div>
+<!-- Apply Log Modal -->
+<div id="apply-log-modal" class="modal">
+    <div class="modal-content" style="max-width: 650px;">
+        <div class="modal-header">
+            <h3><i class="bi bi-terminal-fill text-primary me-2"></i>Configuration Application Log</h3>
+            <button class="modal-close" onclick="closeApplyLog()">&times;</button>
+        </div>
+        <div class="modal-body p-0">
+            <div id="apply-log-content" style="
+                background: #0d1117;
+                color: #e0e0e0;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                font-size: 0.8rem;
+                padding: 16px;
+                max-height: 420px;
+                overflow-y: auto;
+                line-height: 1.6;
+            "></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeApplyLog()">Close</button>
         </div>
     </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
-    <style>
-        #apply-log-content .log-line {
-            margin-bottom: 8px;
-            padding: 4px 0;
-            word-break: break-word;
+<style>
+    #apply-log-content .log-line {
+        margin-bottom: 6px;
+        padding: 2px 0;
+        word-break: break-word;
+    }
+    #apply-log-content .log-line.log-success { color: #3fb950; }
+    #apply-log-content .log-line.log-danger { color: #f85149; }
+    #apply-log-content .log-line.log-warning { color: #d29922; }
+    #apply-log-content .log-line.log-info { color: #58a6ff; }
+</style>
+<script src="{{ url_for('static', filename='js/env-config.js') }}"></script>
+<script>
+    // Quick Add Country Helpers
+    document.addEventListener('DOMContentLoaded', () => {
+        const quickAllow = document.getElementById('quick-add-allow-select');
+        if (quickAllow) {
+            quickAllow.addEventListener('change', function() {
+                const code = this.value;
+                if (!code) return;
+                const input = document.getElementById('geoip-allow-countries');
+                const current = input.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+                if (!current.includes(code)) {
+                    current.push(code);
+                    input.value = current.join(',');
+                    if (window.updateCountryTags) {
+                        window.updateCountryTags('geoip-allow-countries', 'geoip-allow-tags');
+                    }
+                }
+                this.value = '';
+            });
         }
-        
-        #apply-log-content .log-line.log-success {
-            color: #4ade80;
+
+        const quickBlock = document.getElementById('quick-add-block-select');
+        if (quickBlock) {
+            quickBlock.addEventListener('change', function() {
+                const code = this.value;
+                if (!code) return;
+                const input = document.getElementById('geoip-block-countries');
+                const current = input.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+                if (!current.includes(code)) {
+                    current.push(code);
+                    input.value = current.join(',');
+                    if (window.updateCountryTags) {
+                        window.updateCountryTags('geoip-block-countries', 'geoip-block-tags');
+                    }
+                }
+                this.value = '';
+            });
         }
-        
-        #apply-log-content .log-line.log-danger {
-            color: #f87171;
+    });
+
+    // Nginx Console Filter Function
+    window._rawNginxLogs = '';
+    function filterNginxLogs() {
+        const q = (document.getElementById('nginx-log-search')?.value || '').toLowerCase();
+        const consoleEl = document.getElementById('nginx-console');
+        if (!consoleEl) return;
+        if (!window._rawNginxLogs && consoleEl.textContent && !consoleEl.textContent.includes('Loading logs...')) {
+            window._rawNginxLogs = consoleEl.textContent;
         }
-        
-        #apply-log-content .log-line.log-warning {
-            color: #fbbf24;
+        if (!q) {
+            consoleEl.textContent = window._rawNginxLogs;
+        } else {
+            const filtered = (window._rawNginxLogs || '').split('\n').filter(line => line.toLowerCase().includes(q)).join('\n');
+            consoleEl.textContent = filtered || `--- No log entries matching "${q}" ---`;
         }
-        
-        #apply-log-content .log-line.log-info {
-            color: #60a5fa;
-        }
-    </style>
-    <script src="{{ url_for('static', filename='js/env-config.js') }}"></script>
+    }
+
+    // Intercept loadNginxLogs to keep _rawNginxLogs updated
+    const origLoadNginxLogs = window.loadNginxLogs;
+    if (typeof origLoadNginxLogs === 'function') {
+        window.loadNginxLogs = async function() {
+            await origLoadNginxLogs();
+            const consoleEl = document.getElementById('nginx-console');
+            if (consoleEl) {
+                window._rawNginxLogs = consoleEl.textContent;
+                filterNginxLogs();
+            }
+        };
+    }
+</script>
 {% endblock %}

@@ -75,6 +75,64 @@
     </div>
 </div>
 
+<!-- Host Resource Telemetry Row -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card-custom p-3 h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="stat-icon-wrapper stat-icon-indigo" style="width: 38px; height: 38px; font-size: 1.1rem;">
+                        <i class="bi bi-cpu"></i>
+                    </div>
+                    <div>
+                        <div class="fw-semibold">Host CPU Load</div>
+                        <div class="small text-muted" id="host-cpu-cores">- Cores</div>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <span class="fs-5 fw-bold font-monospace" id="host-cpu-pct">-%</span>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" id="host-cpu-status">Normal</span>
+                </div>
+            </div>
+            <div class="progress" style="height: 6px;">
+                <div id="host-cpu-progress" class="progress-bar bg-primary" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="d-flex justify-content-between small text-muted mt-2">
+                <span>1m: <strong id="host-cpu-1m" class="font-monospace">-</strong></span>
+                <span>5m: <strong id="host-cpu-5m" class="font-monospace">-</strong></span>
+                <span>15m: <strong id="host-cpu-15m" class="font-monospace">-</strong></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card-custom p-3 h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="stat-icon-wrapper stat-icon-green" style="width: 38px; height: 38px; font-size: 1.1rem;">
+                        <i class="bi bi-memory"></i>
+                    </div>
+                    <div>
+                        <div class="fw-semibold">Host Memory (RAM)</div>
+                        <div class="small text-muted" id="host-ram-breakdown">- / -</div>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <span class="fs-5 fw-bold font-monospace" id="host-ram-pct">-%</span>
+                    <span class="badge bg-light text-dark border ms-1" id="host-ram-free">- Free</span>
+                </div>
+            </div>
+            <div class="progress" style="height: 6px;">
+                <div id="host-ram-progress" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="d-flex justify-content-between small text-muted mt-2">
+                <span>Used: <strong id="host-ram-used" class="font-monospace">-</strong></span>
+                <span>Available: <strong id="host-ram-avail" class="font-monospace">-</strong></span>
+                <span>Total: <strong id="host-ram-total" class="font-monospace">-</strong></span>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Notifications placeholder for fallback -->
 <div id="notifications"></div>
 

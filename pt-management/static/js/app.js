@@ -717,10 +717,10 @@ function ansiToHtml(text) {
     };
 
     let openSpans = 0;
-    const ansiRegex = /\x1b\[([0-9;]*)m|\u001b\[([0-9;]*)m/g;
+    const ansiRegex = /(?:\x1b|\u001b|\\e|\\033)?\[([0-9;]*)m/g;
 
-    let html = escaped.replace(ansiRegex, (match, p1, p2) => {
-        const codes = (p1 || p2 || '0').split(';').map(c => c.trim()).filter(Boolean);
+    let html = escaped.replace(ansiRegex, (match, p1) => {
+        const codes = (p1 || '0').split(';').map(c => c.trim()).filter(Boolean);
         if (codes.length === 0 || codes.includes('0')) {
             let closeTags = '';
             while (openSpans > 0) {
@@ -760,6 +760,97 @@ function ansiToHtml(text) {
         .replace(/━━━━━━━━━/g, '<span style="color: #475569;">━━━━━━━━━</span>');
 
     return html;
+}
+
+/**
+ * Format bytes to readable string (B, KB, MB, GB)
+ */
+function formatBytes(bytes, decimals = 1) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+/**
+ * Load host CPU and Memory system telemetry
+ */
+async function loadSystemTelemetry() {
+    const cpuPctEl = document.getElementById('host-cpu-pct');
+    if (!cpuPctEl) return; // Not on dashboard
+
+    try {
+        const result = await apiRequest('/system/stats');
+        if (!result || !result.success) return;
+
+        // CPU Telemetry
+        const cpu = result.cpu || {};
+        const cpuPct = Math.round(cpu.pct || 0);
+        cpuPctEl.textContent = `${cpuPct}%`;
+
+        const cpuProg = document.getElementById('host-cpu-progress');
+        if (cpuProg) {
+            cpuProg.style.width = `${Math.min(100, Math.max(0, cpuPct))}%`;
+            cpuProg.className = 'progress-bar ' + (cpuPct >= 90 ? 'bg-danger' : cpuPct >= 70 ? 'bg-warning' : 'bg-primary');
+        }
+
+        const cpuCoresEl = document.getElementById('host-cpu-cores');
+        if (cpuCoresEl) cpuCoresEl.textContent = `${cpu.cores || 1} Cores`;
+
+        const cpuStatusEl = document.getElementById('host-cpu-status');
+        if (cpuStatusEl) {
+            if (cpuPct >= 90) {
+                cpuStatusEl.textContent = 'High Load';
+                cpuStatusEl.className = 'badge bg-danger-subtle text-danger border border-danger-subtle ms-1';
+            } else if (cpuPct >= 70) {
+                cpuStatusEl.textContent = 'Elevated';
+                cpuStatusEl.className = 'badge bg-warning-subtle text-warning border border-warning-subtle ms-1';
+            } else {
+                cpuStatusEl.textContent = 'Normal';
+                cpuStatusEl.className = 'badge bg-success-subtle text-success border border-success-subtle ms-1';
+            }
+        }
+
+        const c1 = document.getElementById('host-cpu-1m');
+        const c5 = document.getElementById('host-cpu-5m');
+        const c15 = document.getElementById('host-cpu-15m');
+        if (c1) c1.textContent = cpu.load_1m !== undefined ? cpu.load_1m.toFixed(2) : '-';
+        if (c5) c5.textContent = cpu.load_5m !== undefined ? cpu.load_5m.toFixed(2) : '-';
+        if (c15) c15.textContent = cpu.load_15m !== undefined ? cpu.load_15m.toFixed(2) : '-';
+
+        // Memory Telemetry
+        const mem = result.memory || {};
+        const memPct = Math.round(mem.pct || 0);
+        const ramPctEl = document.getElementById('host-ram-pct');
+        if (ramPctEl) ramPctEl.textContent = `${memPct}%`;
+
+        const ramProg = document.getElementById('host-ram-progress');
+        if (ramProg) {
+            ramProg.style.width = `${Math.min(100, Math.max(0, memPct))}%`;
+            ramProg.className = 'progress-bar ' + (memPct >= 90 ? 'bg-danger' : memPct >= 75 ? 'bg-warning' : 'bg-success');
+        }
+
+        const ramBreakdownEl = document.getElementById('host-ram-breakdown');
+        if (ramBreakdownEl) {
+            ramBreakdownEl.textContent = `${formatBytes(mem.used)} / ${formatBytes(mem.total)}`;
+        }
+
+        const ramFreeBadge = document.getElementById('host-ram-free');
+        if (ramFreeBadge) {
+            ramFreeBadge.textContent = `${formatBytes(mem.free)} Free`;
+        }
+
+        const ramUsedEl = document.getElementById('host-ram-used');
+        const ramAvailEl = document.getElementById('host-ram-avail');
+        const ramTotalEl = document.getElementById('host-ram-total');
+        if (ramUsedEl) ramUsedEl.textContent = formatBytes(mem.used);
+        if (ramAvailEl) ramAvailEl.textContent = formatBytes(mem.free);
+        if (ramTotalEl) ramTotalEl.textContent = formatBytes(mem.total);
+    } catch (e) {
+        console.error('Failed to load system telemetry:', e);
+    }
 }
 
 /**
@@ -819,6 +910,7 @@ async function runHealthCheck() {
  */
 async function refreshAll() {
     await loadStats();
+    await loadSystemTelemetry();
     await loadUsers();
     await loadContainers();
     await refreshLogs();

@@ -1297,6 +1297,65 @@ def create_api_blueprint():
         except Exception as e:
             logger.error(f"✗ Failed to run health check: {e}")
             return jsonify({'error': str(e)}), 500
+
+    @api.route('/system/stats', methods=['GET'])
+    @require_auth
+    def get_system_stats():
+        """Get live host CPU, memory, and container stats"""
+        try:
+            # Memory telemetry from /proc/meminfo
+            total_ram, used_ram, free_ram, ram_pct = 0, 0, 0, 0.0
+            if os.path.exists('/proc/meminfo'):
+                with open('/proc/meminfo') as f:
+                    lines = dict(x.strip().split(':', 1) for x in f if ':' in x)
+                total_ram = int(lines.get('MemTotal', '0').split()[0]) * 1024
+                avail_ram = int(lines.get('MemAvailable', '0').split()[0]) * 1024
+                used_ram = max(0, total_ram - avail_ram)
+                free_ram = avail_ram
+                if total_ram > 0:
+                    ram_pct = round((used_ram / total_ram) * 100, 1)
+
+            # CPU load telemetry from /proc/loadavg
+            load_1m, load_5m, load_15m = 0.0, 0.0, 0.0
+            if os.path.exists('/proc/loadavg'):
+                with open('/proc/loadavg') as f:
+                    parts = f.read().split()
+                    load_1m = float(parts[0])
+                    load_5m = float(parts[1])
+                    load_15m = float(parts[2])
+
+            cpu_cores = os.cpu_count() or 1
+            cpu_pct = min(100.0, round((load_1m / cpu_cores) * 100, 1))
+
+            # Containers status
+            containers = docker_mgr.list_containers(all=True)
+            running_cnt = sum(1 for c in containers if c.get('status') == 'running')
+            stopped_cnt = len(containers) - running_cnt
+
+            return jsonify({
+                'success': True,
+                'cpu': {
+                    'cores': cpu_cores,
+                    'load_1m': load_1m,
+                    'load_5m': load_5m,
+                    'load_15m': load_15m,
+                    'pct': cpu_pct
+                },
+                'memory': {
+                    'total': total_ram,
+                    'used': used_ram,
+                    'free': free_ram,
+                    'pct': ram_pct
+                },
+                'containers': {
+                    'total': len(containers),
+                    'running': running_cnt,
+                    'stopped': stopped_cnt
+                }
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed to get system stats: {e}")
+            return jsonify({'error': str(e)}), 500
     
     return api
 
