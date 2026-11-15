@@ -363,7 +363,7 @@ class DockerManager:
                 shared_path = os.path.abspath(os.path.join(os.getcwd(), 'shared'))
             
             # Partition storage per container instance
-            instance_storage_path = os.path.join(shared_path, 'instances', name)
+            instance_storage_path = os.path.join(shared_path, 'instances', container_name)
             common_storage_path = os.path.join(shared_path, 'common')
             try:
                 os.makedirs(instance_storage_path, exist_ok=True)
