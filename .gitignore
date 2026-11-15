@@ -15,4 +15,7 @@ chat_history
 COMPLETE_DOCUMENTATION.md
 /ssl/*
 *.env
+*.bak*
 *.bak.*
+.agents/
+

@@ -328,6 +328,7 @@ eval "docker run --restart always --name pt-nginx1 \
   $GEOIP_MOUNTS \
   -p 80:80 \
   $([ "$ENABLE_HTTPS" = "true" ] && echo "-p 443:443") \
+  -p 5000:5000 \
   -d pt-nginx"
 
 sleep 3

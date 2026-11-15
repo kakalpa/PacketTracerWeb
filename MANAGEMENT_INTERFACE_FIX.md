@@ -104,7 +104,7 @@ guacd[71]: INFO: Graphical updates encoded using 12 worker threads
 ## Testing Workflow
 
 ### Bulk User Creation (via Management Interface)
-1. Navigate to management interface: `http://localhost:5000`
+1. Navigate to management interface: `https://localhost:5000` (or `http://localhost:5000` if HTTPS disabled)
 2. Login with ptadmin credentials
 3. Create bulk users with CSV upload
 4. Each user gets assigned a ptvnc container

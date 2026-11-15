@@ -9,6 +9,12 @@ cd "$(dirname "$0")"
 ROOT_DIR="$(pwd)"
 PT_MANAGEMENT_DIR="$ROOT_DIR/pt-management"
 
+# Load environment configuration from .env if it exists
+if [ -f "$ROOT_DIR/.env" ]; then
+  source "$ROOT_DIR/.env"
+  echo "ℹ️  Configuration loaded from .env"
+fi
+
 # Defaults - can be overridden via env or .env loaded by deploy.sh
 PTADMIN_PASSWORD=${PTADMIN_PASSWORD:-IlovePT}
 DB_HOST=${DB_HOST:-guacamole-mariadb}
@@ -16,6 +22,7 @@ DB_USER=${DB_USER:-ptdbuser}
 DB_PASSWORD=${DB_PASSWORD:-ptdbpass}
 DB_NAME=${DB_NAME:-guacamole_db}
 NUM_PT=${NUM_PT:-2}
+ENABLE_HTTPS=${ENABLE_HTTPS:-false}
 
 usage() {
   cat <<EOF
@@ -90,6 +97,15 @@ if docker ps -a --format '{{.Names}}' | grep -q '^pt-management$'; then
   docker rm -f pt-management || true
 fi
 
+# Mount SSL certificates if available
+SSL_MOUNTS=""
+if [[ -f "$ROOT_DIR/ssl/server.crt" ]]; then
+  SSL_MOUNTS="$SSL_MOUNTS -v $ROOT_DIR/ssl/server.crt:/etc/ssl/certs/server.crt:ro"
+fi
+if [[ -f "$ROOT_DIR/ssl/server.key" ]]; then
+  SSL_MOUNTS="$SSL_MOUNTS -v $ROOT_DIR/ssl/server.key:/etc/ssl/private/server.key:ro"
+fi
+
 # Run container (use default bridge network so it can reach other containers by name)
 docker run -d --name pt-management \
   --restart=unless-stopped \
@@ -98,7 +114,7 @@ docker run -d --name pt-management \
   -v "$ROOT_DIR/shared:/shared" \
   -v "$ROOT_DIR/.env:/app/.env" \
   -v "$ROOT_DIR:/project" \
-  -p 5000:5000 \
+  $SSL_MOUNTS \
   -e PTADMIN_PASSWORD="$PTADMIN_PASSWORD" \
   -e DB_HOST="$DB_HOST" \
   -e DB_USER="$DB_USER" \
@@ -106,7 +122,11 @@ docker run -d --name pt-management \
   -e DB_NAME="$DB_NAME" \
   -e PROJECT_ROOT=/project \
   -e SHARED_HOST_PATH="$ROOT_DIR/shared" \
+  -e ENABLE_HTTPS="$ENABLE_HTTPS" \
   pt-management:latest
+
+# Also connect pt-management to ptnet network
+docker network connect ptnet pt-management 2>/dev/null || true
 
 # 4) Wait for pt-management health endpoint
 echo "=== Step 4: Waiting for pt-management to become healthy ==="
@@ -121,8 +141,16 @@ while true; do
     exit 1
   fi
   
-  # Try health endpoint
-  http_code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/health 2>/dev/null || echo "000")
+  # Try health endpoint (HTTPS with -k first if ENABLE_HTTPS=true, otherwise HTTP, with fallback)
+  if [[ "$ENABLE_HTTPS" == "true" ]]; then
+    http_code=$(curl -k -s -o /dev/null -w '%{http_code}' https://localhost:5000/health 2>/dev/null || echo "000")
+  else
+    http_code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/health 2>/dev/null || echo "000")
+  fi
+
+  if [[ "$http_code" == "000" ]]; then
+    http_code=$(curl -k -s -o /dev/null -w '%{http_code}' https://localhost:5000/health 2>/dev/null || curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/health 2>/dev/null || echo "000")
+  fi
   
   # Accept 200, 503 (degraded but running), or 2xx
   if [[ "$http_code" =~ ^[2] ]]; then
@@ -146,14 +174,20 @@ while true; do
     echo ""
     echo "This may still be OK - database might be initializing. You can manually check:"
     echo "  docker logs pt-management"
-    echo "  curl http://localhost:5000/health"
+    echo "  curl -k https://localhost:5000/health"
     echo ""
     break  # Don't exit - deployment might still be proceeding
   fi
 done
 
 echo "=== Deployment complete ==="
-echo "Access the main web UI at: http://localhost"
+if [[ "$ENABLE_HTTPS" == "true" ]]; then
+  echo "Access the main web UI at: https://localhost"
+  echo "Access the management interface at: https://localhost:5000"
+else
+  echo "Access the main web UI at: http://localhost"
+  echo "Access the management interface at: http://localhost:5000"
+fi
 
 echo "Tip: Tail pt-management logs: docker logs -f pt-management"
 

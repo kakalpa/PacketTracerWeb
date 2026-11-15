@@ -57,6 +57,37 @@ services:
       - ../geoip/GeoIP.dat:/usr/share/GeoIP/GeoIP.dat:ro
       - ./shared:/shared:ro
 
+  pt-management:
+    image: pt-management:latest
+    build:
+      context: ../pt-management
+      dockerfile: Dockerfile
+    container_name: pt-management
+    restart: unless-stopped
+    networks:
+      - ptnet
+    depends_on:
+      - mariadb
+      - guacamole
+    ports:
+      - "5000:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./shared:/shared
+      - ../.env:/app/.env
+      - ..:/project
+      - ../ssl/server.crt:/etc/ssl/certs/server.crt:ro
+      - ../ssl/server.key:/etc/ssl/private/server.key:ro
+    environment:
+      PTADMIN_PASSWORD: 'IlovePT'
+      DB_HOST: mariadb
+      DB_USER: ptdbuser
+      DB_PASSWORD: ptdbpass
+      DB_NAME: guacamole_db
+      PROJECT_ROOT: /project
+      SHARED_HOST_PATH: ./shared
+      ENABLE_HTTPS: 'true'
+
 networks:
   ptnet:
     name: ptnet

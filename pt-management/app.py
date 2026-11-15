@@ -33,8 +33,9 @@ def create_app():
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=0)
     
     # Configuration
+    enable_https = os.environ.get('ENABLE_HTTPS', 'false').lower() in ('true', '1', 'yes')
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
-    app.config['SESSION_COOKIE_SECURE'] = False  # HTTP on port 8080 (not exposed externally)
+    app.config['SESSION_COOKIE_SECURE'] = enable_https
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
@@ -242,4 +243,14 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    ssl_context = None
+    cert_path = os.environ.get('SSL_CERT_PATH', '/etc/ssl/certs/server.crt')
+    key_path = os.environ.get('SSL_KEY_PATH', '/etc/ssl/private/server.key')
+    if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        local_cert = os.path.join(os.path.dirname(__file__), '../ssl/server.crt')
+        local_key = os.path.join(os.path.dirname(__file__), '../ssl/server.key')
+        if os.path.exists(local_cert) and os.path.exists(local_key):
+            cert_path, key_path = local_cert, local_key
+    if os.environ.get('ENABLE_HTTPS', 'false').lower() in ('true', '1', 'yes') and os.path.exists(cert_path) and os.path.exists(key_path):
+        ssl_context = (cert_path, key_path)
+    app.run(host='0.0.0.0', port=5000, debug=False, ssl_context=ssl_context)

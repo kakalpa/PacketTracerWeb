@@ -360,15 +360,13 @@ class EnvConfigManager:
             if not success:
                 return False, f"Failed to regenerate nginx config: {msg}"
             
-            # Step 3: Restart nginx container to pick up config changes from bind-mounts
-            # (Required for GeoIP maps and other static config changes)
-            success, msg = self.restart_nginx_container()
+            # Step 3: Hot reload nginx container to pick up config changes gracefully
+            success, msg = self.reload_nginx()
             if not success:
-                logger.warning(f"⚠ Failed to restart nginx container, attempting hot reload instead: {msg}")
-                # Fallback to hot reload if restart fails
-                success, msg = self.reload_nginx()
+                logger.warning(f"⚠ Failed to hot reload nginx, attempting container restart: {msg}")
+                success, msg = self.restart_nginx_container()
                 if not success:
-                    return False, f"Failed to reload nginx: {msg}"
+                    return False, f"Failed to restart nginx: {msg}"
             
             logger.info("✓ All configuration changes applied successfully")
             return True, "Configuration changes applied successfully"

@@ -28,11 +28,13 @@ COPY . .
 COPY templates/ /app/templates/
 
 # Create necessary directories
-RUN mkdir -p logs static/js static/css templates
+RUN mkdir -p logs static/js static/css templates /etc/ssl/certs /etc/ssl/private
+
+# Ensure entrypoint and start-https scripts are executable
+RUN chmod +x /app/entrypoint.sh /app/start-https.sh 2>/dev/null || true
 
 # Expose port
 EXPOSE 5000
 
-# Run with gunicorn on port 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "wsgi:app"]
-# Force rebuild - 1762517097600552840
+# Run entrypoint script supporting SSL/HTTP on port 5000
+ENTRYPOINT ["/app/entrypoint.sh"]
