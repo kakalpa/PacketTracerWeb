@@ -657,9 +657,9 @@ def delete_connection(connection_name):
         
         connection_id = conn_result['connection_id']
         
-        # Delete user permissions for this connection
+        # Delete permissions for this connection
         execute_query(
-            "DELETE FROM guacamole_user_permission WHERE connection_id = %s",
+            "DELETE FROM guacamole_connection_permission WHERE connection_id = %s",
             (connection_id,)
         )
         

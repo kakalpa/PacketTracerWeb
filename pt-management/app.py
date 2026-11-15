@@ -5,6 +5,7 @@ Manages Packet Tracer containers and Guacamole users directly via Docker and Mar
 """
 
 import os
+import secrets
 import logging
 from flask import Flask, render_template, request, redirect, session, jsonify, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -34,7 +35,11 @@ def create_app():
     
     # Configuration
     enable_https = os.environ.get('ENABLE_HTTPS', 'false').lower() in ('true', '1', 'yes')
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
+    secret_key = os.environ.get('SECRET_KEY')
+    if not secret_key or secret_key == 'dev-key-change-in-production':
+        secret_key = secrets.token_hex(32)
+        logger.info("Generated cryptographically secure random SECRET_KEY")
+    app.config['SECRET_KEY'] = secret_key
     app.config['SESSION_COOKIE_SECURE'] = enable_https
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -96,43 +101,14 @@ def create_app():
         protected_routes = ['/dashboard', '/settings', '/files', '/api/']
         
         if any(request.path.startswith(route) for route in protected_routes):
-            # Allow specific endpoints without auth (internal or batch operations)
-            if request.path.startswith('/api/containers') and request.method == 'POST':
-                return  # Skip auth
+            # Allow public defaults endpoint without authentication
             if request.path.startswith('/api/env/defaults') and request.method == 'GET':
-                return  # Skip auth for public defaults endpoint
-            if request.path.startswith('/api/users') and request.method == 'POST':
-                # Allow POST to /api/users for bulk create from internal network
-                client_ip = request.remote_addr
-                is_internal = (
-                    client_ip in ['127.0.0.1', '::1', 'localhost'] or 
-                    client_ip.startswith('172.') or 
-                    client_ip.startswith('10.')
-                )
-                if is_internal:
-                    return  # Allow internal requests
-            if request.path.startswith('/api/users/bulk/delete') and request.method == 'POST':
-                # Allow bulk delete from internal network
-                client_ip = request.remote_addr
-                is_internal = (
-                    client_ip in ['127.0.0.1', '::1', 'localhost'] or 
-                    client_ip.startswith('172.') or 
-                    client_ip.startswith('10.')
-                )
-                if is_internal:
-                    return  # Allow internal requests
-            if request.path.startswith('/api/users/') and request.method == 'DELETE':
-                # Allow DELETE /api/users/<username> from internal network
-                client_ip = request.remote_addr
-                is_internal = (
-                    client_ip in ['127.0.0.1', '::1', 'localhost'] or 
-                    client_ip.startswith('172.') or 
-                    client_ip.startswith('10.')
-                )
-                if is_internal:
-                    return  # Allow internal requests
-                
+                return
+            
+            # Enforce authentication for all protected endpoints
             if 'user' not in session:
+                if request.path.startswith('/api/'):
+                    return jsonify({'error': 'Unauthorized', 'message': 'Authentication required'}), 401
                 return redirect(url_for('login'))
     
     @app.route('/')

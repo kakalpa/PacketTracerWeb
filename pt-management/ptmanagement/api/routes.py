@@ -29,24 +29,11 @@ def require_auth(f):
 
 
 def require_auth_or_internal(f):
-    """Decorator to require authentication OR internal network access"""
+    """Decorator to require authentication for API endpoints"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Allow internal network (127.0.0.1, ::1, localhost, docker internal IPs starting with 172. or 10.)
-        client_ip = request.remote_addr
-        is_internal = (
-            client_ip in ['127.0.0.1', '::1', 'localhost'] or 
-            client_ip.startswith('172.') or 
-            client_ip.startswith('10.')
-        )
-        
-        if is_internal:
-            logger.debug(f"✓ Allowing internal request from {client_ip}")
-            return f(*args, **kwargs)
-        
-        # Otherwise require session auth
         if 'user' not in session:
-            return jsonify({'error': 'Unauthorized'}), 401
+            return jsonify({'error': 'Unauthorized', 'message': 'Authentication required'}), 401
         return f(*args, **kwargs)
     return decorated_function
 
@@ -187,8 +174,8 @@ def create_api_blueprint():
                                 # Try to find it in project root or parent directories
                                 possible_paths = [
                                     os.path.join(project_root, 'CiscoPacketTracer.deb'),
-                                    '/run/media/kalpa/9530f1e7-4f57-4bf2-b7f2-b03a2b8d4111/PT DEv/PacketTracerWeb/CiscoPacketTracer.deb',
                                     '/project/CiscoPacketTracer.deb',
+                                    os.path.join(os.getcwd(), 'CiscoPacketTracer.deb'),
                                 ]
                                 for path in possible_paths:
                                     if os.path.exists(path):

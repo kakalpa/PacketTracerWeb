@@ -84,9 +84,10 @@ fi
 
 # Handle recreate argument
 if [[ "${1:-}" == "recreate" ]]; then
-    echo -e "\e[33m=== Recreate Mode: Cleaning up existing containers and volumes ===\e[0m"
-    docker ps -a --format "{{.Names}}" | xargs -r docker rm -f 2>/dev/null || true
-    docker volume ls --format "{{.Name}}" | xargs -r docker volume rm 2>/dev/null || true
+    echo -e "\e[33m=== Recreate Mode: Cleaning up PacketTracer containers and volumes ===\e[0m"
+    docker ps -a --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|ptvnc.*)$' | xargs -r docker rm -f 2>/dev/null || true
+    docker volume rm mariadb_data dbdump pt_opt 2>/dev/null || true
+    docker network rm ptnet pt-stack 2>/dev/null || true
     echo -e "\e[32m✓ Cleanup complete\e[0m"
     echo ""
 fi
@@ -187,6 +188,7 @@ echo ""
 echo -e "\e[32mStep 1. Start MariaDB\e[0m"
 docker run --name guacamole-mariadb --restart unless-stopped \
   --network ptnet \
+  -v mariadb_data:/var/lib/mysql \
   -v dbdump:/docker-entrypoint-initdb.d \
   -e MYSQL_ROOT_HOST=% \
   -e MYSQL_DATABASE=${dbname} \

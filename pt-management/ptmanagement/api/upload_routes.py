@@ -5,7 +5,7 @@ Handles REST endpoints for uploading SSL certificates and keys
 """
 
 import logging
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from ptmanagement.api.file_upload import FileUploadManager
 
 logger = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ def create_file_upload_blueprint():
             JSON with upload result
         """
         try:
-            if 'user' not in request.environ.get('session', {}):
+            if 'user' not in session:
                 return jsonify({'success': False, 'message': 'Unauthorized'}), 401
             
             # Check if file is in request
@@ -148,7 +148,7 @@ def create_file_upload_blueprint():
             JSON with upload result
         """
         try:
-            if 'user' not in request.environ.get('session', {}):
+            if 'user' not in session:
                 return jsonify({'success': False, 'message': 'Unauthorized'}), 401
             
             # Check if file is in request
@@ -189,7 +189,7 @@ def create_file_upload_blueprint():
             JSON with restore result
         """
         try:
-            if 'user' not in request.environ.get('session', {}):
+            if 'user' not in session:
                 return jsonify({'success': False, 'message': 'Unauthorized'}), 401
             
             data = request.json or {}
@@ -229,7 +229,7 @@ def create_file_upload_blueprint():
             JSON with delete result
         """
         try:
-            if 'user' not in request.environ.get('session', {}):
+            if 'user' not in session:
                 return jsonify({'success': False, 'message': 'Unauthorized'}), 401
             
             data = request.json or {}

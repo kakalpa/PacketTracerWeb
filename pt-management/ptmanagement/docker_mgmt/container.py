@@ -355,7 +355,12 @@ class DockerManager:
             project_root_env = os.getenv('PROJECT_ROOT')
             logger.info(f"DEBUG container.py: SHARED_HOST_PATH={shared_host_path_env}, PROJECT_ROOT={project_root_env}")
             
-            shared_path = shared_host_path_env if shared_host_path_env else '/run/media/kalpa/9530f1e7-4f57-4bf2-b7f2-b03a2b8d4111/PT DEv/PacketTracerWeb/shared'
+            if shared_host_path_env:
+                shared_path = shared_host_path_env
+            elif project_root_env:
+                shared_path = os.path.join(project_root_env, 'shared')
+            else:
+                shared_path = os.path.abspath(os.path.join(os.getcwd(), 'shared'))
             logger.info(f"DEBUG container.py: Using shared_path={shared_path}")
             
             request_data["HostConfig"]["Binds"] = [

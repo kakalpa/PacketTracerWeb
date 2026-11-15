@@ -1,9 +1,9 @@
 #!/bin/bash
 
 ##############################################################################
-# Complete Docker Cleanup Script
-# Removes all containers, images, volumes, and caches for a fresh deployment
-# CAUTION: This is destructive and cannot be undone!
+# PacketTracer Scoped Docker Cleanup Script
+# Safely removes containers, volumes, and networks belonging to PacketTracerWeb
+# CAUTION: Scoped exclusively to PacketTracerWeb resources.
 ##############################################################################
 
 set -e
@@ -15,21 +15,21 @@ BLUE='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║    PacketTracer Deployment - Complete Cleanup         ║${NC}"
+echo -e "${BLUE}║    PacketTracer Deployment - Scoped Project Cleanup   ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 # Confirmation prompt
-echo -e "${YELLOW}⚠️  WARNING: This will permanently delete:${NC}"
-echo "  • All running Docker containers"
-echo "  • All Docker images"
-echo "  • All Docker volumes (including PacketTracer installation)"
-echo "  • All Docker build cache"
+echo -e "${YELLOW}⚠️  WARNING: This will permanently remove PacketTracer resources:${NC}"
+echo "  • Containers: guacamole-mariadb, pt-guacd, pt-guacamole, pt-nginx1, pt-management, ptvnc*"
+echo "  • Volumes:    mariadb_data, dbdump, pt_opt"
+echo "  • Networks:   ptnet, pt-stack"
+echo "  • Images:     pt-nginx, pt-management, ptvnc"
 echo ""
-echo -e "${YELLOW}This action CANNOT be undone!${NC}"
+echo -e "${GREEN}✓ Other containers, images, and volumes on your host will NOT be touched.${NC}"
 echo ""
 
-read -p "Are you absolutely sure? Type 'yes' to continue: " confirm
+read -p "Are you sure you want to clean up PacketTracer resources? Type 'yes' to continue: " confirm
 
 if [ "$confirm" != "yes" ]; then
     echo -e "${YELLOW}❌ Cleanup cancelled.${NC}"
@@ -38,77 +38,73 @@ fi
 
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}Starting cleanup process...${NC}"
+echo -e "${BLUE}Starting scoped cleanup process...${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Step 1: Stop all running containers
-echo -e "${BLUE}[1/5] Stopping all running containers...${NC}"
-if [ $(docker ps -q | wc -l) -gt 0 ]; then
-    docker stop $(docker ps -q) 2>/dev/null || true
-    echo -e "${GREEN}✓ Stopped all running containers${NC}"
+# Helper to find project containers
+get_project_containers() {
+    docker ps -a --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|ptvnc.*)$' || true
+}
+
+# Step 1: Stop project containers
+echo -e "${BLUE}[1/5] Stopping PacketTracer containers...${NC}"
+RUNNING_CONTAINERS=$(docker ps --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|ptvnc.*)$' || true)
+if [ -n "$RUNNING_CONTAINERS" ]; then
+    echo "$RUNNING_CONTAINERS" | xargs -r docker stop 2>/dev/null || true
+    echo -e "${GREEN}✓ Stopped running PacketTracer containers${NC}"
 else
-    echo -e "${YELLOW}ℹ️  No running containers to stop${NC}"
+    echo -e "${YELLOW}ℹ️  No running PacketTracer containers to stop${NC}"
 fi
 echo ""
 
-# Step 2: Remove all containers
-echo -e "${BLUE}[2/5] Removing all containers...${NC}"
-if [ $(docker ps -aq | wc -l) -gt 0 ]; then
-    docker rm $(docker ps -aq) 2>/dev/null || true
-    echo -e "${GREEN}✓ Removed all containers${NC}"
+# Step 2: Remove project containers
+echo -e "${BLUE}[2/5] Removing PacketTracer containers...${NC}"
+ALL_PROJECT_CONTAINERS=$(get_project_containers)
+if [ -n "$ALL_PROJECT_CONTAINERS" ]; then
+    echo "$ALL_PROJECT_CONTAINERS" | xargs -r docker rm -f 2>/dev/null || true
+    echo -e "${GREEN}✓ Removed PacketTracer containers${NC}"
 else
-    echo -e "${YELLOW}ℹ️  No containers to remove${NC}"
+    echo -e "${YELLOW}ℹ️  No PacketTracer containers to remove${NC}"
 fi
 echo ""
 
-# Step 3: Remove all images
-echo -e "${BLUE}[3/5] Removing all Docker images...${NC}"
-if [ $(docker images -q | wc -l) -gt 0 ]; then
-    docker rmi $(docker images -q) 2>/dev/null || true
-    echo -e "${GREEN}✓ Removed all Docker images${NC}"
+# Step 3: Remove project networks
+echo -e "${BLUE}[3/5] Removing PacketTracer networks...${NC}"
+docker network rm ptnet pt-stack 2>/dev/null || true
+echo -e "${GREEN}✓ Cleaned up project networks (ptnet, pt-stack)${NC}"
+echo ""
+
+# Step 4: Remove project volumes
+echo -e "${BLUE}[4/5] Removing PacketTracer volumes (mariadb_data, dbdump, pt_opt)...${NC}"
+PROJECT_VOLUMES=$(docker volume ls --format "{{.Name}}" | grep -E '^(mariadb_data|dbdump|pt_opt|ptweb-vnc_.*)$' || true)
+if [ -n "$PROJECT_VOLUMES" ]; then
+    echo "$PROJECT_VOLUMES" | xargs -r docker volume rm 2>/dev/null || true
+    echo -e "${GREEN}✓ Removed PacketTracer volumes${NC}"
 else
-    echo -e "${YELLOW}ℹ️  No images to remove${NC}"
+    echo -e "${YELLOW}ℹ️  No PacketTracer volumes to remove${NC}"
 fi
 echo ""
 
-# Step 4: Remove all volumes (including pt_opt which has PacketTracer)
-echo -e "${BLUE}[4/5] Removing all Docker volumes...${NC}"
-if [ $(docker volume ls -q | wc -l) -gt 0 ]; then
-    docker volume rm $(docker volume ls -q) 2>/dev/null || true
-    echo -e "${GREEN}✓ Removed all Docker volumes${NC}"
+# Step 5: Remove project images
+echo -e "${BLUE}[5/5] Removing PacketTracer application images...${NC}"
+PROJECT_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E '^(pt-nginx|pt-management|ptvnc)' || true)
+if [ -n "$PROJECT_IMAGES" ]; then
+    echo "$PROJECT_IMAGES" | xargs -r docker rmi 2>/dev/null || true
+    echo -e "${GREEN}✓ Removed PacketTracer application images${NC}"
 else
-    echo -e "${YELLOW}ℹ️  No volumes to remove${NC}"
+    echo -e "${YELLOW}ℹ️  No PacketTracer application images to remove${NC}"
 fi
-echo ""
-
-# Step 5: Prune system (including build cache)
-echo -e "${BLUE}[5/5] Pruning Docker system and build cache...${NC}"
-docker system prune -f --volumes 2>/dev/null || true
-echo -e "${GREEN}✓ Pruned Docker system${NC}"
 echo ""
 
 # Final status
 echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}✅ Complete cleanup finished successfully!${NC}"
+echo -e "${GREEN}✅ Scoped cleanup finished successfully!${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
 echo ""
-
-# Show remaining resources
-echo -e "${BLUE}Remaining Docker resources:${NC}"
-echo -e "${YELLOW}Containers:${NC}"
-docker ps -a --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | head -5 || echo "  (none)"
-echo ""
-echo -e "${YELLOW}Images:${NC}"
-docker images --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}" 2>/dev/null | head -5 || echo "  (none)"
-echo ""
-echo -e "${YELLOW}Volumes:${NC}"
-docker volume ls --format "table {{.Name}}" 2>/dev/null | head -5 || echo "  (none)"
-echo ""
-
-echo -e "${GREEN}✓ System is now ready for a fresh deployment!${NC}"
+echo -e "${GREEN}✓ System is ready for a fresh deployment!${NC}"
 echo ""
 echo "Next steps:"
-echo "  1. Copy your PacketTracer .deb file to the repo root"
+echo "  1. Copy your PacketTracer .deb file to the repo root (if not already present)"
 echo "  2. Run: bash deploy-full.sh"
 echo ""
