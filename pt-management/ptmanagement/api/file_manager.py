@@ -104,10 +104,13 @@ def create_file_manager_blueprint():
             return jsonify({'error': str(e)}), 500
     
     @fm.route('/<path:file_path>', methods=['GET'])
+    @fm.route('/read/<path:file_path>', methods=['GET'])
     @require_auth
     def read_file(file_path):
         """Read file contents"""
         try:
+            if file_path.startswith('read/'):
+                file_path = file_path[len('read/'):]
             safe_path = validate_path(os.path.join(SHARED_FOLDER, file_path))
             if not safe_path:
                 return jsonify({'error': 'Invalid path'}), 400
@@ -149,17 +152,27 @@ def create_file_manager_blueprint():
             logger.error(f"✗ Failed to read file {file_path}: {e}")
             return jsonify({'error': str(e)}), 500
     
+    @fm.route('/write', methods=['POST'])
     @fm.route('/<path:file_path>', methods=['POST'])
+    @fm.route('/write/<path:file_path>', methods=['POST'])
     @require_auth
-    def write_file(file_path):
+    def write_file(file_path=''):
         """Create or update a file"""
         try:
+            data = request.get_json(silent=True) or {}
+            if not file_path or file_path == 'write':
+                file_path = data.get('path', '')
+            elif file_path.startswith('write/'):
+                file_path = file_path[len('write/'):]
+
+            if not file_path:
+                return jsonify({'error': 'Missing file path'}), 400
+
             safe_path = validate_path(os.path.join(SHARED_FOLDER, file_path))
             if not safe_path:
                 return jsonify({'error': 'Invalid path'}), 400
             
-            data = request.get_json()
-            if not data or 'content' not in data:
+            if 'content' not in data:
                 return jsonify({'error': 'Missing content'}), 400
             
             content = data['content']
@@ -189,10 +202,17 @@ def create_file_manager_blueprint():
             return jsonify({'error': str(e)}), 500
     
     @fm.route('/<path:file_path>', methods=['DELETE'])
+    @fm.route('/delete/<path:file_path>', methods=['DELETE'])
     @require_auth
     def delete_file(file_path):
         """Delete a file or directory"""
         try:
+            if file_path.startswith('delete/'):
+                file_path = file_path[len('delete/'):]
+
+            if file_path in ('common', 'instances', 'archive', ''):
+                return jsonify({'error': 'Cannot delete root system directory'}), 400
+
             safe_path = validate_path(os.path.join(SHARED_FOLDER, file_path))
             if not safe_path:
                 return jsonify({'error': 'Invalid path'}), 400
@@ -220,11 +240,21 @@ def create_file_manager_blueprint():
             logger.error(f"✗ Failed to delete file {file_path}: {e}")
             return jsonify({'error': str(e)}), 500
     
+    @fm.route('/mkdir', methods=['POST'])
     @fm.route('/mkdir/<path:dir_path>', methods=['POST'])
     @require_auth
-    def create_directory(dir_path):
+    def create_directory(dir_path=''):
         """Create a new directory"""
         try:
+            data = request.get_json(silent=True) or {}
+            if not dir_path or dir_path == 'mkdir':
+                dir_path = data.get('path', '')
+            elif dir_path.startswith('mkdir/'):
+                dir_path = dir_path[len('mkdir/'):]
+
+            if not dir_path:
+                return jsonify({'error': 'Missing directory path'}), 400
+
             safe_path = validate_path(os.path.join(SHARED_FOLDER, dir_path))
             if not safe_path:
                 return jsonify({'error': 'Invalid path'}), 400
