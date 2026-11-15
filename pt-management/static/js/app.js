@@ -44,6 +44,11 @@ async function apiRequest(endpoint, method = 'GET', data = null) {
  * Show notification message
  */
 function showNotification(message, type = 'info') {
+    if (window.showToast) {
+        window.showToast(message, type);
+        return;
+    }
+
     const alertType = {
         'success': 'alert-success',
         'error': 'alert-danger',
@@ -73,6 +78,102 @@ function showNotification(message, type = 'info') {
     }
 }
 
+// In-memory cache for live client-side filtering
+window._loadedUsers = [];
+window._loadedContainers = [];
+
+/**
+ * Filter users based on search input
+ */
+function filterUsers() {
+    const q = (document.getElementById('users-search')?.value || '').toLowerCase().trim();
+    if (!q) {
+        renderUsersTable(window._loadedUsers || []);
+        return;
+    }
+    const filtered = (window._loadedUsers || []).filter(u => {
+        const username = (u.username || '').toLowerCase();
+        const connections = (u.connections || []).join(' ').toLowerCase();
+        return username.includes(q) || connections.includes(q);
+    });
+    renderUsersTable(filtered);
+}
+
+/**
+ * Render users into table
+ */
+function renderUsersTable(users) {
+    const tbody = document.getElementById('users-tbody');
+    const table = document.getElementById('users-table');
+    const empty = document.getElementById('users-empty');
+    const loading = document.getElementById('users-loading');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (loading) loading.style.display = 'none';
+
+    if (!users || users.length === 0) {
+        if (table) table.style.display = 'none';
+        if (empty) {
+            empty.style.display = 'block';
+            empty.innerHTML = `
+                <div class="empty-state">
+                    <i class="bi bi-people empty-state-icon"></i>
+                    <div class="empty-state-title">No Users Found</div>
+                    <div class="empty-state-subtitle">No student or administrator accounts match your criteria.</div>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    if (empty) empty.style.display = 'none';
+    if (table) table.style.display = 'table';
+
+    users.forEach(user => {
+        const row = document.createElement('tr');
+        row.setAttribute('data-username', user.username);
+        row.style.cursor = 'pointer';
+        
+        const adminBadge = user.is_admin 
+            ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2" title="Admin user"><i class="bi bi-shield-check"></i> Admin</span>'
+            : '';
+        
+        const connectionsList = (user.connections || []).map(c => 
+            `<span class="badge bg-light text-dark border me-1">${c}</span>`
+        ).join('') || '<span class="text-muted small">None</span>';
+
+        row.innerHTML = `
+            <td><input type="checkbox" class="user-checkbox" onchange="updateUserSelectionCount()"></td>
+            <td><strong>${user.username}</strong>${adminBadge}</td>
+            <td>${connectionsList}</td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-danger" onclick="deleteUser('${user.username}')" title="Delete User">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        
+        // Make row clickable to open user menu
+        row.addEventListener('click', function(e) {
+            if (e.target.closest('input[type="checkbox"]') || e.target.closest('button') || e.target.closest('a')) {
+                return;
+            }
+            openUserMenu(user);
+        });
+        
+        tbody.appendChild(row);
+    });
+
+    // Update count indicator if present
+    const countBadge = document.getElementById('users-count-badge');
+    if (countBadge) {
+        countBadge.textContent = `${users.length} of ${window._loadedUsers.length}`;
+    }
+}
+
 /**
  * Load users from API and populate table
  */
@@ -86,66 +187,31 @@ async function loadUsers() {
         return;
     }
 
-    const users = result.users || [];
-    const tbody = document.getElementById('users-tbody');
-    tbody.innerHTML = '';
-
-    if (users.length === 0) {
-        document.getElementById('users-table').style.display = 'none';
-        document.getElementById('users-empty').style.display = 'block';
-        document.getElementById('users-loading').style.display = 'none';
-        return;
-    }
-
-    users.forEach(user => {
-        const row = document.createElement('tr');
-        row.setAttribute('data-username', user.username);
-        row.style.cursor = 'pointer';
-        
-        const adminBadge = user.is_admin 
-            ? '<span class="badge bg-danger ms-2" title="Admin user"><i class="bi bi-shield-check"></i> Admin</span>'
-            : '';
-        
-        row.innerHTML = `
-            <td><input type="checkbox" class="user-checkbox" onchange="updateUserSelectionCount()"></td>
-            <td><strong>${user.username}</strong>${adminBadge}</td>
-            <td><span class="badge bg-info">${(user.connections || []).length}</span></td>
-            <td>
-                <button class="btn btn-sm btn-danger" onclick="deleteUser('${user.username}')">
-                    <i class="bi bi-trash"></i> Delete
-                </button>
-            </td>
-        `;
-        
-        // Make row clickable to open user menu
-        row.addEventListener('click', function(e) {
-            if (e.target.closest('input[type="checkbox"]') || e.target.closest('button')) {
-                return; // Don't open menu if clicking checkbox or button
-            }
-            openUserMenu(user);
-        });
-        
-        tbody.appendChild(row);
-    });
-
-    document.getElementById('users-table').style.display = 'table';
-    document.getElementById('users-empty').style.display = 'none';
-    document.getElementById('users-loading').style.display = 'none';
+    window._loadedUsers = result.users || [];
+    filterUsers();
     
     // Show bulk actions if there are users
-    if (users.length > 0) {
-        document.getElementById('users-bulk-actions').style.display = 'block';
-        // Setup select all/deselect all buttons
-        document.getElementById('users-select-all').onclick = () => {
-            document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = true);
-            updateUserSelectionCount();
-        };
-        document.getElementById('users-deselect-all').onclick = () => {
-            document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
-            updateUserSelectionCount();
-        };
+    if (window._loadedUsers.length > 0) {
+        const bulk = document.getElementById('users-bulk-actions');
+        if (bulk) bulk.style.display = 'block';
+        
+        const selectAllBtn = document.getElementById('users-select-all');
+        if (selectAllBtn) {
+            selectAllBtn.onclick = () => {
+                document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = true);
+                updateUserSelectionCount();
+            };
+        }
+        const deselectAllBtn = document.getElementById('users-deselect-all');
+        if (deselectAllBtn) {
+            deselectAllBtn.onclick = () => {
+                document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
+                updateUserSelectionCount();
+            };
+        }
     } else {
-        document.getElementById('users-bulk-actions').style.display = 'none';
+        const bulk = document.getElementById('users-bulk-actions');
+        if (bulk) bulk.style.display = 'none';
     }
 }
 
@@ -168,6 +234,122 @@ async function deleteUser(username) {
 }
 
 /**
+ * Filter containers based on search input & status filter
+ */
+function filterContainers() {
+    const q = (document.getElementById('containers-search')?.value || '').toLowerCase().trim();
+    const statusFilter = document.getElementById('containers-status-filter')?.value || 'all';
+    
+    let list = window._loadedContainers || [];
+    if (statusFilter !== 'all') {
+        list = list.filter(c => c.status === statusFilter);
+    }
+    if (q) {
+        list = list.filter(c => {
+            const name = (c.name || '').toLowerCase();
+            const img = (c.image || '').toLowerCase();
+            const ports = (c.ports || []).join(' ').toLowerCase();
+            return name.includes(q) || img.includes(q) || ports.includes(q);
+        });
+    }
+    renderContainersTable(list);
+}
+
+/**
+ * Render containers into table
+ */
+function renderContainersTable(containers) {
+    const tbody = document.getElementById('containers-tbody');
+    const table = document.getElementById('containers-table');
+    const empty = document.getElementById('containers-empty');
+    const loading = document.getElementById('containers-loading');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (loading) loading.style.display = 'none';
+
+    if (!containers || containers.length === 0) {
+        if (table) table.style.display = 'none';
+        if (empty) {
+            empty.style.display = 'block';
+            empty.innerHTML = `
+                <div class="empty-state">
+                    <i class="bi bi-boxes empty-state-icon"></i>
+                    <div class="empty-state-title">No Containers Found</div>
+                    <div class="empty-state-subtitle">No Packet Tracer container instances match your criteria.</div>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    if (empty) empty.style.display = 'none';
+    if (table) table.style.display = 'table';
+
+    containers.forEach(container => {
+        const isRunning = container.status === 'running';
+        const statusBadge = isRunning
+            ? '<span class="badge status-pill bg-success-subtle text-success border border-success-subtle"><span class="status-dot status-dot-running"></span> Running</span>'
+            : '<span class="badge status-pill bg-secondary-subtle text-secondary border border-secondary-subtle"><span class="status-dot status-dot-stopped"></span> Stopped</span>';
+        
+        const row = document.createElement('tr');
+        row.setAttribute('data-container-name', container.name);
+        const memory = container.memory || '512MB';
+        const cpus = container.cpus || '1.0';
+        const portStr = (container.ports && container.ports.length > 0) ? container.ports.join(', ') : '-';
+        
+        row.innerHTML = `
+            <td><input type="checkbox" class="container-checkbox" onchange="updateContainerSelectionCount()"></td>
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <strong>${container.name}</strong>
+                </div>
+            </td>
+            <td>${statusBadge}</td>
+            <td>
+                <span class="badge bg-light text-dark border">${memory}</span>
+            </td>
+            <td>
+                <span class="badge bg-light text-dark border">${cpus} CPU</span>
+            </td>
+            <td><code class="small text-secondary">${container.image}</code></td>
+            <td><span class="small text-muted">${portStr}</span></td>
+            <td>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn btn-outline-secondary" onclick="viewLogs('${container.name}')" title="View Logs">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </button>
+                    ${isRunning 
+                        ? `<button class="btn btn-outline-warning" onclick="stopContainer('${container.name}')" title="Stop Container">
+                            <i class="bi bi-stop-circle"></i>
+                        </button>` 
+                        : `<button class="btn btn-outline-success" onclick="startContainer('${container.name}')" title="Start Container">
+                            <i class="bi bi-play-circle"></i>
+                        </button>`
+                    }
+                    ${isRunning 
+                        ? `<button class="btn btn-outline-secondary" onclick="restartContainer('${container.name}')" title="Restart">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>` 
+                        : ''
+                    }
+                    <button class="btn btn-outline-danger" onclick="deleteContainer('${container.name}')" title="Delete">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    // Update count indicator if present
+    const countBadge = document.getElementById('containers-count-badge');
+    if (countBadge) {
+        countBadge.textContent = `${containers.length} of ${window._loadedContainers.length}`;
+    }
+}
+
+/**
  * Load containers from API and populate table
  */
 async function loadContainers() {
@@ -180,86 +362,129 @@ async function loadContainers() {
         return;
     }
 
-    const containers = result.containers || [];
-    const tbody = document.getElementById('containers-tbody');
-    tbody.innerHTML = '';
-
-    if (containers.length === 0) {
-        document.getElementById('containers-table').style.display = 'none';
-        document.getElementById('containers-empty').style.display = 'block';
-        document.getElementById('containers-loading').style.display = 'none';
-        return;
-    }
-
-    containers.forEach(container => {
-        const statusBadge = container.status === 'running'
-            ? '<span class="badge badge-status-running">Running</span>'
-            : '<span class="badge badge-status-stopped">Stopped</span>';
-        
-        const row = document.createElement('tr');
-        row.setAttribute('data-container-name', container.name);
-        const users = (container.users || []).join(', ') || '-';
-        const memory = container.memory || 'N/A';
-        const cpus = container.cpus || 'N/A';
-        
-        row.innerHTML = `
-            <td><input type="checkbox" class="container-checkbox" onchange="updateContainerSelectionCount()"></td>
-            <td><strong>${container.name}</strong></td>
-            <td>${statusBadge}</td>
-            <td>
-                <span class="badge bg-info">${memory}</span>
-            </td>
-            <td>
-                <span class="badge bg-success">${cpus}</span>
-            </td>
-            <td><code>${container.image}</code></td>
-            <td>${container.ports.join(', ') || '-'}</td>
-            <td>
-                <div class="btn-group btn-group-sm" role="group">
-                    <button class="btn btn-info" onclick="viewLogs('${container.name}')" title="View Logs">
-                        <i class="bi bi-file-text"></i>
-                    </button>
-                    ${container.status === 'running' 
-                        ? `<button class="btn btn-warning" onclick="stopContainer('${container.name}')" title="Stop">
-                            <i class="bi bi-stop-circle"></i>
-                        </button>` 
-                        : `<button class="btn btn-success" onclick="startContainer('${container.name}')" title="Start">
-                            <i class="bi bi-play-circle"></i>
-                        </button>`
-                    }
-                    ${container.status === 'running' 
-                        ? `<button class="btn btn-secondary" onclick="restartContainer('${container.name}')" title="Restart">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </button>` 
-                        : ''
-                    }
-                    <button class="btn btn-danger" onclick="deleteContainer('${container.name}')" title="Delete">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-
-    document.getElementById('containers-table').style.display = 'table';
-    document.getElementById('containers-empty').style.display = 'none';
-    document.getElementById('containers-loading').style.display = 'none';
+    window._loadedContainers = result.containers || [];
+    filterContainers();
     
     // Show bulk actions if there are containers
-    if (containers.length > 0) {
-        document.getElementById('containers-bulk-actions').style.display = 'block';
-        // Setup select all/deselect all buttons
-        document.getElementById('containers-select-all').onclick = () => {
-            document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = true);
-            updateContainerSelectionCount();
-        };
-        document.getElementById('containers-deselect-all').onclick = () => {
-            document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = false);
-            updateContainerSelectionCount();
-        };
+    if (window._loadedContainers.length > 0) {
+        const bulk = document.getElementById('containers-bulk-actions');
+        if (bulk) bulk.style.display = 'block';
+        
+        const selectAllBtn = document.getElementById('containers-select-all');
+        if (selectAllBtn) {
+            selectAllBtn.onclick = () => {
+                document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = true);
+                updateContainerSelectionCount();
+            };
+        }
+        const deselectAllBtn = document.getElementById('containers-deselect-all');
+        if (deselectAllBtn) {
+            deselectAllBtn.onclick = () => {
+                document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = false);
+                updateContainerSelectionCount();
+            };
+        }
     } else {
-        document.getElementById('containers-bulk-actions').style.display = 'none';
+        const bulk = document.getElementById('containers-bulk-actions');
+        if (bulk) bulk.style.display = 'none';
+    }
+}
+
+/**
+ * Get list of currently checked container names
+ */
+function getSelectedContainerNames() {
+    return Array.from(document.querySelectorAll('.container-checkbox:checked'))
+        .map(cb => cb.closest('tr')?.getAttribute('data-container-name'))
+        .filter(Boolean);
+}
+
+/**
+ * Start all stopped containers
+ */
+async function startAllContainers() {
+    const stopped = (window._loadedContainers || []).filter(c => c.status !== 'running');
+    if (stopped.length === 0) {
+        showNotification('All containers are already running', 'info');
+        return;
+    }
+    if (!confirm(`Start all ${stopped.length} stopped container(s)?`)) return;
+
+    showNotification(`Starting ${stopped.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/start', 'POST', {
+        names: stopped.map(c => c.name)
+    });
+    if (result && result.success) {
+        showNotification(result.message || `Started ${result.started.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to start containers', 'error');
+    }
+}
+
+/**
+ * Stop all running containers
+ */
+async function stopAllContainers() {
+    const running = (window._loadedContainers || []).filter(c => c.status === 'running');
+    if (running.length === 0) {
+        showNotification('No containers are currently running', 'info');
+        return;
+    }
+    if (!confirm(`Stop all ${running.length} running container(s)? This will pause student lab sessions.`)) return;
+
+    showNotification(`Stopping ${running.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/stop', 'POST', {
+        names: running.map(c => c.name)
+    });
+    if (result && result.success) {
+        showNotification(result.message || `Stopped ${result.stopped.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to stop containers', 'error');
+    }
+}
+
+/**
+ * Start selected containers
+ */
+async function startSelectedContainers() {
+    const names = getSelectedContainerNames();
+    if (names.length === 0) {
+        showNotification('No containers selected', 'warning');
+        return;
+    }
+    showNotification(`Starting ${names.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/start', 'POST', { names });
+    if (result && result.success) {
+        showNotification(`Started ${result.started.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to start selected containers', 'error');
+    }
+}
+
+/**
+ * Stop selected containers
+ */
+async function stopSelectedContainers() {
+    const names = getSelectedContainerNames();
+    if (names.length === 0) {
+        showNotification('No containers selected', 'warning');
+        return;
+    }
+    if (!confirm(`Stop ${names.length} selected container(s)?`)) return;
+    showNotification(`Stopping ${names.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/stop', 'POST', { names });
+    if (result && result.success) {
+        showNotification(`Stopped ${result.stopped.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to stop selected containers', 'error');
     }
 }
 

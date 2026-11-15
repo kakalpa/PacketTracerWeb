@@ -716,6 +716,74 @@ def create_api_blueprint():
         except Exception as e:
             logger.error(f"✗ Failed to restart container {container_name}: {e}")
             return jsonify({'error': str(e)}), 500
+
+    @api.route('/containers/bulk/start', methods=['POST'])
+    @require_auth
+    def bulk_start_containers():
+        """Start multiple containers or all stopped containers"""
+        try:
+            data = request.get_json(silent=True) or {}
+            names = data.get('names')
+            if not names:
+                containers = docker_mgr.list_containers(all=True)
+                names = [c['name'] for c in containers if c.get('status') != 'running' and c.get('name', '').startswith('ptvnc')]
+            
+            started = []
+            failed = []
+            for name in names:
+                try:
+                    if docker_mgr.start_container(name):
+                        started.append(name)
+                    else:
+                        failed.append(name)
+                except Exception as e:
+                    logger.error(f"Error starting {name}: {e}")
+                    failed.append(name)
+            
+            return jsonify({
+                'success': True,
+                'started': started,
+                'failed': failed,
+                'count': len(started),
+                'message': f"Started {len(started)} container(s)"
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed in bulk start containers: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @api.route('/containers/bulk/stop', methods=['POST'])
+    @require_auth
+    def bulk_stop_containers():
+        """Stop multiple containers or all running containers"""
+        try:
+            data = request.get_json(silent=True) or {}
+            names = data.get('names')
+            if not names:
+                containers = docker_mgr.list_containers(all=True)
+                names = [c['name'] for c in containers if c.get('status') == 'running' and c.get('name', '').startswith('ptvnc')]
+            
+            stopped = []
+            failed = []
+            for name in names:
+                try:
+                    if docker_mgr.stop_container(name):
+                        stopped.append(name)
+                    else:
+                        failed.append(name)
+                except Exception as e:
+                    logger.error(f"Error stopping {name}: {e}")
+                    failed.append(name)
+            
+            return jsonify({
+                'success': True,
+                'stopped': stopped,
+                'failed': failed,
+                'count': len(stopped),
+                'message': f"Stopped {len(stopped)} container(s)"
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed in bulk stop containers: {e}")
+            return jsonify({'error': str(e)}), 500
     
     @api.route('/containers/<container_name>', methods=['DELETE'])
     @require_auth
