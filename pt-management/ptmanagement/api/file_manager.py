@@ -45,34 +45,48 @@ def create_file_manager_blueprint():
     fm = Blueprint('file_manager', __name__, url_prefix='/api/files')
     
     @fm.route('/', methods=['GET'])
+    @fm.route('/list', methods=['GET'])
+    @fm.route('/list/<path:sub_path>', methods=['GET'])
     @require_auth
-    def list_files():
-        """List files and directories in /shared"""
+    def list_files(sub_path=''):
+        """List files and directories in /shared or a subfolder"""
         try:
             if not os.path.exists(SHARED_FOLDER):
                 os.makedirs(SHARED_FOLDER, exist_ok=True)
             
+            # Ensure standard folders exist
+            for sub in ('common', 'instances', 'archive'):
+                os.makedirs(os.path.join(SHARED_FOLDER, sub), exist_ok=True)
+
+            target_folder = validate_path(os.path.join(SHARED_FOLDER, sub_path)) if sub_path else Path(SHARED_FOLDER).resolve()
+            if not target_folder or not target_folder.exists():
+                return jsonify({'error': 'Directory not found'}), 404
+            
+            if not target_folder.is_dir():
+                return jsonify({'error': 'Path is not a directory'}), 400
+
             items = []
-            for item in os.listdir(SHARED_FOLDER):
-                item_path = os.path.join(SHARED_FOLDER, item)
-                is_dir = os.path.isdir(item_path)
+            for item in sorted(os.listdir(str(target_folder))):
+                item_path = target_folder / item
+                is_dir = item_path.is_dir()
                 
                 try:
-                    stat = os.stat(item_path)
+                    stat = item_path.stat()
                     size = stat.st_size if not is_dir else 0
                     modified = stat.st_mtime
                 except OSError:
                     size = 0
                     modified = 0
                 
+                rel_path = str(item_path.relative_to(Path(SHARED_FOLDER).resolve()))
                 items.append({
                     'name': item,
-                    'path': item,
+                    'path': rel_path,
                     'type': 'directory' if is_dir else 'file',
                     'size': size,
                     'modified': modified,
-                    'readable': os.access(item_path, os.R_OK),
-                    'writable': os.access(item_path, os.W_OK)
+                    'readable': os.access(str(item_path), os.R_OK),
+                    'writable': os.access(str(item_path), os.W_OK)
                 })
             
             # Sort: directories first, then alphabetically
@@ -80,7 +94,7 @@ def create_file_manager_blueprint():
             
             return jsonify({
                 'success': True,
-                'path': SHARED_FOLDER,
+                'path': str(target_folder.relative_to(Path(SHARED_FOLDER).resolve())) if sub_path else '',
                 'items': items
             }), 200
         except Exception as e:

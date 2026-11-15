@@ -201,9 +201,11 @@ sleep 10
 # Step 2: Start ptvnc containers
 echo -e "\e[32mStep 2. Start Packet Tracer VNC containers\e[0m"
 mkdir -p "${WORKDIR}/shared/instances"
+mkdir -p "${WORKDIR}/shared/common"
 mkdir -p "${WORKDIR}/shared/archive"
 chmod 755 "${WORKDIR}/shared"
 chmod 755 "${WORKDIR}/shared/instances"
+chmod 777 "${WORKDIR}/shared/common"
 chmod 700 "${WORKDIR}/shared/archive"
 
 # Query Guacamole container IP and generate ptweb.conf
@@ -241,18 +243,20 @@ for ((i=1; i<=$numofPT; i++)); do
       --dns=127.0.0.1 \
       -v pt_opt:/opt/pt \
       --mount type=bind,source="${INSTANCE_DIR}",target=/shared,bind-propagation=rprivate \
+      --mount type=bind,source="${WORKDIR}/shared/common",target=/shared_common,readonly,bind-propagation=rprivate \
       ptvnc
     sleep $i
 done
 
-# Create desktop and save symlinks for easy access to /shared
-echo -e "\e[32mCreating /shared and saves symlinks in containers\e[0m"
+# Create desktop and save symlinks for easy access to /shared and Course_Materials
+echo -e "\e[32mCreating /shared, saves, and Course_Materials symlinks in containers\e[0m"
 for ((i=1; i<=$numofPT; i++)); do
     docker exec ptvnc$i mkdir -p /home/ptuser/Desktop /home/ptuser/pt 2>/dev/null || true
     docker exec ptvnc$i ln -sf /shared /home/ptuser/Desktop/shared 2>/dev/null || true
     docker exec ptvnc$i ln -sf /shared /home/ptuser/Desktop/Saved_Files 2>/dev/null || true
     docker exec ptvnc$i rm -rf /home/ptuser/pt/saves 2>/dev/null || true
     docker exec ptvnc$i ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
+    docker exec ptvnc$i ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
 done
 sleep 2
 

@@ -245,8 +245,28 @@ TAMPERED_PATH=$(echo "$DL_PATH" | sed 's/sig=[^&]*/sig=invalidsignature/')
 TAMPERED_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "https://localhost$TAMPERED_PATH")
 assert_contains "Tampered download request is rejected (403/401)" "403 401" "$TAMPERED_STATUS"
 
+# 8. Test Course Materials (/shared/common) distribution to all students
+COMMON_PKT="course-material-$(date +%s).pkt"
+COMMON_DATA="COURSE_MATERIAL_DATA_$(date +%s)"
+echo "$COMMON_DATA" > "shared/common/$COMMON_PKT"
+
+VIS_COMMON_1=$(docker exec ptvnc1 test -f "/home/ptuser/Desktop/Course_Materials/$COMMON_PKT" && echo "YES" || echo "NO")
+assert_eq "Course material is visible on ptvnc1 Desktop (Course_Materials)" "$VIS_COMMON_1" "YES"
+
+VIS_COMMON_2=$(docker exec ptvnc2 test -f "/home/ptuser/Desktop/Course_Materials/$COMMON_PKT" && echo "YES" || echo "NO")
+assert_eq "Course material is visible on ptvnc2 Desktop (Course_Materials)" "$VIS_COMMON_2" "YES"
+
+RO_TEST=$(docker exec ptvnc1 rm -f "/shared_common/$COMMON_PKT" 2>&1 || true)
+assert_contains "Course materials are read-only in student session" "$RO_TEST" "Read-only file system"
+
+COMMON_TOKEN_JSON=$(curl -k -s "https://localhost/api/student/files/token?container=common&file=$COMMON_PKT")
+COMMON_DL_PATH=$(echo "$COMMON_TOKEN_JSON" | grep -o '"download_url":"[^"]*' | cut -d'"' -f4)
+COMMON_DL_CONTENT=$(curl -k -s "https://localhost$COMMON_DL_PATH")
+assert_eq "Course material downloadable via Student API" "$COMMON_DL_CONTENT" "$COMMON_DATA"
+
 # Cleanup
 rm -f "shared/instances/ptvnc1/$TEST_PKT"
+rm -f "shared/common/$COMMON_PKT"
 
 # -----------------------------------------------------------------------------
 echo -e "\n${BLUE}======================================================${NC}"

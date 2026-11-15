@@ -364,16 +364,20 @@ class DockerManager:
             
             # Partition storage per container instance
             instance_storage_path = os.path.join(shared_path, 'instances', name)
+            common_storage_path = os.path.join(shared_path, 'common')
             try:
                 os.makedirs(instance_storage_path, exist_ok=True)
                 os.chmod(instance_storage_path, 0o777)
+                os.makedirs(common_storage_path, exist_ok=True)
+                os.chmod(common_storage_path, 0o777)
             except OSError as e:
-                logger.warning(f"Could not prepare instance storage path {instance_storage_path}: {e}")
-            logger.info(f"DEBUG container.py: Using instance_storage_path={instance_storage_path}")
+                logger.warning(f"Could not prepare storage paths: {e}")
+            logger.info(f"DEBUG container.py: Using instance_storage_path={instance_storage_path}, common={common_storage_path}")
             
             request_data["HostConfig"]["Binds"] = [
                 "pt_opt:/opt/pt",  # Named volume for Packet Tracer binary
-                f"{instance_storage_path}:/shared"  # Isolated instance storage mount (MUST be host path)
+                f"{instance_storage_path}:/shared",  # Isolated instance storage mount (MUST be host path)
+                f"{common_storage_path}:/shared_common:ro"  # Read-only common course materials shared across students
             ]
             
             logger.info(f"Mounting: pt_opt:/opt/pt and {shared_path}:/shared on bridge network (will connect to pt-stack after creation)")

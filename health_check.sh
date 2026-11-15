@@ -202,6 +202,15 @@ run_test "$PTVNC_SECOND has shared symlink on Desktop" \
 run_test "$PTVNC_SECOND shared symlink is accessible" \
     "docker exec $PTVNC_SECOND [ -d /home/ptuser/Desktop/shared ]"
 
+run_test "$PTVNC_FIRST has Course_Materials symlink on Desktop" \
+    "docker exec $PTVNC_FIRST [ -L /home/ptuser/Desktop/Course_Materials ]"
+
+run_test "$PTVNC_FIRST Course_Materials points to /shared_common" \
+    "docker exec $PTVNC_FIRST readlink /home/ptuser/Desktop/Course_Materials | grep -q '^/shared_common\$'"
+
+run_test "$PTVNC_FIRST Course_Materials is read-only" \
+    "! docker exec $PTVNC_FIRST touch /shared_common/.ro_test 2>/dev/null"
+
 # ============================================================================
 # SECTION 6: WEB ENDPOINTS
 # ============================================================================
@@ -256,6 +265,26 @@ run_test "Downloaded file content matches exactly" \
 
 run_test "Path traversal attempt blocked (HTTP 403)" \
     "curl -k -s -o /dev/null -w '%{http_code}' \"$WEB_HOST/api/student/files/download?container=$PTVNC_FIRST&file=../../etc/passwd&expires=9999999999&sig=fake\" | grep -q -E '403|401'"
+
+# Test Course Materials broadcast to all students
+COMMON_TEST_FILE="common-test-$(date +%s).pkt"
+COMMON_TEST_CONTENT="Common Course Material Content $(date)"
+mkdir -p "$WORKDIR/shared/common"
+echo "$COMMON_TEST_CONTENT" > "$WORKDIR/shared/common/$COMMON_TEST_FILE"
+
+run_test "Course material visible from $PTVNC_FIRST (Course_Materials)" \
+    "docker exec $PTVNC_FIRST [ -f /home/ptuser/Desktop/Course_Materials/$COMMON_TEST_FILE ]"
+
+run_test "Course material visible from $PTVNC_SECOND (Course_Materials)" \
+    "docker exec $PTVNC_SECOND [ -f /home/ptuser/Desktop/Course_Materials/$COMMON_TEST_FILE ]"
+
+COMMON_TOKEN_JSON=$(curl -k -s "$WEB_HOST/api/student/files/token?container=common&file=$COMMON_TEST_FILE")
+COMMON_DOWNLOAD_URL=$(echo "$COMMON_TOKEN_JSON" | grep -o '"download_url":"[^"]*' | cut -d'"' -f4)
+
+run_test "Course material downloadable via Student API" \
+    "[ \"\$(curl -k -s \"$WEB_HOST$COMMON_DOWNLOAD_URL\")\" = \"$COMMON_TEST_CONTENT\" ]"
+
+rm -f "$WORKDIR/shared/common/$COMMON_TEST_FILE" 2>/dev/null || true
 
 # Cleanup test file
 rm -f "$WORKDIR/shared/instances/$PTVNC_FIRST/$TEST_FILE" 2>/dev/null || true

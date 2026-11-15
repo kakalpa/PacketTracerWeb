@@ -13,6 +13,7 @@ student_api = Blueprint('student_api', __name__, url_prefix='/api/student/files'
 
 # Host-mounted storage root inside pt-management container
 STORAGE_BASE = Path("/shared/instances").resolve()
+COMMON_BASE = Path("/shared/common").resolve()
 
 
 def get_secret_key() -> bytes:
@@ -85,7 +86,13 @@ def download_file():
         return jsonify({'error': 'Authentication required. Valid token or session needed.'}), 401
 
     # Multi-Tenant Path Traversal Defense
-    container_dir = (STORAGE_BASE / container_name).resolve()
+    if container_name == 'common':
+        container_dir = COMMON_BASE
+        internal_uri = f"/internal/common/{filename}"
+    else:
+        container_dir = (STORAGE_BASE / container_name).resolve()
+        internal_uri = f"/internal/downloads/{container_name}/{filename}"
+
     target_path = (container_dir / filename).resolve()
 
     try:
@@ -100,10 +107,9 @@ def download_file():
 
     # Emit Zero-Copy Nginx X-Accel-Redirect Header
     # Nginx will map /internal/downloads/<container>/<filename> to /shared/instances/<container>/<filename>
-    internal_uri = f"/internal/downloads/{container_name}/{target_path.name}"
-
+    # and /internal/common/<filename> to /shared/common/<filename>
     response = Response("", status=200)
-    response.headers['X-Accel-Redirect'] = internal_uri
+    response.headers['X-Accel-Redirect'] = f"/internal/common/{target_path.name}" if container_name == 'common' else f"/internal/downloads/{container_name}/{target_path.name}"
     response.headers['Content-Type'] = 'application/octet-stream'
     response.headers['Content-Disposition'] = f'attachment; filename="{target_path.name}"'
     response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -120,11 +126,14 @@ def list_files():
     if not container_name:
         return jsonify({'error': 'Container identifier required'}), 400
 
-    container_dir = (STORAGE_BASE / container_name).resolve()
-    try:
-        container_dir.relative_to(STORAGE_BASE)
-    except ValueError:
-        return jsonify({'error': 'Invalid container identifier'}), 403
+    if container_name == 'common':
+        container_dir = COMMON_BASE
+    else:
+        container_dir = (STORAGE_BASE / container_name).resolve()
+        try:
+            container_dir.relative_to(STORAGE_BASE)
+        except ValueError:
+            return jsonify({'error': 'Invalid container identifier'}), 403
 
     if not container_dir.exists() or not container_dir.is_dir():
         return jsonify({'container': container_name, 'count': 0, 'files': []}), 200

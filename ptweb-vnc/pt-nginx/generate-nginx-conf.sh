@@ -264,6 +264,19 @@ render_common_server_block() {
     add_header Content-Security-Policy "default-src 'none'" always;
   }
 
+  # Protected internal course materials - accessible ONLY via X-Accel-Redirect
+  location ^~ /internal/common/ {
+    internal;
+    alias /shared/common/;
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    gzip off;
+    default_type application/octet-stream;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Content-Security-Policy "default-src 'none'" always;
+  }
+
   # Reverse proxy for Student File Download API
   location ^~ /api/student/files/ {
 EOF
