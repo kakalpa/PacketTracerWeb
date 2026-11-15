@@ -115,6 +115,7 @@ if command -v x11vnc &>/dev/null; then
       -noshm \
       -threads \
       -forever \
+      -shared \
       -bg \
       -logfile /tmp/x11vnc.log || {
         echo "x11vnc failed, trying TurboVNC..."
@@ -125,6 +126,7 @@ if command -v x11vnc &>/dev/null; then
               -depth ${VNC_DEPTH} \
               -rfbport ${VNC_PORT} \
               -securitytypes none \
+              -alwaysshared \
               >/tmp/turbovnc.log 2>&1
         fi
     }
@@ -137,6 +139,7 @@ else
       -depth ${VNC_DEPTH} \
       -rfbport ${VNC_PORT} \
       -securitytypes none \
+      -alwaysshared \
       >/tmp/turbovnc.log 2>&1
     sleep 2
     echo "✓ TurboVNC server started on port ${VNC_PORT}"

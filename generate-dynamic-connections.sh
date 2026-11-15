@@ -59,7 +59,7 @@ for instance_num in $ptvnc_containers; do
 -- Only create if it doesn't already exist
 INSERT IGNORE INTO \`guacamole_connection\` 
 (\`connection_name\`, \`protocol\`, \`proxy_port\`, \`proxy_hostname\`, \`proxy_encryption_method\`, \`max_connections\`, \`max_connections_per_user\`, \`failover_only\`) 
-VALUES ('$connection_name', 'vnc', 4822, 'pt-guacd', 'NONE', 1, 1, 0);
+VALUES ('$connection_name', 'vnc', 4822, 'pt-guacd', 'NONE', NULL, NULL, 0);
 
 -- Grant access to ptadmin (only if not already granted)
 INSERT IGNORE INTO \`guacamole_connection_permission\` 
