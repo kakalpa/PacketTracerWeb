@@ -222,7 +222,7 @@ def create_api_blueprint():
                                     symlink_cmd = [
                                         'docker', 'exec', container_name,
                                         'bash', '-c',
-                                        'mkdir -p /home/ptuser/Desktop /home/ptuser/pt && ln -sf /shared /home/ptuser/Desktop/shared && ln -sf /shared /home/ptuser/Desktop/Saved_Files && rm -rf /home/ptuser/pt/saves && ln -sfn /shared /home/ptuser/pt/saves && ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials && chmod 777 /shared && chown ptuser:ptuser /shared && chown -R ptuser:ptuser /home/ptuser/Desktop && chown -h ptuser:ptuser /home/ptuser/Desktop/* && chmod 755 /home/ptuser/Desktop'
+                                        'mkdir -p /home/ptuser/Desktop /home/ptuser/pt && ln -sf /shared /home/ptuser/Desktop/shared && ln -sf /shared /home/ptuser/Desktop/Personal_Saves && rm -rf /home/ptuser/pt/saves && ln -sfn /shared /home/ptuser/pt/saves && ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials && chmod 777 /shared && chown ptuser:ptuser /shared && chown -R ptuser:ptuser /home/ptuser/Desktop && chown -h ptuser:ptuser /home/ptuser/Desktop/* && chmod 755 /home/ptuser/Desktop'
                                     ]
                                     symlink_result = subprocess.run(symlink_cmd, capture_output=True, text=True, timeout=10)
                                     if symlink_result.returncode == 0:
@@ -547,7 +547,7 @@ def create_api_blueprint():
                 try:
                     docker_mgr.exec_in_container(container_name, ['mkdir', '-p', '/home/ptuser/Desktop'])
                     docker_mgr.exec_in_container(container_name, ['ln', '-sf', '/shared', '/home/ptuser/Desktop/shared'])
-                    docker_mgr.exec_in_container(container_name, ['ln', '-sf', '/shared', '/home/ptuser/Desktop/Saved_Files'])
+                    docker_mgr.exec_in_container(container_name, ['ln', '-sf', '/shared', '/home/ptuser/Desktop/Personal_Saves'])
                     docker_mgr.exec_in_container(container_name, ['ln', '-sfn', '/shared_common', '/home/ptuser/Desktop/Course_Materials'])
                     docker_mgr.exec_in_container(container_name, ['chmod', '777', '/shared'])
                     docker_mgr.exec_in_container(container_name, ['chown', 'ptuser:ptuser', '/shared'])

@@ -253,7 +253,7 @@ echo -e "\e[32mCreating /shared, saves, and Course_Materials symlinks in contain
 for ((i=1; i<=$numofPT; i++)); do
     docker exec ptvnc$i mkdir -p /home/ptuser/Desktop /home/ptuser/pt 2>/dev/null || true
     docker exec ptvnc$i ln -sf /shared /home/ptuser/Desktop/shared 2>/dev/null || true
-    docker exec ptvnc$i ln -sf /shared /home/ptuser/Desktop/Saved_Files 2>/dev/null || true
+    docker exec ptvnc$i ln -sf /shared /home/ptuser/Desktop/Personal_Saves 2>/dev/null || true
     docker exec ptvnc$i rm -rf /home/ptuser/pt/saves 2>/dev/null || true
     docker exec ptvnc$i ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
     docker exec ptvnc$i ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
