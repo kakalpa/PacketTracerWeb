@@ -41,7 +41,7 @@ RUN cd /tmp && \
     echo "Installing VirtualGL..." && \
     dpkg -i virtualgl_3.1.4_amd64.deb && \
     rm -f virtualgl_3.1.4_amd64.deb && \
-    /usr/bin/vglserver_config +s +f >/dev/null 2>&1 || true && \
+    /usr/bin/vglserver_config +config +s +f >/dev/null 2>&1 || true && \
     echo "✓ VirtualGL 3.1.4 installed successfully with GPU support configured" && \
     vglrun --version 2>&1 | head -1
 
