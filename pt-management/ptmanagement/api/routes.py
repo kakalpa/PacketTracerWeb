@@ -793,6 +793,40 @@ def create_api_blueprint():
         except Exception as e:
             logger.error(f"✗ Failed in bulk stop containers: {e}")
             return jsonify({'error': str(e)}), 500
+
+    @api.route('/containers/bulk/restart', methods=['POST'])
+    @require_auth
+    def bulk_restart_containers():
+        """Restart multiple containers or all running containers"""
+        try:
+            data = request.get_json(silent=True) or {}
+            names = data.get('names')
+            if not names:
+                containers = docker_mgr.list_containers(all=True)
+                names = [c['name'] for c in containers if c.get('status') == 'running' and c.get('name', '').startswith('ptvnc')]
+            
+            restarted = []
+            failed = []
+            for name in names:
+                try:
+                    if docker_mgr.restart_container(name):
+                        restarted.append(name)
+                    else:
+                        failed.append(name)
+                except Exception as e:
+                    logger.error(f"Error restarting {name}: {e}")
+                    failed.append(name)
+            
+            return jsonify({
+                'success': True,
+                'restarted': restarted,
+                'failed': failed,
+                'count': len(restarted),
+                'message': f"Restarted {len(restarted)} container(s)"
+            }), 200
+        except Exception as e:
+            logger.error(f"✗ Failed in bulk restart containers: {e}")
+            return jsonify({'error': str(e)}), 500
     
     @api.route('/containers/<container_name>', methods=['DELETE'])
     @require_auth

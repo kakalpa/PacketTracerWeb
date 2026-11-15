@@ -3,82 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Packet Tracer - Student Downloads</title>
+    <title>Student File Downloads - Packet Tracer</title>
+    <!-- Prevent FOUC Theme Script -->
+    <script>
+        (function() {
+            const saved = localStorage.getItem('pt_theme');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
+        :root {
+            --pt-primary: #4f46e5;
+            --pt-primary-hover: #4338ca;
+            --pt-primary-light: rgba(79, 70, 229, 0.08);
+            --pt-bg: #f8fafc;
+            --pt-card-bg: #ffffff;
+            --pt-border: #e2e8f0;
+            --pt-text: #0f172a;
+            --pt-text-muted: #64748b;
+            --pt-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+            --pt-radius: 12px;
+            --pt-radius-sm: 8px;
+        }
+
+        [data-bs-theme="dark"] {
+            --pt-bg: #090d16;
+            --pt-card-bg: #131c2e;
+            --pt-border: #1e293b;
+            --pt-text: #f8fafc;
+            --pt-text-muted: #94a3b8;
+            --pt-primary-light: rgba(79, 70, 229, 0.15);
+            --pt-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.5), 0 10px 15px -8px rgba(0, 0, 0, 0.4);
+        }
+
         body {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            background-color: var(--pt-bg);
+            color: var(--pt-text);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            padding: 1.5rem;
+            position: relative;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            transition: background-color 0.25s ease, color 0.25s ease;
         }
-        .portal-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
             width: 100%;
-            max-width: 850px;
-            overflow: hidden;
+            max-width: 1000px;
+            height: 400px;
+            background: radial-gradient(circle at center, rgba(79, 70, 229, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
         }
+
+        .portal-card {
+            background-color: var(--pt-card-bg);
+            border: 1px solid var(--pt-border);
+            border-radius: var(--pt-radius);
+            box-shadow: var(--pt-shadow);
+            width: 100%;
+            max-width: 860px;
+            overflow: hidden;
+            position: relative;
+            z-index: 1;
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+
         .portal-header {
-            background: #0d6efd;
-            color: white;
-            padding: 24px 30px;
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--pt-border);
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
         }
-        .portal-header h2 {
-            margin: 0;
-            font-size: 22px;
-            font-weight: 600;
-        }
+
         .portal-body {
-            padding: 30px;
+            padding: 2rem;
         }
+
         .file-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 14px 18px;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            transition: all 0.2s ease;
-            background: #fdfdfd;
+            padding: 1rem 1.25rem;
+            border: 1px solid var(--pt-border);
+            border-radius: var(--pt-radius-sm);
+            margin-bottom: 0.75rem;
+            transition: all 0.15s ease-in-out;
+            background: var(--pt-card-bg);
         }
+
         .file-item:hover {
-            border-color: #0d6efd;
-            background: #f8f9fa;
+            border-color: var(--pt-primary);
+            background: var(--pt-primary-light);
             transform: translateY(-1px);
         }
+
         .file-title {
             font-weight: 600;
-            color: #212529;
-            font-size: 15px;
+            color: var(--pt-text);
+            font-size: 0.95rem;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 0.5rem;
         }
+
         .file-meta {
-            font-size: 12px;
-            color: #6c757d;
+            font-size: 0.8rem;
+            color: var(--pt-text-muted);
+            margin-top: 2px;
         }
+
         .empty-state {
             text-align: center;
-            padding: 30px;
-            color: #6c757d;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border: 1px dashed #dee2e6;
+            padding: 2.5rem 1.5rem;
+            color: var(--pt-text-muted);
+            background: var(--pt-bg);
+            border-radius: var(--pt-radius-sm);
+            border: 1px dashed var(--pt-border);
         }
+
         .auth-box {
             max-width: 420px;
             margin: 0 auto;
+        }
+
+        .theme-toggle-btn {
+            background: transparent;
+            border: 1px solid var(--pt-border);
+            border-radius: 8px;
+            padding: 0.35rem 0.65rem;
+            color: var(--pt-text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle-btn:hover {
+            color: var(--pt-primary);
+            border-color: var(--pt-primary);
+            background-color: var(--pt-primary-light);
         }
     </style>
 </head>
@@ -86,14 +162,25 @@
 
 <div class="portal-card">
     <div class="portal-header">
-        <div>
-            <h2><i class="bi bi-box-arrow-down"></i> Student File Portal</h2>
-            <small class="opacity-75">Cisco Packet Tracer Web Lab Downloads</small>
+        <div class="d-flex align-items-center gap-3">
+            <div class="d-inline-flex align-items-center justify-content-center bg-primary text-white rounded-3 p-2" style="width: 44px; height: 44px; font-size: 1.3rem;">
+                <i class="bi bi-box-arrow-down"></i>
+            </div>
+            <div>
+                <h5 class="fw-bold mb-0">Student Lab Files</h5>
+                <small class="text-muted">Cisco Packet Tracer Web Lab Downloads</small>
+            </div>
         </div>
-        <div id="userBadge" style="display: none;">
-            <span class="badge bg-light text-dark px-3 py-2 me-2" id="usernameDisplay"></span>
-            <button class="btn btn-sm btn-outline-light" onclick="handleLogout()">
-                <i class="bi bi-box-arrow-right"></i> Logout
+
+        <div class="d-flex align-items-center gap-2">
+            <div id="userBadge" style="display: none;">
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 me-2" id="usernameDisplay"></span>
+                <button class="btn btn-sm btn-outline-danger" onclick="handleLogout()">
+                    <i class="bi bi-box-arrow-right"></i> Sign Out
+                </button>
+            </div>
+            <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme">
+                <i class="bi bi-moon-stars" id="theme-toggle-icon"></i>
             </button>
         </div>
     </div>
@@ -105,71 +192,66 @@
         <div id="authView">
             <div class="auth-box">
                 <div class="text-center mb-4">
-                    <i class="bi bi-person-badge text-primary" style="font-size: 48px;"></i>
-                    <h4 class="mt-2">Student Sign In</h4>
-                    <p class="text-muted small">Sign in with your Packet Tracer student credentials to view and download your saved exercise files.</p>
+                    <i class="bi bi-shield-lock-fill text-primary" style="font-size: 42px;"></i>
+                    <h5 class="mt-2 fw-bold">Student Sign In</h5>
+                    <p class="text-muted small">Enter your station credentials to view and download your saved Packet Tracer lab topologies.</p>
                 </div>
 
                 <form id="loginForm" onsubmit="handleLogin(event)">
                     <div class="mb-3">
-                        <label for="username" class="form-label fw-bold">Student Username</label>
+                        <label for="username" class="form-label small fw-semibold">Student Username</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-person"></i></span>
                             <input type="text" class="form-control" id="username" placeholder="e.g. kalpa" required autofocus>
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label for="password" class="form-label fw-bold">Password</label>
+                        <label for="password" class="form-label small fw-semibold">Password</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-lock"></i></span>
                             <input type="password" class="form-control" id="password" placeholder="••••••••" required>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold" id="loginBtn">
-                        <i class="bi bi-unlock"></i> Access My Files
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold d-flex align-items-center justify-content-center gap-2" id="loginBtn">
+                        <i class="bi bi-unlock"></i>
+                        <span>Access My Files</span>
                     </button>
                 </form>
 
-                <div class="mt-4 p-3 bg-light rounded border text-muted small">
-                    <i class="bi bi-shield-check text-success me-1"></i>
-                    <strong>Private & Isolated:</strong> Your files are strictly private to your station and can only be downloaded after authentication.
+                <div class="mt-4 p-3 rounded bg-body-secondary small text-muted text-center border">
+                    <i class="bi bi-info-circle me-1"></i> Use the exact same username and password you use to connect to your virtual desktop.
                 </div>
             </div>
         </div>
 
-        <!-- DASHBOARD VIEW (when logged in) -->
+        <!-- DASHBOARD VIEW (when authenticated) -->
         <div id="dashboardView" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0 text-dark fw-bold">
-                    <i class="bi bi-folder2-open text-primary me-2"></i>My Saved Lab Files
-                </h5>
+            <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+                <h6 class="fw-bold mb-0 text-uppercase small text-muted">
+                    <i class="bi bi-folder2-open text-primary me-1"></i> Personal Lab Saves
+                </h6>
                 <button class="btn btn-sm btn-outline-secondary" onclick="loadMyFiles()">
-                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                    <i class="bi bi-arrow-clockwise me-1"></i> Refresh
                 </button>
             </div>
 
-            <div id="personalFilesList">
+            <div id="personalFilesList" class="mb-4">
                 <div class="text-center py-4 text-muted">
-                    <div class="spinner-border spinner-border-sm me-2"></div> Loading your files...
+                    <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+                    <div>Loading your files...</div>
                 </div>
             </div>
 
-            <hr class="my-4">
+            <!-- Course Materials Section -->
+            <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+                <h6 class="fw-bold mb-0 text-uppercase small text-muted">
+                    <i class="bi bi-book text-success me-1"></i> Course Materials &amp; Lab Guides
+                </h6>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">Shared Classroom Resources</span>
+            </div>
 
-            <h5 class="mb-3 text-dark fw-bold">
-                <i class="bi bi-journal-bookmark text-success me-2"></i>Course Materials & Templates
-            </h5>
             <div id="courseMaterialsList">
-                <div class="text-center py-3 text-muted">
-                    <div class="spinner-border spinner-border-sm me-2"></div> Loading course materials...
-                </div>
-            </div>
-
-            <div class="mt-4 alert alert-info py-2 px-3 small d-flex align-items-center">
-                <i class="bi bi-info-circle-fill me-2 fs-5"></i>
-                <div>
-                    <strong>How to save files in Packet Tracer:</strong> Inside your lab desktop session, click <strong>File &rarr; Save As</strong> and choose <code>Personal_Saves</code> on your desktop. Saved files will appear here immediately.
-                </div>
+                <div class="text-center py-3 text-muted small">Loading course materials...</div>
             </div>
         </div>
     </div>
@@ -178,11 +260,27 @@
 <script>
     const API_PREFIX = '/api/student/files';
 
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+        const next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-bs-theme', next);
+        localStorage.setItem('pt_theme', next);
+        updateThemeIcon(next);
+    }
+
+    function updateThemeIcon(theme) {
+        const icon = document.getElementById('theme-toggle-icon');
+        if (icon) {
+            icon.className = theme === 'dark' ? 'bi bi-sun-fill text-warning' : 'bi bi-moon-stars';
+        }
+    }
+
     function showAlert(message, type = 'danger') {
         const container = document.getElementById('alertContainer');
         container.innerHTML = `
-            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-                ${message}
+            <div class="alert alert-${type} alert-dismissible fade show border-0 d-flex align-items-center gap-2 mb-3" role="alert">
+                <i class="bi bi-exclamation-circle-fill"></i>
+                <div class="flex-grow-1">${message}</div>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         `;
@@ -199,6 +297,19 @@
     function formatDate(epoch) {
         if (!epoch) return '-';
         return new Date(epoch * 1000).toLocaleString();
+    }
+
+    function getFileBadge(filename) {
+        const ext = (filename.split('.').pop() || '').toLowerCase();
+        if (ext === 'pkt') {
+            return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace me-2" style="font-size: 0.72rem;">PKT</span>';
+        } else if (ext === 'pka') {
+            return '<span class="badge bg-info-subtle text-info border border-info-subtle font-monospace me-2" style="font-size: 0.72rem;">PKA</span>';
+        } else if (ext === 'pdf') {
+            return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle font-monospace me-2" style="font-size: 0.72rem;">PDF</span>';
+        } else {
+            return '<i class="bi bi-file-earmark-code text-primary fs-4 me-2"></i>';
+        }
     }
 
     async function checkSession() {
@@ -296,7 +407,7 @@
                     <div class="file-item">
                         <div>
                             <div class="file-title">
-                                <i class="bi bi-file-earmark-code text-primary fs-4"></i>
+                                ${getFileBadge(f.name)}
                                 <span>${f.name}</span>
                             </div>
                             <div class="file-meta">
@@ -323,7 +434,7 @@
                     <div class="file-item">
                         <div>
                             <div class="file-title">
-                                <i class="bi bi-file-earmark-arrow-down text-success fs-4"></i>
+                                ${getFileBadge(f.name)}
                                 <span>${f.name}</span>
                             </div>
                             <div class="file-meta">
@@ -342,7 +453,11 @@
         }
     }
 
-    document.addEventListener('DOMContentLoaded', checkSession);
+    document.addEventListener('DOMContentLoaded', () => {
+        const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+        updateThemeIcon(current);
+        checkSession();
+    });
 </script>
 
 </body>

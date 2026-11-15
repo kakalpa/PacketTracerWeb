@@ -148,6 +148,9 @@
                 <button class="btn btn-outline-success d-flex align-items-center gap-1" onclick="startAllContainers()" title="Start all stopped lab instances">
                     <i class="bi bi-play-fill"></i> Start All
                 </button>
+                <button class="btn btn-outline-warning d-flex align-items-center gap-1" onclick="restartAllContainers()" title="Restart all running lab instances">
+                    <i class="bi bi-arrow-clockwise"></i> Restart All
+                </button>
                 <button class="btn btn-outline-secondary d-flex align-items-center gap-1" onclick="stopAllContainers()" title="Stop all running lab instances">
                     <i class="bi bi-stop-fill"></i> Stop All
                 </button>
@@ -180,7 +183,10 @@
                     <button class="btn btn-outline-success" onclick="startSelectedContainers()">
                         <i class="bi bi-play"></i> Start Selected
                     </button>
-                    <button class="btn btn-outline-warning" onclick="stopSelectedContainers()">
+                    <button class="btn btn-outline-warning" onclick="restartSelectedContainers()">
+                        <i class="bi bi-arrow-clockwise"></i> Restart Selected
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="stopSelectedContainers()">
                         <i class="bi bi-stop"></i> Stop Selected
                     </button>
                     <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#resourceTuningModal">

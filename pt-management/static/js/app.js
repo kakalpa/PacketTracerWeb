@@ -490,6 +490,51 @@ async function stopSelectedContainers() {
     }
 }
 
+/**
+ * Restart all running containers
+ */
+async function restartAllContainers() {
+    const running = (window._loadedContainers || []).filter(c => c.status === 'running');
+    if (running.length === 0) {
+        showNotification('No containers are currently running to restart', 'info');
+        return;
+    }
+    if (!confirm(`Restart all ${running.length} running container(s)? This will briefly reset student lab sessions.`)) return;
+
+    showNotification(`Restarting ${running.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/restart', 'POST', {
+        names: running.map(c => c.name)
+    });
+    if (result && result.success) {
+        showNotification(result.message || `Restarted ${result.restarted.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to restart containers', 'error');
+    }
+}
+
+/**
+ * Restart selected containers
+ */
+async function restartSelectedContainers() {
+    const names = getSelectedContainerNames();
+    if (names.length === 0) {
+        showNotification('No containers selected', 'warning');
+        return;
+    }
+    if (!confirm(`Restart ${names.length} selected container(s)?`)) return;
+    showNotification(`Restarting ${names.length} container(s)...`, 'info');
+    const result = await apiRequest('/containers/bulk/restart', 'POST', { names });
+    if (result && result.success) {
+        showNotification(`Restarted ${result.restarted.length} container(s)`, 'success');
+        await loadContainers();
+        await loadStats();
+    } else {
+        showNotification('Failed to restart selected containers', 'error');
+    }
+}
+
 
 
 /**
