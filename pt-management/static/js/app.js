@@ -688,6 +688,70 @@ function clearLogs() {
 }
 
 /**
+ * Convert ANSI escape sequences into styled HTML
+ */
+function ansiToHtml(text) {
+    if (!text) return '';
+
+    let escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    const colorMap = {
+        '30': '#64748b', '31': '#ef4444', '32': '#10b981', '33': '#f59e0b',
+        '34': '#3b82f6', '35': '#d946ef', '36': '#06b6d4', '37': '#f8fafc',
+        '90': '#94a3b8', '91': '#f87171', '92': '#34d399', '93': '#fde047',
+        '94': '#60a5fa', '95': '#e879f9', '96': '#67e8f9', '97': '#ffffff'
+    };
+
+    let openSpans = 0;
+    const ansiRegex = /\x1b\[([0-9;]*)m|\u001b\[([0-9;]*)m/g;
+
+    let html = escaped.replace(ansiRegex, (match, p1, p2) => {
+        const codes = (p1 || p2 || '0').split(';').map(c => c.trim()).filter(Boolean);
+        if (codes.length === 0 || codes.includes('0')) {
+            let closeTags = '';
+            while (openSpans > 0) {
+                closeTags += '</span>';
+                openSpans--;
+            }
+            return closeTags;
+        }
+
+        let styles = [];
+        codes.forEach(code => {
+            if (code === '1') styles.push('font-weight: 600;');
+            else if (code === '4') styles.push('text-decoration: underline;');
+            else if (colorMap[code]) styles.push(`color: ${colorMap[code]};`);
+        });
+
+        if (styles.length > 0) {
+            openSpans++;
+            return `<span style="${styles.join(' ')}">`;
+        }
+        return '';
+    });
+
+    while (openSpans > 0) {
+        html += '</span>';
+        openSpans--;
+    }
+
+    // Clean up any remaining raw artifacts if escape byte was omitted
+    html = html.replace(/\[(?:[0-9]{1,2};?)+m/g, '');
+
+    // Highlight key pass/fail badges
+    html = html
+        .replace(/✅ PASS/g, '<span style="color: #10b981; font-weight: 600;">✅ PASS</span>')
+        .replace(/✔ PASS/g, '<span style="color: #10b981; font-weight: 600;">✔ PASS</span>')
+        .replace(/❌ FAIL/g, '<span style="color: #ef4444; font-weight: 600;">❌ FAIL</span>')
+        .replace(/━━━━━━━━━/g, '<span style="color: #475569;">━━━━━━━━━</span>');
+
+    return html;
+}
+
+/**
  * Run health check and display results
  */
 async function runHealthCheck() {
@@ -728,18 +792,8 @@ async function runHealthCheck() {
             statusBadge.className = 'badge bg-danger';
         }
         
-        // Display full output with syntax highlighting
-        let highlightedOutput = result.output
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/✅ PASS/g, '<span style="color: #28a745;">✅ PASS</span>')
-            .replace(/❌ FAIL/g, '<span style="color: #dc3545;">❌ FAIL</span>')
-            .replace(/⚠️/g, '<span style="color: #ffc107;">⚠️</span>')
-            .replace(/ℹ️/g, '<span style="color: #17a2b8;">ℹ️</span>')
-            .replace(/━━━━━━━━━/g, '<span style="color: #6c757d;">━━━━━━━━━</span>');
-        
-        outputDiv.innerHTML = highlightedOutput;
+        // Display full output with proper ANSI color decoding and formatting
+        outputDiv.innerHTML = ansiToHtml(result.output);
     } catch (error) {
         console.error('Health check error:', error);
         outputDiv.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
