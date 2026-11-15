@@ -93,15 +93,21 @@ RUN apt-get clean -y
 
 RUN chown -R ptuser /home/ptuser
 
+# Copy save hook library if available
+COPY libptsavehook.so* /usr/local/lib/
+
 # Create /opt/pt directory for Packet Tracer installation (if not already created by .deb)
 RUN mkdir -p /opt/pt && chmod 755 /opt/pt
 
 # Create wrapper script for PacketTracer that handles both AppImage and regular binary
 RUN mkdir -p /opt/pt && \
     echo '#!/bin/bash' > /opt/pt/packettracer-launcher && \
+    echo 'if [ -f /usr/local/lib/libptsavehook.so ]; then' >> /opt/pt/packettracer-launcher && \
+    echo '  export LD_PRELOAD=/usr/local/lib/libptsavehook.so' >> /opt/pt/packettracer-launcher && \
+    echo 'fi' >> /opt/pt/packettracer-launcher && \
     echo 'if [ -x /opt/pt/packettracer.AppImage ]; then' >> /opt/pt/packettracer-launcher && \
     echo '  cd /tmp' >> /opt/pt/packettracer-launcher && \
-    echo '  /opt/pt/packettracer.AppImage --appimage-extract >/dev/null 2>&1' >> /opt/pt/packettracer-launcher && \
+    echo '  LD_PRELOAD="" /opt/pt/packettracer.AppImage --appimage-extract >/dev/null 2>&1' >> /opt/pt/packettracer-launcher && \
     echo '  exec ./squashfs-root/AppRun "$@"' >> /opt/pt/packettracer-launcher && \
     echo 'elif [ -x /opt/pt/bin/PacketTracer ]; then' >> /opt/pt/packettracer-launcher && \
     echo '  exec /opt/pt/bin/PacketTracer "$@"' >> /opt/pt/packettracer-launcher && \

@@ -52,6 +52,10 @@ mkdir -p /home/ptuser/Desktop /home/ptuser/.config/gtk-3.0 /home/ptuser/pt
 if [ -d /shared ]; then
     ln -sfn /shared /home/ptuser/Desktop/Personal_Saves 2>/dev/null || true
     ln -sfn /shared /home/ptuser/Desktop/shared 2>/dev/null || true
+    if [ -d /home/ptuser/pt/saves ] && [ ! -L /home/ptuser/pt/saves ]; then
+        cp -rn /home/ptuser/pt/saves/* /shared/ 2>/dev/null || true
+        rm -rf /home/ptuser/pt/saves
+    fi
     ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
     rm -f /home/ptuser/Desktop/Saved_Files 2>/dev/null || true
 fi

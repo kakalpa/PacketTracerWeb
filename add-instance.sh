@@ -122,6 +122,9 @@ for ((i=0; i<instances_to_add; i++)); do
         docker exec $container_name rm -rf /home/ptuser/pt/saves 2>/dev/null || true
         docker exec $container_name ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
         docker exec $container_name ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
+        if [ -f ptweb-vnc/libptsavehook.so ]; then
+            docker cp ptweb-vnc/libptsavehook.so $container_name:/usr/local/lib/libptsavehook.so 2>/dev/null || true
+        fi
         docker exec $container_name chown -R ptuser:ptuser /home/ptuser/Desktop 2>/dev/null || true
         docker exec $container_name chown -h ptuser:ptuser /home/ptuser/Desktop/* 2>/dev/null || true
     fi
