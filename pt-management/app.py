@@ -37,8 +37,22 @@ def create_app():
     enable_https = os.environ.get('ENABLE_HTTPS', 'false').lower() in ('true', '1', 'yes')
     secret_key = os.environ.get('SECRET_KEY')
     if not secret_key or secret_key == 'dev-key-change-in-production':
-        secret_key = secrets.token_hex(32)
-        logger.info("Generated cryptographically secure random SECRET_KEY")
+        secret_key_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.secret_key')
+        if os.path.exists(secret_key_file):
+            try:
+                with open(secret_key_file, 'r') as f:
+                    secret_key = f.read().strip()
+            except Exception:
+                pass
+        if not secret_key:
+            secret_key = secrets.token_hex(32)
+            try:
+                with open(secret_key_file, 'w') as f:
+                    f.write(secret_key)
+                os.chmod(secret_key_file, 0o600)
+            except Exception as e:
+                logger.warning(f"Could not persist secret key to {secret_key_file}: {e}")
+            logger.info("Generated cryptographically secure random SECRET_KEY")
     app.config['SECRET_KEY'] = secret_key
     app.config['SESSION_COOKIE_SECURE'] = enable_https
     app.config['SESSION_COOKIE_HTTPONLY'] = True
