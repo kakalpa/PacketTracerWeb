@@ -93,7 +93,7 @@ function filterUsers() {
     }
     const filtered = (window._loadedUsers || []).filter(u => {
         const username = (u.username || '').toLowerCase();
-        const connections = (u.connections || []).join(' ').toLowerCase();
+        const connections = (u.connections || []).map(c => typeof c === 'object' ? (c.connection_name || '') : c).join(' ').toLowerCase();
         return username.includes(q) || connections.includes(q);
     });
     renderUsersTable(filtered);
@@ -139,17 +139,18 @@ function renderUsersTable(users) {
             ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2" title="Admin user"><i class="bi bi-shield-check"></i> Admin</span>'
             : '';
         
-        const connectionsList = (user.connections || []).map(c => 
-            `<span class="badge bg-light text-dark border me-1">${c}</span>`
-        ).join('') || '<span class="text-muted small">None</span>';
+        const connectionsList = (user.connections || []).map(c => {
+            const name = typeof c === 'object' ? (c.connection_name || c.name || c.connection_id || JSON.stringify(c)) : c;
+            return `<span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="bi bi-display me-1"></i>${name}</span>`;
+        }).join('') || '<span class="text-muted small">None</span>';
 
         row.innerHTML = `
             <td><input type="checkbox" class="user-checkbox" onchange="updateUserSelectionCount()"></td>
             <td><strong>${user.username}</strong>${adminBadge}</td>
             <td>${connectionsList}</td>
-            <td>
+            <td class="text-end">
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-danger" onclick="deleteUser('${user.username}')" title="Delete User">
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.username}')" title="Delete User">
                         <i class="bi bi-trash"></i>
                     </button>
                 </div>
@@ -190,28 +191,23 @@ async function loadUsers() {
     window._loadedUsers = result.users || [];
     filterUsers();
     
-    // Show bulk actions if there are users
-    if (window._loadedUsers.length > 0) {
-        const bulk = document.getElementById('users-bulk-actions');
-        if (bulk) bulk.style.display = 'block';
-        
-        const selectAllBtn = document.getElementById('users-select-all');
-        if (selectAllBtn) {
-            selectAllBtn.onclick = () => {
-                document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = true);
-                updateUserSelectionCount();
-            };
-        }
-        const deselectAllBtn = document.getElementById('users-deselect-all');
-        if (deselectAllBtn) {
-            deselectAllBtn.onclick = () => {
-                document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
-                updateUserSelectionCount();
-            };
-        }
-    } else {
-        const bulk = document.getElementById('users-bulk-actions');
-        if (bulk) bulk.style.display = 'none';
+    // Wire up bulk actions handlers and update visibility
+    const selectAllBtn = document.getElementById('users-select-all');
+    if (selectAllBtn) {
+        selectAllBtn.onclick = () => {
+            document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = true);
+            if (typeof updateUserSelectionCount === 'function') updateUserSelectionCount();
+        };
+    }
+    const deselectAllBtn = document.getElementById('users-deselect-all');
+    if (deselectAllBtn) {
+        deselectAllBtn.onclick = () => {
+            document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
+            if (typeof updateUserSelectionCount === 'function') updateUserSelectionCount();
+        };
+    }
+    if (typeof updateUserSelectionCount === 'function') {
+        updateUserSelectionCount();
     }
 }
 
@@ -365,28 +361,23 @@ async function loadContainers() {
     window._loadedContainers = result.containers || [];
     filterContainers();
     
-    // Show bulk actions if there are containers
-    if (window._loadedContainers.length > 0) {
-        const bulk = document.getElementById('containers-bulk-actions');
-        if (bulk) bulk.style.display = 'block';
-        
-        const selectAllBtn = document.getElementById('containers-select-all');
-        if (selectAllBtn) {
-            selectAllBtn.onclick = () => {
-                document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = true);
-                updateContainerSelectionCount();
-            };
-        }
-        const deselectAllBtn = document.getElementById('containers-deselect-all');
-        if (deselectAllBtn) {
-            deselectAllBtn.onclick = () => {
-                document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = false);
-                updateContainerSelectionCount();
-            };
-        }
-    } else {
-        const bulk = document.getElementById('containers-bulk-actions');
-        if (bulk) bulk.style.display = 'none';
+    // Wire up bulk actions handlers and update visibility
+    const selectAllBtn = document.getElementById('containers-select-all');
+    if (selectAllBtn) {
+        selectAllBtn.onclick = () => {
+            document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = true);
+            if (typeof updateContainerSelectionCount === 'function') updateContainerSelectionCount();
+        };
+    }
+    const deselectAllBtn = document.getElementById('containers-deselect-all');
+    if (deselectAllBtn) {
+        deselectAllBtn.onclick = () => {
+            document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = false);
+            if (typeof updateContainerSelectionCount === 'function') updateContainerSelectionCount();
+        };
+    }
+    if (typeof updateContainerSelectionCount === 'function') {
+        updateContainerSelectionCount();
     }
 }
 

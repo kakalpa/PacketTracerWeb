@@ -475,8 +475,15 @@ async function createSingleUserWithContainer() {
 function updateUserSelectionCount() {
     const checked = document.querySelectorAll('.user-checkbox:checked').length;
     const total = document.querySelectorAll('.user-checkbox').length;
-    document.getElementById('users-selected-count').textContent = `${checked} of ${total} selected`;
+    const countEl = document.getElementById('users-selected-count');
+    if (countEl) countEl.textContent = `${checked} of ${total} selected`;
     
+    // Toggle bulk actions bar visibility based on active selection
+    const bulk = document.getElementById('users-bulk-actions');
+    if (bulk) {
+        bulk.style.display = checked > 0 ? 'block' : 'none';
+    }
+
     // Update "select all" checkbox
     const selectAllCheckbox = document.getElementById('users-select-all-checkbox');
     if (selectAllCheckbox) {
@@ -546,8 +553,15 @@ async function deleteSelectedUsers() {
 function updateContainerSelectionCount() {
     const checked = document.querySelectorAll('.container-checkbox:checked').length;
     const total = document.querySelectorAll('.container-checkbox').length;
-    document.getElementById('containers-selected-count').textContent = `${checked} of ${total} selected`;
+    const countEl = document.getElementById('containers-selected-count');
+    if (countEl) countEl.textContent = `${checked} of ${total} selected`;
     
+    // Toggle bulk actions bar visibility based on active selection
+    const bulk = document.getElementById('containers-bulk-actions');
+    if (bulk) {
+        bulk.style.display = checked > 0 ? 'block' : 'none';
+    }
+
     // Update "select all" checkbox
     const selectAllCheckbox = document.getElementById('containers-select-all-checkbox');
     if (selectAllCheckbox) {
