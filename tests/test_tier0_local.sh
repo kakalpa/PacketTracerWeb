@@ -202,6 +202,53 @@ MOUNT_DEST=$(docker inspect guacamole-mariadb --format '{{range .Mounts}}{{if eq
 assert_eq "guacamole-mariadb mounts mariadb_data to /var/lib/mysql" "$MOUNT_DEST" "mariadb_data"
 
 # -----------------------------------------------------------------------------
+echo -e "\n${YELLOW}TEST GROUP 8: Secure Student File Downloads & Isolation (Option D)${NC}"
+# -----------------------------------------------------------------------------
+# 1. Public /downloads/ must be eliminated (404/403)
+DL_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "https://localhost/downloads/")
+assert_contains "Public /downloads/ directory listing is eliminated (404/403)" "404 403" "$DL_STATUS"
+
+# 2. Internal downloads must reject direct external requests (404)
+INT_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "https://localhost/internal/downloads/ptvnc1/test.pkt")
+assert_eq "Internal downloads endpoint blocks direct external access (404)" "$INT_STATUS" "404"
+
+# 3. Test multi-tenant container isolation and secure download workflow
+TEST_PKT="student-lab-$(date +%s).pkt"
+TEST_DATA="PACKET_TRACER_LAB_DATA_CONTENT_$(date +%s)"
+mkdir -p "shared/instances/ptvnc1"
+echo "$TEST_DATA" > "shared/instances/ptvnc1/$TEST_PKT"
+
+# Check isolation: visible in ptvnc1, NOT visible in ptvnc2
+VIS_P1=$(docker exec ptvnc1 test -f "/shared/$TEST_PKT" && echo "YES" || echo "NO")
+assert_eq "File is visible inside ptvnc1 (/shared)" "$VIS_P1" "YES"
+
+VIS_P2=$(docker exec ptvnc2 test -f "/shared/$TEST_PKT" && echo "YES" || echo "NO")
+assert_eq "File is ISOLATED and NOT visible in ptvnc2" "$VIS_P2" "NO"
+
+# 4. Mint token via Student API
+TOKEN_JSON=$(curl -k -s "https://localhost/api/student/files/token?container=ptvnc1&file=$TEST_PKT")
+assert_contains "Student API token response has success:true" "$TOKEN_JSON" '"success":true'
+
+DL_PATH=$(echo "$TOKEN_JSON" | grep -o '"download_url":"[^"]*' | cut -d'"' -f4)
+assert_contains "Student API returns download URL" "$DL_PATH" "/api/student/files/download"
+
+# 5. Execute secure zero-copy download via Nginx
+DL_CONTENT=$(curl -k -s "https://localhost$DL_PATH")
+assert_eq "Downloaded content matches original file content exactly" "$DL_CONTENT" "$TEST_DATA"
+
+# 6. Verify path traversal attempt is blocked
+TRAVERSAL_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "https://localhost/api/student/files/download?container=ptvnc1&file=../../etc/passwd&expires=9999999999&sig=dummy")
+assert_contains "Path traversal attempt is rejected (403/401)" "403 401" "$TRAVERSAL_STATUS"
+
+# 7. Verify tampered signature is rejected
+TAMPERED_PATH=$(echo "$DL_PATH" | sed 's/sig=[^&]*/sig=invalidsignature/')
+TAMPERED_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "https://localhost$TAMPERED_PATH")
+assert_contains "Tampered download request is rejected (403/401)" "403 401" "$TAMPERED_STATUS"
+
+# Cleanup
+rm -f "shared/instances/ptvnc1/$TEST_PKT"
+
+# -----------------------------------------------------------------------------
 echo -e "\n${BLUE}======================================================${NC}"
 echo -e "RESULTS: ${GREEN}$PASSED Passed${NC}, ${RED}$FAILED Failed${NC}"
 echo -e "${BLUE}======================================================${NC}"

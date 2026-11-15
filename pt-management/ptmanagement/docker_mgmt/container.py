@@ -361,11 +361,19 @@ class DockerManager:
                 shared_path = os.path.join(project_root_env, 'shared')
             else:
                 shared_path = os.path.abspath(os.path.join(os.getcwd(), 'shared'))
-            logger.info(f"DEBUG container.py: Using shared_path={shared_path}")
+            
+            # Partition storage per container instance
+            instance_storage_path = os.path.join(shared_path, 'instances', name)
+            try:
+                os.makedirs(instance_storage_path, exist_ok=True)
+                os.chmod(instance_storage_path, 0o777)
+            except OSError as e:
+                logger.warning(f"Could not prepare instance storage path {instance_storage_path}: {e}")
+            logger.info(f"DEBUG container.py: Using instance_storage_path={instance_storage_path}")
             
             request_data["HostConfig"]["Binds"] = [
                 "pt_opt:/opt/pt",  # Named volume for Packet Tracer binary
-                f"{shared_path}:/shared"  # Bind mount for shared files (MUST be host path)
+                f"{instance_storage_path}:/shared"  # Isolated instance storage mount (MUST be host path)
             ]
             
             logger.info(f"Mounting: pt_opt:/opt/pt and {shared_path}:/shared on bridge network (will connect to pt-stack after creation)")

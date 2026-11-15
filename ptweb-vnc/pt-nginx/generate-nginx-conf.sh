@@ -251,15 +251,31 @@ render_common_server_block() {
   cat <<'EOF'
   charset utf-8;
 
-  # Serve shared downloads with highest priority
-  location ^~ /downloads/ {
+  # Protected internal storage serving - accessible ONLY via X-Accel-Redirect
+  location ^~ /internal/downloads/ {
+    internal;
+    alias /shared/instances/;
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    gzip off;
+    default_type application/octet-stream;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Content-Security-Policy "default-src 'none'" always;
+  }
+
+  # Reverse proxy for Student File Download API
+  location ^~ /api/student/files/ {
 EOF
   render_geoip_check
+  render_rate_limit_directive
   cat <<'EOF'
-    alias /shared/;
-    autoindex on;
-    autoindex_exact_size off;
-    autoindex_localtime on;
+    proxy_pass http://pt-management:5000/api/student/files/;
+    proxy_redirect off;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
   }
 
   # File manager interface

@@ -115,11 +115,15 @@ def create_app():
         protected_routes = ['/dashboard', '/settings', '/files', '/api/']
         
         if any(request.path.startswith(route) for route in protected_routes):
+            # Exclude student download API from admin session requirement (it handles its own auth)
+            if request.path.startswith('/api/student/files/'):
+                return
+
             # Allow public defaults endpoint without authentication
             if request.path.startswith('/api/env/defaults') and request.method == 'GET':
                 return
             
-            # Enforce authentication for all protected endpoints
+            # Enforce authentication for all other protected endpoints
             if 'user' not in session:
                 if request.path.startswith('/api/'):
                     return jsonify({'error': 'Unauthorized', 'message': 'Authentication required'}), 401
@@ -178,6 +182,13 @@ def create_app():
     from ptmanagement.api.file_manager import create_file_manager_blueprint
     fm_api_bp = create_file_manager_blueprint()
     app.register_blueprint(fm_api_bp)  # Blueprint already has /api/files prefix
+    
+    # ========================================================================
+    # Student File Download API
+    # ========================================================================
+    
+    from ptmanagement.api.student_routes import student_api
+    app.register_blueprint(student_api)  # Blueprint already has /api/student/files prefix
     
     # ========================================================================
     # Error Handlers

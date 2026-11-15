@@ -185,7 +185,15 @@ def create_api_blueprint():
                             if not pt_deb:
                                 pt_deb = os.path.join(project_root, 'CiscoPacketTracer.deb')
                             
-                            # Create the container using docker CLI with /shared mount - matching deploy.sh exactly
+                            # Partition storage per container instance
+                            instance_storage_path = os.path.join(shared_path, 'instances', container_name)
+                            try:
+                                os.makedirs(instance_storage_path, exist_ok=True)
+                                os.chmod(instance_storage_path, 0o777)
+                            except OSError:
+                                pass
+
+                            # Create the container using docker CLI with isolated instance storage mount
                             cmd = [
                                 'docker', 'run', '-d',
                                 '--name', container_name,
@@ -198,7 +206,7 @@ def create_api_blueprint():
                                 '--dns=127.0.0.1',
                                 '-v', f'{pt_deb}:/PacketTracer.deb:ro',
                                 '-v', 'pt_opt:/opt/pt',
-                                f'--mount=type=bind,source={shared_path},target=/shared,bind-propagation=rprivate',
+                                f'--mount=type=bind,source={instance_storage_path},target=/shared,bind-propagation=rprivate',
                                 '-e', 'PT_DEB_PATH=/PacketTracer.deb',
                                 'ptvnc'
                             ]
@@ -208,13 +216,13 @@ def create_api_blueprint():
                             if result.returncode == 0:
                                 logger.info(f"✓ Created container {container_name}")
 
-                                # Create Desktop symlink to /shared for easy file access
+                                # Create Desktop and save symlinks to /shared for easy file access
                                 # Also fix /shared permissions to be writable by ptuser
                                 try:
                                     symlink_cmd = [
                                         'docker', 'exec', container_name,
                                         'bash', '-c',
-                                        'mkdir -p /home/ptuser/Desktop && ln -sf /shared /home/ptuser/Desktop/shared && chmod 777 /shared && chown ptuser:ptuser /shared'
+                                        'mkdir -p /home/ptuser/Desktop /home/ptuser/pt && ln -sf /shared /home/ptuser/Desktop/shared && ln -sf /shared /home/ptuser/Desktop/Saved_Files && rm -rf /home/ptuser/pt/saves && ln -sfn /shared /home/ptuser/pt/saves && chmod 777 /shared && chown ptuser:ptuser /shared'
                                     ]
                                     symlink_result = subprocess.run(symlink_cmd, capture_output=True, text=True, timeout=10)
                                     if symlink_result.returncode == 0:

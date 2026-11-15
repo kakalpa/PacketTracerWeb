@@ -121,6 +121,19 @@ echo ""
 echo -e "\e[32mStep 1. Stopping and removing containers\e[0m"
 for instance_num in $instances_to_remove_list; do
     container_name="ptvnc$instance_num"
+    
+    # Archive and clean instance storage directory
+    INSTANCE_DIR="${WORKDIR}/shared/instances/${container_name}"
+    ARCHIVE_DIR="${WORKDIR}/shared/archive"
+    if [ -d "$INSTANCE_DIR" ]; then
+        mkdir -p "$ARCHIVE_DIR"
+        ARCHIVE_FILE="${ARCHIVE_DIR}/${container_name}_$(date +%Y%m%d_%H%M%S).tar.gz"
+        echo "Archiving storage for $container_name to $ARCHIVE_FILE..."
+        tar -czf "$ARCHIVE_FILE" -C "${WORKDIR}/shared/instances" "$container_name" 2>/dev/null || true
+        rm -rf "$INSTANCE_DIR"
+        echo "  ✓ Cleaned storage for $container_name"
+    fi
+
     echo "Removing $container_name..."
     docker stop $container_name 2>/dev/null || true
     docker rm $container_name 2>/dev/null || true
