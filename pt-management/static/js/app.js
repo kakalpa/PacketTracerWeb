@@ -294,6 +294,10 @@ function renderContainersTable(containers) {
         const cpus = container.cpus || '1.0';
         const portStr = (container.ports && container.ports.length > 0) ? container.ports.join(', ') : '-';
         
+        const guacAssistUrl = container.client_token 
+            ? `${window.location.protocol}//${window.location.hostname}/#/client/${container.client_token}`
+            : (container.guacamole_url ? `${window.location.protocol}//${window.location.hostname}${container.guacamole_url}` : null);
+
         row.innerHTML = `
             <td><input type="checkbox" class="container-checkbox" onchange="updateContainerSelectionCount()"></td>
             <td>
@@ -313,8 +317,8 @@ function renderContainersTable(containers) {
             <td><span class="small text-muted">${portStr}</span></td>
             <td>
                 <div class="btn-group btn-group-sm" role="group">
-                    ${isRunning && container.guacamole_url 
-                        ? `<a href="${container.guacamole_url}" target="_blank" class="btn btn-outline-primary" title="Assist Student (Open Live Screen in Guacamole)">
+                    ${isRunning && guacAssistUrl 
+                        ? `<a href="${guacAssistUrl}" target="_blank" class="btn btn-outline-primary" title="Assist Student (Open Live Screen in Guacamole)">
                             <i class="bi bi-display"></i>
                         </a>` 
                         : ''

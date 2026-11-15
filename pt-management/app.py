@@ -165,6 +165,15 @@ def create_app():
         if 'text/html' in accept:
             return redirect(url_for('student_my_files'))
         return jsonify({'error': 'Forbidden: Unauthenticated directory listing is disabled. Use /my-files to access your student files.'}), 403
+
+    @app.route('/guacamole')
+    @app.route('/guacamole/')
+    @app.route('/guacamole/<path:subpath>')
+    def guacamole_redirect(subpath=''):
+        """Redirect Guacamole requests from port 5000 to primary HTTPS port 443 where Guacamole lives"""
+        host = request.host.split(':')[0]
+        target = f"https://{host}/#/{subpath}" if subpath else f"https://{host}/#/"
+        return redirect(target, code=302)
     
     # ========================================================================
     # API Routes

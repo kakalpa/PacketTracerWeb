@@ -790,7 +790,8 @@ def get_all_container_connections():
                 res[hostname] = {
                     'connection_id': cid,
                     'connection_name': cname,
-                    'guacamole_url': f"/guacamole/#/client/{token}"
+                    'client_token': token,
+                    'guacamole_url': f"/#/client/{token}"
                 }
         return res
     except Exception as e:

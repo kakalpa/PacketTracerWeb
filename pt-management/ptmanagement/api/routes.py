@@ -467,6 +467,7 @@ def create_api_blueprint():
                 if guac_info:
                     container['connection_id'] = guac_info.get('connection_id')
                     container['connection_name'] = guac_info.get('connection_name')
+                    container['client_token'] = guac_info.get('client_token')
                     container['guacamole_url'] = guac_info.get('guacamole_url')
             
             return jsonify({
