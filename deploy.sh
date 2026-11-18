@@ -261,6 +261,7 @@ for ((i=1; i<=$numofPT; i++)); do
     if [ -f ptweb-vnc/libptsavehook.so ]; then
         docker cp ptweb-vnc/libptsavehook.so ptvnc$i:/usr/local/lib/libptsavehook.so 2>/dev/null || true
     fi
+    docker exec ptvnc$i ln -sf /opt/pt/packettracer-launcher /opt/pt/packettracer 2>/dev/null || true
     if [ -f ptweb-vnc/app.png ]; then
         docker exec ptvnc$i mkdir -p /opt/pt/art /usr/share/pixmaps 2>/dev/null || true
         docker cp ptweb-vnc/app.png ptvnc$i:/opt/pt/art/app.png 2>/dev/null || true

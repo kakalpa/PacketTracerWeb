@@ -105,6 +105,11 @@ if [ ! -f /opt/pt/art/app.png ]; then
     chmod 644 /opt/pt/art/app.png /usr/share/pixmaps/app.png /usr/share/pixmaps/packettracer.png 2>/dev/null || true
 fi
 
+# Ensure /opt/pt/packettracer symlink exists for panel launchers and scripts
+if [ ! -e /opt/pt/packettracer ] && [ -x /opt/pt/packettracer-launcher ]; then
+    ln -sf /opt/pt/packettracer-launcher /opt/pt/packettracer 2>/dev/null || true
+fi
+
 # Start XFCE desktop on the virtual display
 echo "Starting XFCE desktop..."
 DISPLAY=:1 XAUTHORITY=/home/ptuser/.Xauthority su - ptuser -c "startxfce4" >/tmp/xfce.log 2>&1 &

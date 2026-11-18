@@ -119,7 +119,8 @@ RUN mkdir -p /opt/pt && \
     echo '  echo "Error: PacketTracer not found at any known location"' >> /opt/pt/packettracer-launcher && \
     echo '  exit 1' >> /opt/pt/packettracer-launcher && \
     echo 'fi' >> /opt/pt/packettracer-launcher && \
-    chmod +x /opt/pt/packettracer-launcher
+    chmod +x /opt/pt/packettracer-launcher && \
+    ln -sf /opt/pt/packettracer-launcher /opt/pt/packettracer
 
 # Create desktop shortcut for Packet Tracer
 RUN mkdir -p /home/ptuser/Desktop && \
