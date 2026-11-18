@@ -119,6 +119,7 @@ for ((i=0; i<instances_to_add; i++)); do
         docker exec $container_name mkdir -p /home/ptuser/Desktop /home/ptuser/pt 2>/dev/null || true
         docker exec $container_name ln -sfn /shared /home/ptuser/Desktop/shared 2>/dev/null || true
         docker exec $container_name ln -sfn /shared /home/ptuser/Desktop/Personal_Saves 2>/dev/null || true
+        docker exec $container_name rm -rf /shared/shared 2>/dev/null || true
         docker exec $container_name rm -rf /home/ptuser/pt/saves 2>/dev/null || true
         docker exec $container_name ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
         docker exec $container_name ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
