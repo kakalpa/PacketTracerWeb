@@ -3,6 +3,8 @@
 import os
 import hashlib
 import logging
+from functools import wraps
+from flask import jsonify, session
 from ptmanagement.db.connection import get_db_connection
 
 logger = logging.getLogger(__name__)
@@ -196,3 +198,17 @@ def verify_ptadmin_credentials(username, password):
     else:
         logger.warning(f"✗ Authentication failed for user {username}")
         return False
+
+
+def require_admin(f):
+    """Decorator to require an authenticated admin user (ptadmin or DB ADMINISTER)."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        username = session.get('user')
+        if not username:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        if username != 'ptadmin' and not is_user_admin(username):
+            logger.warning(f"✗ Forbidden admin access attempt by user: {username}")
+            return jsonify({'success': False, 'message': 'Forbidden: Admin privileges required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function

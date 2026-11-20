@@ -24,7 +24,7 @@ RUN apt-get update && \
       librsvg2-common libglu1-mesa humanity-icon-theme adwaita-icon-theme \
     && rm -rf /var/lib/apt/lists/*
 
-# Download and install TurboVNC from GitHub release
+# Download and install TurboVNC from GitHub release (pinned to 3.3; 3.3.1+ adds hard systemd dependency)
 RUN cd /tmp && \
     echo "Downloading TurboVNC 3.3 from GitHub..." && \
     wget -q https://github.com/TurboVNC/turbovnc/releases/download/3.3/turbovnc_3.3_amd64.deb && \
@@ -36,13 +36,13 @@ RUN cd /tmp && \
 
 # Download and install VirtualGL from GitHub release
 RUN cd /tmp && \
-    echo "Downloading VirtualGL 3.1.4 from GitHub..." && \
-    wget -q https://github.com/VirtualGL/virtualgl/releases/download/3.1.4/virtualgl_3.1.4_amd64.deb && \
+    echo "Downloading VirtualGL 3.1.5 from GitHub..." && \
+    wget -q https://github.com/VirtualGL/virtualgl/releases/download/3.1.5/virtualgl_3.1.5_amd64.deb && \
     echo "Installing VirtualGL..." && \
-    dpkg -i virtualgl_3.1.4_amd64.deb && \
-    rm -f virtualgl_3.1.4_amd64.deb && \
+    dpkg -i virtualgl_3.1.5_amd64.deb && \
+    rm -f virtualgl_3.1.5_amd64.deb && \
     /usr/bin/vglserver_config +config +s +f >/dev/null 2>&1 || true && \
-    echo "✓ VirtualGL 3.1.4 installed successfully with GPU support configured" && \
+    echo "✓ VirtualGL 3.1.5 installed successfully with GPU support configured" && \
     vglrun --version 2>&1 | head -1
 
 WORKDIR /

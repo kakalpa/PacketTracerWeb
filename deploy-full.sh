@@ -9,9 +9,53 @@ cd "$(dirname "$0")"
 ROOT_DIR="$(pwd)"
 PT_MANAGEMENT_DIR="$ROOT_DIR/pt-management"
 
-# Load environment configuration from .env if it exists
-if [ -f "$ROOT_DIR/.env" ]; then
-  source "$ROOT_DIR/.env"
+# Safe .env loader (no shell execution via source)
+load_env_file() {
+  local env_file="$1"
+  local line key val
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    [[ -z "${line//[[:space:]]/}" || "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" =~ ^[[:space:]]*export[[:space:]]+(.*)$ ]] && line="${BASH_REMATCH[1]}"
+    [[ "$line" != *=* ]] && continue
+    key="${line%%=*}"
+    val="${line#*=}"
+    key="${key//[[:space:]]/}"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    if [[ "$val" =~ ^\"(.*)\"$ ]]; then
+      val="${BASH_REMATCH[1]}"
+    elif [[ "$val" =~ ^\'(.*)\'$ ]]; then
+      val="${BASH_REMATCH[1]}"
+    fi
+    case "$key" in
+      PRODUCTION_MODE|PUBLIC_IP|ENABLE_HTTPS|TLS_MODE|SERVER_NAME|\
+      SSL_CERT_PATH|SSL_KEY_PATH|\
+      CERTBOT_ENABLED|CERTBOT_DOMAIN|CERTBOT_EXTRA_DOMAINS|CERTBOT_EMAIL|\
+      CERTBOT_CHALLENGE_TYPE|CERTBOT_STAGING|CERTBOT_AUTO_RENEW|CERTBOT_WEBROOT|\
+      NGINX_GEOIP_ALLOW|NGINX_GEOIP_BLOCK|GEOIP_ALLOW_COUNTRIES|GEOIP_BLOCK_COUNTRIES|\
+      NGINX_TRUSTED_IPS_OVERRIDE|\
+      NGINX_RATE_LIMIT_ENABLE|NGINX_RATE_LIMIT_RATE|NGINX_RATE_LIMIT_BURST|NGINX_RATE_LIMIT_ZONE_SIZE|\
+      PTADMIN_PASSWORD|DB_HOST|DB_USER|DB_PASSWORD|DB_NAME|NUM_PT|SHARED_HOST_PATH|STANDALONE_SSL)
+        printf -v "$key" '%s' "$val"
+        ;;
+    esac
+  done < "$env_file"
+}
+
+# Pre-create .env if missing so bind mounts never create an empty directory
+if [[ ! -f "$ROOT_DIR/.env" ]]; then
+  if [[ -f "$ROOT_DIR/.env.example" ]]; then
+    cp "$ROOT_DIR/.env.example" "$ROOT_DIR/.env"
+    echo "ℹ️  Created .env from .env.example"
+  else
+    touch "$ROOT_DIR/.env"
+    echo "ℹ️  Created empty .env"
+  fi
+fi
+
+# Load environment configuration from .env safely
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  load_env_file "$ROOT_DIR/.env"
   echo "ℹ️  Configuration loaded from .env"
 fi
 
@@ -64,9 +108,14 @@ if [[ ! -d "$ROOT_DIR/shared" ]]; then
   chmod 777 "$ROOT_DIR/shared" || true
 fi
 
+# Ensure host SSL and Certbot directories exist
+mkdir -p "$ROOT_DIR/ssl" \
+         "$ROOT_DIR/certbot/conf" \
+         "$ROOT_DIR/certbot/www/.well-known/acme-challenge"
+
 # Connect all containers to pt-stack network for inter-container communication
 echo "Connecting containers to pt-stack network..."
-for container in guacamole-mariadb pt-guacd pt-guacamole pt-nginx1 ptvnc1 ptvnc2; do
+for container in guacamole-mariadb pt-guacd pt-guacamole pt-nginx1 pt-certbot ptvnc1 ptvnc2; do
   if docker ps -a --format '{{.Names}}' | grep -q "^${container}$"; then
     docker network connect pt-stack "$container" 2>/dev/null || echo "  (already connected: $container)"
   fi
@@ -97,16 +146,7 @@ if docker ps -a --format '{{.Names}}' | grep -q '^pt-management$'; then
   docker rm -f pt-management || true
 fi
 
-# Mount SSL certificates if available
-SSL_MOUNTS=""
-if [[ -f "$ROOT_DIR/ssl/server.crt" ]]; then
-  SSL_MOUNTS="$SSL_MOUNTS -v $ROOT_DIR/ssl/server.crt:/etc/ssl/certs/server.crt:ro"
-fi
-if [[ -f "$ROOT_DIR/ssl/server.key" ]]; then
-  SSL_MOUNTS="$SSL_MOUNTS -v $ROOT_DIR/ssl/server.key:/etc/ssl/private/server.key:ro"
-fi
-
-# Run container (use default bridge network so it can reach other containers by name)
+# Run container on pt-stack with Certbot directory mounts (use pt-nginx1 for external TLS)
 docker run -d --name pt-management \
   --restart=unless-stopped \
   --network pt-stack \
@@ -114,7 +154,8 @@ docker run -d --name pt-management \
   -v "$ROOT_DIR/shared:/shared" \
   -v "$ROOT_DIR/.env:/app/.env" \
   -v "$ROOT_DIR:/project" \
-  $SSL_MOUNTS \
+  -v "$ROOT_DIR/certbot/conf:/etc/letsencrypt" \
+  -v "$ROOT_DIR/certbot/www:/var/www/certbot" \
   -e PTADMIN_PASSWORD="$PTADMIN_PASSWORD" \
   -e DB_HOST="$DB_HOST" \
   -e DB_USER="$DB_USER" \
@@ -123,6 +164,7 @@ docker run -d --name pt-management \
   -e PROJECT_ROOT=/project \
   -e SHARED_HOST_PATH="$ROOT_DIR/shared" \
   -e ENABLE_HTTPS="$ENABLE_HTTPS" \
+  -e STANDALONE_SSL="false" \
   pt-management:latest
 
 # Also connect pt-management to ptnet network

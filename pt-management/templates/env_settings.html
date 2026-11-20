@@ -339,6 +339,10 @@
                     <i class="bi bi-shield-lock"></i>
                     <span>HTTPS / SSL</span>
                 </a>
+                <a class="nav-link" id="certbot-tab" data-bs-toggle="tab" href="#certbot-panel" role="tab">
+                    <i class="bi bi-patch-check"></i>
+                    <span>Let's Encrypt / Certbot</span>
+                </a>
                 <a class="nav-link" id="geoip-tab" data-bs-toggle="tab" href="#geoip-panel" role="tab">
                     <i class="bi bi-globe"></i>
                     <span>GeoIP Filtering</span>
@@ -400,6 +404,18 @@
                 <div class="tab-pane fade show active" id="https-panel" role="tabpanel">
                     <div class="settings-section-header">
                         <h3><i class="bi bi-shield-lock text-primary"></i> HTTPS &amp; SSL Enforcement</h3>
+                        <span id="https-tls-mode-badge" class="badge bg-secondary-subtle text-secondary border">Mode: loading...</span>
+                    </div>
+
+                    <div id="https-cookie-restart-notice" class="alert alert-warning border-0 small mb-3" style="display: none;">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        <code>ENABLE_HTTPS</code> in <code>.env</code> differs from the running process's <code>SESSION_COOKIE_SECURE</code> setting. Restart <code>pt-management</code> for session cookie flags to update.
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold" for="https-server-name">Domain / Server Name (<code>SERVER_NAME</code>)</label>
+                        <input type="text" class="form-control" id="https-server-name" placeholder="pt.example.edu (or space-separated domains)">
+                        <div class="help-text">Nginx <code>server_name</code> for ports 80, 443, and 5000. Separate multiple domains with spaces; defaults to <code>localhost</code> when empty.</div>
                     </div>
 
                     <div class="form-check form-switch mb-3">
@@ -408,19 +424,177 @@
                             Enable Strict HTTPS (HTTP → HTTPS 301 Redirect)
                         </label>
                     </div>
-                    <div class="help-text mb-4">When enabled, all incoming unencrypted HTTP requests will be permanently redirected to secure HTTPS port 443.</div>
+                    <div class="help-text mb-4">When enabled, all incoming unencrypted HTTP requests (except ACME HTTP-01 challenges) will be permanently redirected to secure HTTPS port 443.</div>
 
                     <div id="https-options" style="display: none;">
                         <div class="mb-3">
                             <label class="form-label fw-semibold" for="https-cert">SSL Certificate Path</label>
-                            <input type="text" class="form-control" id="https-cert" placeholder="/etc/ssl/certs/server.crt">
+                            <input type="text" class="form-control" id="https-cert" placeholder="/etc/ssl/ptweb/server.crt">
                             <div class="help-text">Absolute path to the certificate inside the Nginx container filesystem.</div>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold" for="https-key">SSL Private Key Path</label>
-                            <input type="text" class="form-control" id="https-key" placeholder="/etc/ssl/private/server.key">
+                            <input type="text" class="form-control" id="https-key" placeholder="/etc/ssl/ptweb/server.key">
                             <div class="help-text">Absolute path to the private key inside the Nginx container filesystem.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1b. Let's Encrypt / Certbot Panel -->
+                <div class="tab-pane fade" id="certbot-panel" role="tabpanel">
+                    <div class="settings-section-header">
+                        <h3><i class="bi bi-patch-check text-primary"></i> Let's Encrypt / Certbot TLS</h3>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span id="certbot-container-badge" class="badge bg-secondary-subtle text-secondary border">pt-certbot: checking...</span>
+                            <span id="certbot-mode-badge" class="badge bg-secondary-subtle text-secondary border">TLS Mode: ...</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="loadCertbotStatus()">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Live Active Certificate Status Card -->
+                    <div class="subsection" id="certbot-cert-card">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                            <h5 class="mb-0"><i class="bi bi-award text-primary me-1"></i> Active Certificate Status</h5>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="cert-status-source" class="badge bg-secondary-subtle text-secondary border">Unknown</span>
+                                <span id="cert-status-days" class="badge bg-secondary-subtle text-secondary border">-- days</span>
+                                <span id="cert-status-pair-match" class="badge bg-secondary-subtle text-secondary border">Pair: --</span>
+                            </div>
+                        </div>
+                        <div class="row g-2 small">
+                            <div class="col-md-6">
+                                <div class="text-muted">Subject</div>
+                                <div id="cert-status-subject" class="fw-semibold font-monospace text-break">--</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted">Issuer</div>
+                                <div id="cert-status-issuer" class="fw-semibold font-monospace text-break">--</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted">Subject Alternative Names (SANs)</div>
+                                <div id="cert-status-sans" class="font-monospace text-break">--</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted">Validity Window</div>
+                                <div id="cert-status-validity" class="font-monospace">--</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted">Active Cert Path</div>
+                                <div id="cert-status-path" class="font-monospace text-break">--</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted">Auto-Renewal Timer</div>
+                                <div id="cert-status-renewal" class="text-break">--</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TLS Mode Switcher -->
+                    <div class="subsection" id="tls-mode-switcher">
+                        <h5><i class="bi bi-toggles text-primary me-1"></i> Active TLS Mode</h5>
+                        <p class="small text-muted mb-3">Switch between self-signed bootstrap certificates, manually uploaded certificates, and Let's Encrypt Certbot without destroying stored certificates.</p>
+                        <div class="btn-group flex-wrap" role="group" aria-label="TLS Mode Switcher">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-mode-self-signed" onclick="switchTlsMode('self-signed')">
+                                <i class="bi bi-shield me-1"></i> Self-Signed
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-mode-manual" onclick="switchTlsMode('manual')">
+                                <i class="bi bi-file-earmark-lock me-1"></i> Manual Upload
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-mode-certbot" onclick="switchTlsMode('certbot')">
+                                <i class="bi bi-patch-check me-1"></i> Let's Encrypt Certbot
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Certbot Configuration Form -->
+                    <div class="subsection" id="certbot-config-form">
+                        <h5><i class="bi bi-sliders text-primary me-1"></i> ACME Configuration</h5>
+                        <div class="row g-3 mt-1">
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="certbot-enabled">
+                                    <label class="form-check-label fw-semibold" for="certbot-enabled">Enable Certbot Management</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" for="certbot-domain">Primary Domain (FQDN)</label>
+                                <input type="text" class="form-control" id="certbot-domain" placeholder="pt.example.edu">
+                                <div class="help-text">Must be a valid public FQDN (no <code>localhost</code>, IPs, or wildcards for HTTP-01).</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" for="certbot-extra-domains">Additional SAN Domains</label>
+                                <input type="text" class="form-control" id="certbot-extra-domains" placeholder="www.pt.example.edu, alt.example.edu">
+                                <div class="help-text">Optional comma-separated FQDNs included in the same certificate.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" for="certbot-email">ACME Registration Email</label>
+                                <input type="email" class="form-control" id="certbot-email" placeholder="admin@example.edu">
+                                <div class="help-text">Used by Let's Encrypt for account registration and expiry alerts.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" for="certbot-challenge-type">ACME Challenge Type</label>
+                                <select class="form-select" id="certbot-challenge-type">
+                                    <option value="http-01">HTTP-01 (Webroot via Port 80)</option>
+                                    <option value="dns-01">DNS-01 (Future / Requires DNS hook)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="certbot-staging">
+                                    <label class="form-check-label fw-semibold" for="certbot-staging">Use Let's Encrypt Staging Environment</label>
+                                </div>
+                                <div class="help-text">Staging issues untrusted test certificates without production rate limits.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="certbot-auto-renew" checked>
+                                    <label class="form-check-label fw-semibold" for="certbot-auto-renew">Enable 12-Hour Auto-Renewal</label>
+                                </div>
+                                <div class="help-text">Controls the <code>pt-certbot</code> background renewal loop.</div>
+                            </div>
+                            <div class="col-12 d-flex justify-content-end">
+                                <button type="button" class="btn btn-primary btn-sm" id="certbot-save-btn" onclick="saveCertbotConfig()">
+                                    <i class="bi bi-save me-1"></i> Save Certbot Config
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Issuance & Renewal Actions -->
+                    <div class="subsection">
+                        <h5><i class="bi bi-terminal text-primary me-1"></i> Certificate Issuance &amp; Renewal</h5>
+                        <p class="small text-muted mb-3">Run a non-destructive dry-run first to verify DNS and port 80 HTTP-01 routing before requesting a live certificate.</p>
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary certbot-action-btn" id="certbot-dryrun-btn" onclick="issueCertbot(true)">
+                                <i class="bi bi-play-circle me-1"></i> Dry-Run Test
+                            </button>
+                            <button type="button" class="btn btn-sm btn-success certbot-action-btn" id="certbot-issue-btn" onclick="issueCertbot(false)">
+                                <i class="bi bi-patch-check me-1"></i> Issue Certificate
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary certbot-action-btn" id="certbot-renew-dryrun-btn" onclick="renewCertbot(true)">
+                                <i class="bi bi-arrow-repeat me-1"></i> Renew Dry-Run
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success certbot-action-btn" id="certbot-renew-btn" onclick="renewCertbot(false)">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Renew Now
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning certbot-action-btn" id="certbot-force-renew-btn" onclick="renewCertbot(false, true)">
+                                <i class="bi bi-lightning me-1"></i> Force Renew
+                            </button>
+                        </div>
+
+                        <div class="terminal-window">
+                            <div class="terminal-header">
+                                <div class="terminal-dots">
+                                    <div class="terminal-dot red"></div>
+                                    <div class="terminal-dot yellow"></div>
+                                    <div class="terminal-dot green"></div>
+                                </div>
+                                <div class="small text-secondary font-monospace">pt-certbot output</div>
+                            </div>
+                            <pre id="certbot-terminal-output" class="terminal-body mb-0" style="height: 260px;">Ready.</pre>
                         </div>
                     </div>
                 </div>
@@ -596,9 +770,14 @@
                         <span class="badge bg-secondary-subtle text-secondary border">x509 PEM</span>
                     </div>
 
+                    <div id="ssl-panel-mode-banner" class="alert alert-secondary border-0 mb-3 small">
+                        <i class="bi bi-shield-lock me-1"></i>
+                        Active TLS Mode: <strong id="ssl-panel-mode-label">loading...</strong>
+                    </div>
+
                     <div class="alert alert-info border-0 mb-4">
                         <i class="bi bi-info-circle-fill me-1"></i>
-                        Upload <code>server.crt</code> (Certificate Chain) and <code>server.key</code> (Private Key). Automatic timestamped backups are generated prior to file replacement.
+                        Upload <code>server.crt</code> (Certificate Chain) and <code>server.key</code> (Private Key). Files are validated with OpenSSL and staged in <code>.pending/</code> until both halves match before switching <code>TLS_MODE=manual</code> and reloading Nginx.
                     </div>
 
                     <div class="row g-4">
@@ -608,7 +787,7 @@
                                 <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
                                     <i class="bi bi-shield-check text-success"></i> Certificate (server.crt)
                                 </h6>
-                                <div id="cert-info" class="p-3 mb-3 rounded bg-light border font-monospace small">
+                                <div id="cert-info" class="p-3 mb-3 rounded bg-body-tertiary border font-monospace small">
                                     <p class="text-muted mb-0">Loading certificate info...</p>
                                 </div>
                                 <div class="mb-3">
@@ -628,7 +807,7 @@
                                 <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
                                     <i class="bi bi-key-fill text-warning"></i> Private Key (server.key)
                                 </h6>
-                                <div id="key-info" class="p-3 mb-3 rounded bg-light border font-monospace small">
+                                <div id="key-info" class="p-3 mb-3 rounded bg-body-tertiary border font-monospace small">
                                     <p class="text-muted mb-0">Loading key info...</p>
                                 </div>
                                 <div class="mb-3">

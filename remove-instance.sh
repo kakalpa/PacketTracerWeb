@@ -11,15 +11,50 @@
 PTfile="CiscoPacketTracer.deb"
 WORKDIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Load environment configuration from .env if it exists
+# Safe .env loader (no shell execution via source)
+load_env_file() {
+    local env_file="$1"
+    local line key val
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%$'\r'}"
+        [[ -z "${line//[[:space:]]/}" || "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*export[[:space:]]+(.*)$ ]] && line="${BASH_REMATCH[1]}"
+        [[ "$line" != *=* ]] && continue
+        key="${line%%=*}"
+        val="${line#*=}"
+        key="${key//[[:space:]]/}"
+        [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+        if [[ "$val" =~ ^\"(.*)\"$ ]]; then
+            val="${BASH_REMATCH[1]}"
+        elif [[ "$val" =~ ^\'(.*)\'$ ]]; then
+            val="${BASH_REMATCH[1]}"
+        fi
+        case "$key" in
+            PRODUCTION_MODE|PUBLIC_IP|ENABLE_HTTPS|TLS_MODE|SERVER_NAME|\
+            SSL_CERT_PATH|SSL_KEY_PATH|\
+            CERTBOT_ENABLED|CERTBOT_DOMAIN|CERTBOT_EXTRA_DOMAINS|CERTBOT_EMAIL|\
+            CERTBOT_CHALLENGE_TYPE|CERTBOT_STAGING|CERTBOT_AUTO_RENEW|CERTBOT_WEBROOT|\
+            NGINX_GEOIP_ALLOW|NGINX_GEOIP_BLOCK|GEOIP_ALLOW_COUNTRIES|GEOIP_BLOCK_COUNTRIES|\
+            NGINX_TRUSTED_IPS_OVERRIDE|\
+            NGINX_RATE_LIMIT_ENABLE|NGINX_RATE_LIMIT_RATE|NGINX_RATE_LIMIT_BURST|NGINX_RATE_LIMIT_ZONE_SIZE|\
+            PTADMIN_PASSWORD|DB_HOST|DB_USER|DB_PASSWORD|DB_NAME|NUM_PT|SHARED_HOST_PATH|STANDALONE_SSL)
+                printf -v "$key" '%s' "$val"
+                ;;
+        esac
+    done < "$env_file"
+}
+
+# Load environment configuration from .env safely if it exists
 if [ -f "$WORKDIR/.env" ]; then
-    source "$WORKDIR/.env"
+    load_env_file "$WORKDIR/.env"
 fi
 
-# SSL/HTTPS Configuration (from .env or defaults)
+# SSL/HTTPS & GeoIP Configuration (from .env or defaults)
 ENABLE_HTTPS=${ENABLE_HTTPS:-false}
-SSL_CERT_PATH=${SSL_CERT_PATH:-/etc/ssl/certs/server.crt}
-SSL_KEY_PATH=${SSL_KEY_PATH:-/etc/ssl/private/server.key}
+SSL_CERT_PATH=${SSL_CERT_PATH:-/etc/ssl/ptweb/server.crt}
+SSL_KEY_PATH=${SSL_KEY_PATH:-/etc/ssl/ptweb/server.key}
+NGINX_GEOIP_ALLOW=${NGINX_GEOIP_ALLOW:-false}
+NGINX_GEOIP_BLOCK=${NGINX_GEOIP_BLOCK:-false}
 
 # Parse arguments - check if they are instance names (pt01, pt02) or count
 instances_to_remove_list=""
@@ -158,33 +193,33 @@ echo ""
 # Step 3: Restart guacamole services
 echo -e "\e[32mStep 3. Restarting Guacamole services\e[0m"
 
+# Ensure ptnet network exists
+docker network create ptnet 2>/dev/null || true
+
 # Stop and remove old guacd
 echo "Stopping pt-guacd..."
 docker stop pt-guacd 2>/dev/null || true
 docker rm pt-guacd 2>/dev/null || true
 
-# Build link string for remaining instances
-linkstr=""
-remaining_instances=$(docker ps --format "table {{.Names}}" | grep "^ptvnc" | sed 's/ptvnc//' | sort -n)
-for instance_num in $remaining_instances; do
-    linkstr="${linkstr} --link ptvnc$instance_num:ptvnc$instance_num"
-done
-
-# Start new guacd with remaining links
-docker run --name pt-guacd --restart always -d ${linkstr} guacamole/guacd
+# Start new guacd on ptnet (no legacy --link)
+docker run --name pt-guacd --restart always \
+  --network ptnet \
+  -d guacamole/guacd:latest
 sleep 20
 
-# Recreate guacamole
+# Recreate guacamole on ptnet
 echo "Recreating pt-guacamole..."
 docker stop pt-guacamole 2>/dev/null || true
 docker rm pt-guacamole 2>/dev/null || true
 sleep 5
 docker run --name pt-guacamole --restart always \
-  --link pt-guacd:guacd \
-  --link guacamole-mariadb:mysql \
+  --network ptnet \
+  -e MYSQL_HOSTNAME=guacamole-mariadb \
   -e MYSQL_DATABASE=guacamole_db \
   -e MYSQL_USER=ptdbuser \
   -e MYSQL_PASSWORD=ptdbpass \
+  -e GUACAMOLE_GUACD_HOSTNAME=pt-guacd \
+  -e GUACAMOLE_GUACD_PORT=4822 \
   -d guacamole/guacamole
 sleep 10
 
@@ -194,26 +229,45 @@ docker stop pt-nginx1 2>/dev/null || true
 docker rm pt-nginx1 2>/dev/null || true
 sleep 3
 
-# Mount SSL certificates if HTTPS is enabled
-SSL_MOUNTS=""
-if [ "$ENABLE_HTTPS" = "true" ]; then
-    if [ -f "$WORKDIR/ssl/server.crt" ]; then
-        SSL_MOUNTS="$SSL_MOUNTS --mount type=bind,source=\"$WORKDIR/ssl/server.crt\",target=$SSL_CERT_PATH,readonly"
-    fi
-    if [ -f "$WORKDIR/ssl/server.key" ]; then
-        SSL_MOUNTS="$SSL_MOUNTS --mount type=bind,source=\"$WORKDIR/ssl/server.key\",target=$SSL_KEY_PATH,readonly"
+# Ensure host SSL and Certbot directories exist
+mkdir -p "${WORKDIR}/ssl" \
+         "${WORKDIR}/certbot/conf" \
+         "${WORKDIR}/certbot/www/.well-known/acme-challenge"
+
+if [ "$ENABLE_HTTPS" = "true" ] || [ "$ENABLE_HTTPS" = "1" ]; then
+    bash "${WORKDIR}/generate-ssl-cert.sh" --if-missing
+fi
+
+# Mount GeoIP database if GeoIP filtering is enabled
+GEOIP_ARGS=()
+if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_ALLOW" = "1" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "1" ]; then
+    GEOIP_FILE="${WORKDIR}/geoip/GeoIP.dat"
+    if [ -f "$GEOIP_FILE" ]; then
+        GEOIP_ARGS+=(--mount "type=bind,source=${GEOIP_FILE},target=/usr/share/GeoIP/GeoIP.dat,readonly")
     fi
 fi
 
-eval "docker run --restart always --name pt-nginx1 \
-  --mount type=bind,source=\"$WORKDIR/ptweb-vnc/pt-nginx/www\",target=/usr/share/nginx/html,readonly \
-  --mount type=bind,source=\"$WORKDIR/ptweb-vnc/pt-nginx/conf\",target=/etc/nginx/conf.d,readonly \
-  --mount type=bind,source=\"$WORKDIR/shared\",target=/shared,readonly \
-  $SSL_MOUNTS \
-  --link pt-guacamole:guacamole \
+docker run --restart always --name pt-nginx1 \
+  --network ptnet \
+  --mount "type=bind,source=${WORKDIR}/ptweb-vnc/pt-nginx/nginx.conf,target=/etc/nginx/nginx.conf,readonly" \
+  --mount "type=bind,source=${WORKDIR}/ptweb-vnc/pt-nginx/www,target=/usr/share/nginx/html,readonly" \
+  --mount "type=bind,source=${WORKDIR}/ptweb-vnc/pt-nginx/conf,target=/etc/nginx/conf.d,readonly" \
+  --mount "type=bind,source=${WORKDIR}/shared,target=/shared,readonly,bind-propagation=rprivate" \
+  --mount "type=bind,source=${WORKDIR}/ssl,target=/etc/ssl/ptweb,readonly" \
+  --mount "type=bind,source=${WORKDIR}/certbot/conf,target=/etc/letsencrypt,readonly" \
+  --mount "type=bind,source=${WORKDIR}/certbot/www,target=/var/www/certbot,readonly" \
+  "${GEOIP_ARGS[@]}" \
   -p 80:80 \
-  $([ "$ENABLE_HTTPS" = "true" ] && echo "-p 443:443") \
-  -d pt-nginx"
+  -p 443:443 \
+  -p 5000:5000 \
+  -d pt-nginx
+
+# Reconnect recreated containers to pt-stack if pt-stack exists
+if docker network inspect pt-stack &>/dev/null; then
+    for c in pt-guacd pt-guacamole pt-nginx1; do
+        docker network connect pt-stack "$c" 2>/dev/null || true
+    done
+fi
 sleep 5
 
 echo "✅ Services restarted"

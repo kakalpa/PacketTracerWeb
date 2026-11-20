@@ -213,6 +213,14 @@ def create_app():
     
     from ptmanagement.api.student_routes import student_api
     app.register_blueprint(student_api)  # Blueprint already has /api/student/files prefix
+
+    # ========================================================================
+    # Certbot / TLS Management API
+    # ========================================================================
+
+    from ptmanagement.api.certbot_routes import create_certbot_blueprint
+    certbot_api_bp = create_certbot_blueprint()
+    app.register_blueprint(certbot_api_bp)  # Blueprint already has /api/certbot prefix
     
     # ========================================================================
     # Error Handlers

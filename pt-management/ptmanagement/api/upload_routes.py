@@ -5,7 +5,8 @@ Handles REST endpoints for uploading SSL certificates and keys
 """
 
 import logging
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
+from ptmanagement.api.auth import require_admin
 from ptmanagement.api.file_upload import FileUploadManager
 
 logger = logging.getLogger(__name__)
@@ -14,15 +15,17 @@ logger = logging.getLogger(__name__)
 file_manager = FileUploadManager()
 
 
-def create_file_upload_blueprint():
+def create_file_upload_blueprint(manager=None):
     """Create and configure the file upload API blueprint"""
     upload_api = Blueprint('upload_api', __name__, url_prefix='/api/upload')
+    mgr = manager or file_manager
     
     # ========================================================================
     # File Information Endpoints
     # ========================================================================
     
     @upload_api.route('/info/<file_type>', methods=['GET'])
+    @require_admin
     def get_file_info(file_type):
         """
         Get information about current certificate or key
@@ -41,7 +44,7 @@ def create_file_upload_blueprint():
             if not full_name:
                 return jsonify({'success': False, 'message': 'Invalid file type'}), 400
             
-            info = file_manager.get_file_info(full_name)
+            info = mgr.get_file_info(full_name)
             
             return jsonify({
                 'success': True,
@@ -53,6 +56,7 @@ def create_file_upload_blueprint():
             return jsonify({'success': False, 'message': str(e)}), 500
     
     @upload_api.route('/backups', methods=['GET'])
+    @require_admin
     def list_backups():
         """
         List all backup certificates and keys
@@ -61,7 +65,7 @@ def create_file_upload_blueprint():
             JSON with list of backups
         """
         try:
-            backups = file_manager.list_backups()
+            backups = mgr.list_backups()
             
             return jsonify({
                 'success': True,
@@ -73,6 +77,7 @@ def create_file_upload_blueprint():
             return jsonify({'success': False, 'message': str(e)}), 500
     
     @upload_api.route('/backups/<file_type>', methods=['GET'])
+    @require_admin
     def list_file_backups(file_type):
         """
         List backups for specific file type
@@ -90,7 +95,7 @@ def create_file_upload_blueprint():
             if not full_name:
                 return jsonify({'success': False, 'message': 'Invalid file type'}), 400
             
-            backups = file_manager.list_backups(full_name)
+            backups = mgr.list_backups(full_name)
             
             return jsonify({
                 'success': True,
@@ -107,66 +112,44 @@ def create_file_upload_blueprint():
     # ========================================================================
     
     @upload_api.route('/certificate', methods=['POST'])
+    @require_admin
     def upload_certificate():
         """
-        Upload server certificate (server.crt)
+        Upload server certificate (server.crt) into .pending/ and activate when pair matches.
         
         Returns:
-            JSON with upload result
+            JSON with upload/staging result
         """
         try:
-            if 'user' not in session:
-                return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-            
-            # Check if file is in request
             if 'file' not in request.files:
                 return jsonify({'success': False, 'message': 'No file provided'}), 400
             
             file_obj = request.files['file']
-            
-            # Upload file
-            success, message, filepath = file_manager.upload_file(file_obj, 'server.crt')
-            
-            status_code = 200 if success else 400
-            
-            return jsonify({
-                'success': success,
-                'message': message,
-                'file_path': filepath,
-            }), status_code
+            res = mgr.upload_and_stage(file_obj, 'server.crt')
+            status_code = res.pop('status_code', 200 if res.get('success') else 400)
+            return jsonify(res), status_code
         
         except Exception as e:
             logger.error(f"✗ Error uploading certificate: {e}")
             return jsonify({'success': False, 'message': str(e)}), 500
     
     @upload_api.route('/key', methods=['POST'])
+    @require_admin
     def upload_key():
         """
-        Upload server private key (server.key)
+        Upload server private key (server.key) into .pending/ and activate when pair matches.
         
         Returns:
-            JSON with upload result
+            JSON with upload/staging result
         """
         try:
-            if 'user' not in session:
-                return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-            
-            # Check if file is in request
             if 'file' not in request.files:
                 return jsonify({'success': False, 'message': 'No file provided'}), 400
             
             file_obj = request.files['file']
-            
-            # Upload file
-            success, message, filepath = file_manager.upload_file(file_obj, 'server.key')
-            
-            status_code = 200 if success else 400
-            
-            return jsonify({
-                'success': success,
-                'message': message,
-                'file_path': filepath,
-            }), status_code
+            res = mgr.upload_and_stage(file_obj, 'server.key')
+            status_code = res.pop('status_code', 200 if res.get('success') else 400)
+            return jsonify(res), status_code
         
         except Exception as e:
             logger.error(f"✗ Error uploading key: {e}")
@@ -177,9 +160,10 @@ def create_file_upload_blueprint():
     # ========================================================================
     
     @upload_api.route('/restore', methods=['POST'])
+    @require_admin
     def restore_from_backup():
         """
-        Restore certificate or key from backup
+        Restore certificate or key from backup via .pending/ staging + pair verification.
         
         Request JSON:
             - backup_path: Path to backup file
@@ -189,25 +173,24 @@ def create_file_upload_blueprint():
             JSON with restore result
         """
         try:
-            if 'user' not in session:
-                return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-            
-            data = request.json or {}
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                return jsonify({'success': False, 'message': 'Invalid JSON payload'}), 400
+
             backup_path = data.get('backup_path')
             file_type = data.get('file_type')
             
-            if not backup_path or not file_type:
+            if (
+                not isinstance(backup_path, str)
+                or not backup_path.strip()
+                or not isinstance(file_type, str)
+                or not file_type.strip()
+            ):
                 return jsonify({'success': False, 'message': 'Missing backup_path or file_type'}), 400
             
-            # Restore from backup
-            success, message = file_manager.restore_backup(backup_path, file_type)
-            
-            status_code = 200 if success else 400
-            
-            return jsonify({
-                'success': success,
-                'message': message,
-            }), status_code
+            res = mgr.restore_and_stage(backup_path, file_type)
+            status_code = res.pop('status_code', 200 if res.get('success') else 400)
+            return jsonify(res), status_code
         
         except Exception as e:
             logger.error(f"✗ Error restoring from backup: {e}")
@@ -218,6 +201,7 @@ def create_file_upload_blueprint():
     # ========================================================================
     
     @upload_api.route('/backup/delete', methods=['POST'])
+    @require_admin
     def delete_backup():
         """
         Delete a backup file
@@ -229,18 +213,15 @@ def create_file_upload_blueprint():
             JSON with delete result
         """
         try:
-            if 'user' not in session:
-                return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-            
-            data = request.json or {}
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                return jsonify({'success': False, 'message': 'Invalid JSON payload'}), 400
+
             backup_path = data.get('backup_path')
-            
-            if not backup_path:
+            if not isinstance(backup_path, str) or not backup_path.strip():
                 return jsonify({'success': False, 'message': 'Missing backup_path'}), 400
             
-            # Delete backup
-            success, message = file_manager.delete_backup(backup_path)
-            
+            success, message = mgr.delete_backup(backup_path)
             status_code = 200 if success else 400
             
             return jsonify({

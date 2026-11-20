@@ -5,8 +5,9 @@ Handles REST endpoints for reading and updating .env configuration
 """
 
 import logging
-from functools import wraps
-from flask import Blueprint, request, jsonify, session
+import re
+from flask import Blueprint, request, jsonify, current_app
+from ptmanagement.api.auth import require_admin
 from ptmanagement.api.env_config import EnvConfigManager
 
 logger = logging.getLogger(__name__)
@@ -15,20 +16,40 @@ logger = logging.getLogger(__name__)
 env_manager = EnvConfigManager()
 
 
-def require_admin(f):
-    """Decorator to require admin authentication"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user' not in session:
-            return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-        # Note: In production, also check if user is admin
-        return f(*args, **kwargs)
-    return decorated_function
+def _extract_user_ids(data: dict):
+    """Validate and extract positive integer user IDs from user_id / user_ids payload."""
+    if 'user_id' in data and data['user_id'] is not None:
+        raw_ids = [data['user_id']]
+    elif 'user_ids' in data and data['user_ids'] is not None:
+        if not isinstance(data['user_ids'], list):
+            return None, (jsonify({'success': False, 'message': 'user_ids must be a list of integers'}), 400)
+        raw_ids = data['user_ids']
+    else:
+        raw_ids = []
+
+    if not raw_ids:
+        return None, (jsonify({'success': False, 'message': 'No user IDs provided'}), 400)
+
+    parsed_ids = []
+    for uid in raw_ids:
+        if isinstance(uid, (bool, float)):
+            return None, (jsonify({'success': False, 'message': f'Invalid user ID: {uid}'}), 400)
+        if isinstance(uid, str) and not re.fullmatch(r'[0-9]+', uid.strip()):
+            return None, (jsonify({'success': False, 'message': f'Invalid user ID: {uid}'}), 400)
+        try:
+            uid_int = int(uid)
+        except (TypeError, ValueError):
+            return None, (jsonify({'success': False, 'message': f'Invalid user ID: {uid}'}), 400)
+        if uid_int <= 0:
+            return None, (jsonify({'success': False, 'message': f'Invalid user ID: {uid}'}), 400)
+        parsed_ids.append(uid_int)
+    return parsed_ids, None
 
 
-def create_env_config_blueprint():
+def create_env_config_blueprint(manager=None):
     """Create and configure the environment config API blueprint"""
     env_api = Blueprint('env_api', __name__, url_prefix='/api/env')
+    mgr = manager or env_manager
     
     # ========================================================================
     # Configuration Read Endpoints
@@ -41,14 +62,17 @@ def create_env_config_blueprint():
         Get current environment configuration
         
         Returns:
-            JSON with current config structured by section (https, geoip, rate_limit, production)
+            JSON with current config structured by section (https, certbot, geoip, rate_limit, production)
         """
         try:
-            config = env_manager.get_config()
+            config = mgr.get_config()
+            cookie_secure = bool(current_app.config.get('SESSION_COOKIE_SECURE', False))
             return jsonify({
                 'success': True,
                 'config': config,
-                'env_path': env_manager.env_path,
+                'env_path': mgr.env_path,
+                'session_cookie_secure': cookie_secure,
+                'session_cookie_restart_needed': (bool(config['https']['enabled']) != cookie_secure),
             })
         except Exception as e:
             logger.error(f"✗ Error getting config: {e}")
@@ -64,13 +88,13 @@ def create_env_config_blueprint():
             JSON with raw .env content
         """
         try:
-            with open(env_manager.env_path, 'r') as f:
+            with open(mgr.env_path, 'r') as f:
                 content = f.read()
             
             return jsonify({
                 'success': True,
                 'content': content,
-                'path': env_manager.env_path,
+                'path': mgr.env_path,
             })
         except Exception as e:
             logger.error(f"✗ Error reading raw .env: {e}")
@@ -87,8 +111,20 @@ def create_env_config_blueprint():
         defaults = {
             'https': {
                 'enabled': False,
-                'cert_path': '/etc/ssl/certs/server.crt',
-                'key_path': '/etc/ssl/private/server.key',
+                'cert_path': '/etc/ssl/ptweb/server.crt',
+                'key_path': '/etc/ssl/ptweb/server.key',
+                'tls_mode': 'self-signed',
+                'server_name': 'localhost',
+            },
+            'certbot': {
+                'enabled': False,
+                'domain': '',
+                'extra_domains': '',
+                'email': '',
+                'challenge_type': 'http-01',
+                'staging': False,
+                'auto_renew': True,
+                'webroot': '/var/www/certbot',
             },
             'geoip': {
                 'allow_enabled': False,
@@ -125,29 +161,21 @@ def create_env_config_blueprint():
         """
         Update environment configuration and apply changes
         
-        Expected JSON:
-        {
-            "https": {"enabled": true, "cert_path": "...", "key_path": "..."},
-            "geoip": {"allow_enabled": true, "allow_countries": [...], ...},
-            "rate_limit": {"enabled": true, "rate": "100r/s", ...},
-            "production": {"mode": true, "public_ip": "..."}
-        }
-        
         Returns:
             JSON with success status and message
         """
         try:
-            updates = request.json
-            if not updates:
-                return jsonify({'success': False, 'message': 'No configuration provided'}), 400
+            updates = request.get_json(silent=True)
+            if not isinstance(updates, dict) or not updates:
+                return jsonify({'success': False, 'message': 'No valid JSON configuration provided'}), 400
             
             # Validate configuration
-            is_valid, msg = env_manager.validate_config(updates)
+            is_valid, msg = mgr.validate_config(updates)
             if not is_valid:
                 return jsonify({'success': False, 'message': f'Validation failed: {msg}'}), 400
             
             # Apply changes
-            success, msg = env_manager.apply_config_changes(updates)
+            success, msg = mgr.apply_config_changes(updates)
             
             return jsonify({
                 'success': success,
@@ -168,18 +196,15 @@ def create_env_config_blueprint():
         """
         Validate configuration without applying changes
         
-        Expected JSON:
-        Configuration to validate (same format as /config POST)
-        
         Returns:
             JSON with validation result
         """
         try:
-            config = request.json
-            if not config:
-                return jsonify({'success': False, 'message': 'No configuration provided'}), 400
+            config = request.get_json(silent=True)
+            if not isinstance(config, dict) or not config:
+                return jsonify({'success': False, 'message': 'No valid JSON configuration provided'}), 400
             
-            is_valid, msg = env_manager.validate_config(config)
+            is_valid, msg = mgr.validate_config(config)
             
             return jsonify({
                 'success': is_valid,
@@ -197,18 +222,17 @@ def create_env_config_blueprint():
         """
         Preview what would change with new configuration
         
-        Expected JSON:
-        Configuration to preview (same format as /config POST)
-        
         Returns:
             JSON with preview of changes
         """
         try:
-            updates = request.json
-            if not updates:
-                return jsonify({'success': False, 'message': 'No configuration provided'}), 400
+            updates = request.get_json(silent=True)
+            if not isinstance(updates, dict) or not updates:
+                return jsonify({'success': False, 'message': 'No valid JSON configuration provided'}), 400
             
-            preview = env_manager.preview_changes(updates)
+            preview = mgr.preview_changes(updates)
+            if isinstance(preview, dict) and 'error' in preview:
+                return jsonify({'success': False, 'message': preview['error']}), 400
             
             return jsonify({
                 'success': True,
@@ -233,7 +257,7 @@ def create_env_config_blueprint():
             JSON with backup path
         """
         try:
-            backup_path = env_manager.backup_env()
+            backup_path = mgr.backup_env()
             if not backup_path:
                 return jsonify({'success': False, 'message': 'Failed to create backup'}), 500
             
@@ -260,17 +284,18 @@ def create_env_config_blueprint():
             JSON with restore result
         """
         try:
-            data = request.json
-            if not data or not data.get('backup_path'):
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict) or not isinstance(data.get('backup_path'), str) or not data['backup_path'].strip():
                 return jsonify({'success': False, 'message': 'No backup path provided'}), 400
             
-            success, msg = env_manager.restore_env(data['backup_path'])
-            
+            success, msg = mgr.restore_env(data['backup_path'])
+            if not success:
+                return jsonify({'success': False, 'message': msg}), 400
+
+            # Regenerate and reload nginx
+            success, msg = mgr.regenerate_nginx_config()
             if success:
-                # Regenerate and reload nginx
-                success, msg = env_manager.regenerate_nginx_config()
-                if success:
-                    success, msg = env_manager.reload_nginx()
+                success, msg = mgr.reload_nginx()
             
             return jsonify({
                 'success': success,
@@ -294,10 +319,10 @@ def create_env_config_blueprint():
             import os
             backups = []
             
-            if os.path.exists(env_manager.backup_dir):
-                for filename in sorted(os.listdir(env_manager.backup_dir), reverse=True):
+            if os.path.exists(mgr.backup_dir):
+                for filename in sorted(os.listdir(mgr.backup_dir), reverse=True):
                     if filename.startswith('.env.backup.'):
-                        filepath = os.path.join(env_manager.backup_dir, filename)
+                        filepath = os.path.join(mgr.backup_dir, filename)
                         backups.append({
                             'filename': filename,
                             'path': filepath,
@@ -328,7 +353,7 @@ def create_env_config_blueprint():
             JSON with regeneration result
         """
         try:
-            success, msg = env_manager.regenerate_nginx_config()
+            success, msg = mgr.regenerate_nginx_config()
             
             return jsonify({
                 'success': success,
@@ -349,7 +374,7 @@ def create_env_config_blueprint():
             JSON with reload result
         """
         try:
-            success, msg = env_manager.reload_nginx()
+            success, msg = mgr.reload_nginx()
             
             return jsonify({
                 'success': success,
@@ -417,7 +442,7 @@ def create_env_config_blueprint():
             JSON with list of locked users and their lockout details
         """
         try:
-            locked_users = env_manager.get_locked_users()
+            locked_users = mgr.get_locked_users()
             
             return jsonify({
                 'success': True,
@@ -444,22 +469,17 @@ def create_env_config_blueprint():
             JSON with unlock results
         """
         try:
-            data = request.json
-            if not data:
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict) or not data:
                 return jsonify({'success': False, 'message': 'No data provided'}), 400
             
-            # Handle both single user and multiple users
-            user_ids = data.get('user_ids') or []
-            single_user = data.get('user_id')
-            if single_user:
-                user_ids = [single_user]
-            
-            if not user_ids:
-                return jsonify({'success': False, 'message': 'No user IDs provided'}), 400
+            user_ids, err_resp = _extract_user_ids(data)
+            if err_resp is not None:
+                return err_resp
             
             results = []
             for user_id in user_ids:
-                success, msg = env_manager.unlock_user(int(user_id))
+                success, msg = mgr.unlock_user(user_id)
                 results.append({
                     'user_id': user_id,
                     'success': success,
@@ -493,22 +513,17 @@ def create_env_config_blueprint():
             JSON with reset results
         """
         try:
-            data = request.json
-            if not data:
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict) or not data:
                 return jsonify({'success': False, 'message': 'No data provided'}), 400
             
-            # Handle both single user and multiple users
-            user_ids = data.get('user_ids') or []
-            single_user = data.get('user_id')
-            if single_user:
-                user_ids = [single_user]
-            
-            if not user_ids:
-                return jsonify({'success': False, 'message': 'No user IDs provided'}), 400
+            user_ids, err_resp = _extract_user_ids(data)
+            if err_resp is not None:
+                return err_resp
             
             results = []
             for user_id in user_ids:
-                success, msg = env_manager.reset_failed_attempts(int(user_id))
+                success, msg = mgr.reset_failed_attempts(user_id)
                 results.append({
                     'user_id': user_id,
                     'success': success,
@@ -540,7 +555,7 @@ def create_env_config_blueprint():
             JSON with user's lockout status
         """
         try:
-            status = env_manager.get_user_lockout_status(user_id)
+            status = mgr.get_user_lockout_status(user_id)
             
             if status is None:
                 return jsonify({

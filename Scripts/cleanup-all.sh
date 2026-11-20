@@ -21,10 +21,10 @@ echo ""
 
 # Confirmation prompt
 echo -e "${YELLOW}⚠️  WARNING: This will permanently remove PacketTracer resources:${NC}"
-echo "  • Containers: guacamole-mariadb, pt-guacd, pt-guacamole, pt-nginx1, pt-management, ptvnc*"
+echo "  • Containers: guacamole-mariadb, pt-guacd, pt-guacamole, pt-nginx1, pt-management, pt-certbot, ptvnc*"
 echo "  • Volumes:    mariadb_data, dbdump, pt_opt"
 echo "  • Networks:   ptnet, pt-stack"
-echo "  • Images:     pt-nginx, pt-management, ptvnc"
+echo "  • Images:     pt-nginx, pt-management, pt-certbot, ptvnc"
 echo ""
 echo -e "${GREEN}✓ Other containers, images, and volumes on your host will NOT be touched.${NC}"
 echo ""
@@ -44,12 +44,12 @@ echo ""
 
 # Helper to find project containers
 get_project_containers() {
-    docker ps -a --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|ptvnc.*)$' || true
+    docker ps -a --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|pt-certbot|ptvnc.*)$' || true
 }
 
 # Step 1: Stop project containers
 echo -e "${BLUE}[1/5] Stopping PacketTracer containers...${NC}"
-RUNNING_CONTAINERS=$(docker ps --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|ptvnc.*)$' || true)
+RUNNING_CONTAINERS=$(docker ps --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|pt-certbot|ptvnc.*)$' || true)
 if [ -n "$RUNNING_CONTAINERS" ]; then
     echo "$RUNNING_CONTAINERS" | xargs -r docker stop 2>/dev/null || true
     echo -e "${GREEN}✓ Stopped running PacketTracer containers${NC}"
@@ -88,7 +88,7 @@ echo ""
 
 # Step 5: Remove project images
 echo -e "${BLUE}[5/5] Removing PacketTracer application images...${NC}"
-PROJECT_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E '^(pt-nginx|pt-management|ptvnc)' || true)
+PROJECT_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E '^(pt-nginx|pt-management|pt-certbot|ptvnc)' || true)
 if [ -n "$PROJECT_IMAGES" ]; then
     echo "$PROJECT_IMAGES" | xargs -r docker rmi 2>/dev/null || true
     echo -e "${GREEN}✓ Removed PacketTracer application images${NC}"

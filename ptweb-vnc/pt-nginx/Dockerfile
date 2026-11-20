@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and compile nginx with geoip module
-ARG NGINX_VERSION=1.27.0
+ARG NGINX_VERSION=1.30.7
 RUN cd /tmp && \
     wget http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz && \
     tar xzf nginx-${NGINX_VERSION}.tar.gz && \
@@ -69,6 +69,10 @@ RUN mkdir -p /var/log/nginx /var/cache/nginx /etc/nginx/conf.d && \
 # Verify nginx and geoip module
 RUN nginx -V 2>&1 | grep -q 'with-http_geoip_module' && echo "✓ GeoIP module verified" || echo "⚠ Warning: GeoIP module not found"
 
-EXPOSE 80 443
+EXPOSE 80 443 5000
 
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Load SSL info
     await loadSSLInfo();
+
+    // Load Certbot status
+    await loadCertbotStatus();
 });
 
 /**
@@ -95,6 +98,11 @@ async function loadConfiguration() {
             // Populate form fields
             populateForm(currentConfig);
             updateStatusBadge();
+
+            const restartNotice = document.getElementById('https-cookie-restart-notice');
+            if (restartNotice) {
+                restartNotice.style.display = data.session_cookie_restart_needed ? 'block' : 'none';
+            }
             hideSpinner();
         } else {
             hideSpinner();
@@ -115,6 +123,19 @@ function populateForm(config) {
     document.getElementById('https-enabled').checked = config.https.enabled;
     document.getElementById('https-cert').value = config.https.cert_path;
     document.getElementById('https-key').value = config.https.key_path;
+    const serverNameInput = document.getElementById('https-server-name');
+    if (serverNameInput) {
+        serverNameInput.value = config.https.server_name || 'localhost';
+    }
+    const tlsMode = config.https.tls_mode || 'self-signed';
+    const modeBadge = document.getElementById('https-tls-mode-badge');
+    if (modeBadge) {
+        modeBadge.textContent = `Mode: ${tlsMode}`;
+    }
+    const sslModeLabel = document.getElementById('ssl-panel-mode-label');
+    if (sslModeLabel) {
+        sslModeLabel.textContent = tlsMode;
+    }
     toggleHttpsOptions();
     
     // GeoIP
@@ -231,13 +252,22 @@ function updateCountryTags(inputId, tagsContainerId) {
         .map(c => c.trim().toUpperCase())
         .filter(c => c.length === 2);
     
-    container.innerHTML = countries
-        .map(country => `
-            <div class="country-chip">
-                ${country}
-                <span class="remove" onclick="removeCountry('${inputId}', '${country}')">×</span>
-            </div>
-        `).join('');
+    container.innerHTML = '';
+    for (const country of countries) {
+        const chip = document.createElement('div');
+        chip.className = 'country-chip';
+        chip.textContent = `${country} `;
+
+        const removeBtn = document.createElement('span');
+        removeBtn.className = 'remove';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+            removeCountry(inputId, country);
+        });
+
+        chip.appendChild(removeBtn);
+        container.appendChild(chip);
+    }
 }
 
 /**
@@ -258,11 +288,13 @@ function removeCountry(inputId, country) {
  * Collect form data
  */
 function getFormData() {
+    const serverNameEl = document.getElementById('https-server-name');
     return {
         https: {
             enabled: document.getElementById('https-enabled').checked,
             cert_path: document.getElementById('https-cert').value,
             key_path: document.getElementById('https-key').value,
+            server_name: serverNameEl ? serverNameEl.value.trim() : 'localhost',
         },
         geoip: {
             allow_enabled: document.getElementById('geoip-allow-enabled').checked,
@@ -356,6 +388,13 @@ function showPreviewModal(preview) {
             html += generateChangeItem(key, change);
         }
     }
+
+    if (preview.changes.certbot && Object.keys(preview.changes.certbot).length > 0) {
+        html += `<div style="margin-top: 10px;"><strong>🔐 Certbot</strong></div>`;
+        for (const [key, change] of Object.entries(preview.changes.certbot)) {
+            html += generateChangeItem(key, change);
+        }
+    }
     
     content.innerHTML = html;
     modal.classList.add('show');
@@ -365,11 +404,12 @@ function showPreviewModal(preview) {
  * Generate change item HTML
  */
 function generateChangeItem(key, change) {
-    const from = formatValue(change.from);
-    const to = formatValue(change.to);
+    const from = escapeHtml(formatValue(change.from));
+    const to = escapeHtml(formatValue(change.to));
+    const label = escapeHtml(String(key).replace(/_/g, ' '));
     return `
         <div class="change-item">
-            <div class="key">${key.replace(/_/g, ' ')}</div>
+            <div class="key">${label}</div>
             <div class="from">From: <code>${from}</code></div>
             <div class="to">To: <code>${to}</code></div>
         </div>
@@ -391,25 +431,25 @@ function formatValue(value) {
  */
 function closePreviewModal() {
     document.getElementById('preview-modal').classList.remove('show');
+    previewData = null;
 }
 
 /**
  * Confirm and apply changes
  */
 async function confirmAndApply() {
+    const confirmedPreview = previewData;
     closePreviewModal();
-    await applyConfiguration();
+    await applyConfiguration(confirmedPreview);
 }
 
 /**
  * Apply configuration
  */
-async function applyConfiguration() {
+async function applyConfiguration(configOverride = null) {
     try {
-        if (!previewData) {
-            const config = getFormData();
-            previewData = config;
-        }
+        const configToApply = configOverride || previewData || getFormData();
+        previewData = null;
         
         // Show log modal while applying
         showApplyLog();
@@ -419,29 +459,22 @@ async function applyConfiguration() {
         const response = await fetch('/api/env/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(previewData),
+            body: JSON.stringify(configToApply),
         });
         
         const data = await response.json();
         
         if (data.success) {
             addApplyLog('✅ .env configuration updated', 'success');
-            addApplyLog('🔄 Regenerating nginx configuration...', 'info');
-            addApplyLog('⚙️  Running generate-nginx-conf.sh script', 'info');
-            
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            addApplyLog('📤 Deploying configuration to nginx container', 'info');
-            addApplyLog('🔄 Restarting nginx container (pt-nginx1)...', 'info');
-            
+            addApplyLog('🔄 Regenerating nginx configuration (generate-nginx-conf.sh)...', 'info');
+            addApplyLog('🔍 Validating nginx -t and hot-reloading pt-nginx1...', 'info');
+            addApplyLog(data.message || 'Nginx reloaded successfully', 'success');
+
             previewData = null;
-            
-            // Wait for restart to complete
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            addApplyLog('⏹ Nginx container restart completed', 'success');
+
             addApplyLog('🔄 Reloading configuration panel...', 'info');
             await loadConfiguration();
+            await loadCertbotStatus();
             addApplyLog('✓ Configuration loaded and applied successfully', 'success');
             addApplyLog('✨ All changes are now active in nginx!', 'success');
             setTimeout(() => closeApplyLog(), 2000);
@@ -507,21 +540,25 @@ async function loadBackups() {
         const data = await response.json();
         
         if (data.success && data.backups.length > 0) {
-            let html = '';
+            const backupsList = document.getElementById('backups-list');
+            backupsList.innerHTML = '';
             for (const backup of data.backups) {
-                html += `
-                    <div style="background: #f7fafc; padding: 12px; border-radius: 4px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>${backup.timestamp}</strong>
-                            <div style="font-size: 12px; color: #718096;">${backup.path}</div>
-                        </div>
-                        <button class="btn btn-sm btn-secondary" onclick="restoreBackup('${backup.path}')">
-                            Restore
-                        </button>
+                const row = document.createElement('div');
+                row.style.cssText = 'background: var(--pt-bg); border: 1px solid var(--pt-border); padding: 12px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;';
+                row.innerHTML = `
+                    <div>
+                        <strong>${escapeHtml(backup.timestamp)}</strong>
+                        <div style="font-size: 12px; color: var(--pt-text-muted);">${escapeHtml(backup.path)}</div>
                     </div>
+                    <button type="button" class="btn btn-sm btn-secondary js-restore-env-backup">
+                        Restore
+                    </button>
                 `;
+                row.querySelector('.js-restore-env-backup').addEventListener('click', () => {
+                    restoreBackup(backup.path);
+                });
+                backupsList.appendChild(row);
             }
-            document.getElementById('backups-list').innerHTML = html;
         } else {
             document.getElementById('backups-list').innerHTML = '<p class="text-muted">No backups available</p>';
         }
@@ -589,12 +626,13 @@ function updateStatusBadge() {
  * Show alert
  */
 function showAlert(message, type = 'info') {
+    const bsType = type === 'error' ? 'danger' : type;
     const container = document.getElementById('alerts-container');
     const alert = document.createElement('div');
-    alert.className = `alert alert-${type}`;
+    alert.className = `alert alert-${bsType}`;
     alert.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>${message}</div>
+            <div>${escapeHtml(message)}</div>
             <button type="button" class="btn-close" onclick="this.parentElement.parentElement.remove()"></button>
         </div>
     `;
@@ -617,7 +655,7 @@ function showSpinner(message = 'Loading...') {
     spinner.innerHTML = `
         <div style="display: flex; gap: 10px; align-items: center;">
             <div class="spinner"></div>
-            <div>${message}</div>
+            <div>${escapeHtml(message)}</div>
         </div>
     `;
     container.appendChild(spinner);
@@ -700,7 +738,7 @@ async function loadSSLInfo() {
         await loadSSLBackups();
     } catch (error) {
         console.error('✗ Error loading SSL info:', error);
-        showAlert('Error loading SSL information', 'error');
+        showAlert('Error loading SSL information', 'danger');
     }
 }
 
@@ -717,8 +755,8 @@ async function loadSSLBackups() {
             backupsList.innerHTML = '';
             
             data.backups.forEach(backup => {
-                const timestamp = new Date(backup.modified).toLocaleString();
-                const size = (backup.size / 1024).toFixed(2);
+                const timestamp = escapeHtml(new Date(backup.modified).toLocaleString());
+                const size = escapeHtml((backup.size / 1024).toFixed(2));
                 
                 const item = document.createElement('div');
                 item.className = 'card mb-2';
@@ -726,22 +764,28 @@ async function loadSSLBackups() {
                     <div class="card-body p-3">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
-                                <strong>${backup.filename}</strong><br>
+                                <strong>${escapeHtml(backup.filename)}</strong><br>
                                 <small class="text-muted">
                                     ${timestamp} • ${size} KB
                                 </small>
                             </div>
                             <div class="btn-group" role="group">
-                                <button class="btn btn-sm btn-primary" onclick="restoreSSLBackup('${backup.path}', '${backup.type}')">
+                                <button type="button" class="btn btn-sm btn-primary js-restore-ssl-backup">
                                     <i class="bi bi-arrow-counterclockwise"></i> Restore
                                 </button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteSSLBackup('${backup.path}')">
+                                <button type="button" class="btn btn-sm btn-danger js-delete-ssl-backup">
                                     <i class="bi bi-trash"></i> Delete
                                 </button>
                             </div>
                         </div>
                     </div>
                 `;
+                item.querySelector('.js-restore-ssl-backup').addEventListener('click', () => {
+                    restoreSSLBackup(backup.path, backup.type);
+                });
+                item.querySelector('.js-delete-ssl-backup').addEventListener('click', () => {
+                    deleteSSLBackup(backup.path);
+                });
                 backupsList.appendChild(item);
             });
         } else {
@@ -805,7 +849,13 @@ async function uploadSSLFile(file, type) {
         const data = await response.json();
         
         if (data.success) {
-            showAlert(`${type} uploaded successfully`, 'success');
+            if (data.staged && data.pair_matched === false) {
+                showAlert(data.warning || data.message || `${type} staged in .pending/ awaiting matching counterpart`, 'warning');
+            } else {
+                showAlert(data.message || `${type} uploaded and activated`, 'success');
+                await loadConfiguration();
+                await loadCertbotStatus();
+            }
             
             // Clear file input
             document.getElementById(type === 'certificate' ? 'cert-file' : 'key-file').value = '';
@@ -813,12 +863,12 @@ async function uploadSSLFile(file, type) {
             // Reload SSL info
             await loadSSLInfo();
         } else {
-            showAlert(`Error: ${data.message}`, 'error');
+            showAlert(`Error: ${data.message}`, 'danger');
         }
     } catch (error) {
         hideSpinner();
         console.error(`✗ Error uploading ${type}:`, error);
-        showAlert(`Error uploading ${type}`, 'error');
+        showAlert(`Error uploading ${type}`, 'danger');
     }
 }
 
@@ -848,15 +898,21 @@ async function restoreSSLBackup(backupPath, fileType) {
         const data = await response.json();
         
         if (data.success) {
-            showAlert(`${fileType} restored successfully`, 'success');
+            if (data.staged && data.pair_matched === false) {
+                showAlert(data.warning || data.message || `${fileType} staged in .pending/ awaiting matching counterpart`, 'warning');
+            } else {
+                showAlert(data.message || `${fileType} restored and activated`, 'success');
+                await loadConfiguration();
+                await loadCertbotStatus();
+            }
             await loadSSLInfo();
         } else {
-            showAlert(`Error: ${data.message}`, 'error');
+            showAlert(`Error: ${data.message}`, 'danger');
         }
     } catch (error) {
         hideSpinner();
         console.error('✗ Error restoring backup:', error);
-        showAlert('Error restoring backup', 'error');
+        showAlert('Error restoring backup', 'danger');
     }
 }
 
@@ -888,12 +944,12 @@ async function deleteSSLBackup(backupPath) {
             showAlert('Backup deleted successfully', 'success');
             await loadSSLInfo();
         } else {
-            showAlert(`Error: ${data.message}`, 'error');
+            showAlert(`Error: ${data.message}`, 'danger');
         }
     } catch (error) {
         hideSpinner();
         console.error('✗ Error deleting backup:', error);
-        showAlert('Error deleting backup', 'error');
+        showAlert('Error deleting backup', 'danger');
     }
 }
 
@@ -1066,6 +1122,14 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => loadLockedUsers(), 100);
         });
     }
+
+    // Add event listener for Certbot tab
+    const certbotTab = document.getElementById('certbot-tab');
+    if (certbotTab) {
+        certbotTab.addEventListener('click', function() {
+            setTimeout(() => loadCertbotStatus(), 100);
+        });
+    }
 });
 
 // ========================================================================
@@ -1124,7 +1188,8 @@ function displayLockedUsers(users) {
     unlockAllBtn.style.display = 'inline-block';
     resetAllBtn.style.display = 'inline-block';
     
-    tbody.innerHTML = users.map((user, index) => {
+    tbody.innerHTML = '';
+    for (const user of users) {
         const lockedUntil = user.locked_until 
             ? new Date(user.locked_until).toLocaleString() 
             : '-';
@@ -1137,24 +1202,27 @@ function displayLockedUsers(users) {
             ? '<span class="badge bg-danger">Locked</span>'
             : '<span class="badge bg-warning">Temporary</span>';
         
-        return `
-            <tr>
-                <td>
-                    <input type="checkbox" class="user-checkbox" value="${user.user_id}">
-                </td>
-                <td><strong>${escapeHtml(user.username)}</strong></td>
-                <td>${user.failed_attempts || 0}</td>
-                <td><small>${lastFailed}</small></td>
-                <td><small>${lockedUntil}</small></td>
-                <td>${status}</td>
-                <td>
-                    <button class="btn btn-sm btn-primary" onclick="unlockUser(${user.user_id}, '${escapeHtml(user.username)}')">
-                        <i class="bi bi-unlock"></i> Unlock
-                    </button>
-                </td>
-            </tr>
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <input type="checkbox" class="user-checkbox" value="${escapeHtml(user.user_id)}">
+            </td>
+            <td><strong>${escapeHtml(user.username)}</strong></td>
+            <td>${escapeHtml(user.failed_attempts || 0)}</td>
+            <td><small>${escapeHtml(lastFailed)}</small></td>
+            <td><small>${escapeHtml(lockedUntil)}</small></td>
+            <td>${status}</td>
+            <td>
+                <button type="button" class="btn btn-sm btn-primary js-unlock-user">
+                    <i class="bi bi-unlock"></i> Unlock
+                </button>
+            </td>
         `;
-    }).join('');
+        tr.querySelector('.js-unlock-user').addEventListener('click', () => {
+            unlockUser(user.user_id, user.username);
+        });
+        tbody.appendChild(tr);
+    }
 }
 
 /**
@@ -1277,11 +1345,12 @@ function resetAllAttempts() {
 /**
  * Toggle selection of all users
  */
-function toggleAllUserSelection() {
+function toggleSelectAllUsers() {
     const selectAll = document.getElementById('select-all-users');
     const checkboxes = document.querySelectorAll('.user-checkbox');
     checkboxes.forEach(cb => cb.checked = selectAll.checked);
 }
+window.toggleAllUserSelection = toggleSelectAllUsers;
 
 /**
  * Toggle auto-refresh for locked users
@@ -1304,9 +1373,10 @@ function toggleLockoutAutoRefresh() {
 }
 
 /**
- * Escape HTML special characters
+ * Escape HTML special characters (null-safe)
  */
 function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
     const map = {
         '&': '&amp;',
         '<': '&lt;',
@@ -1314,5 +1384,349 @@ function escapeHtml(text) {
         '"': '&quot;',
         "'": '&#039;'
     };
-    return text.replace(/[&<>"']/g, m => map[m]);
+    return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
+// ========================================================================
+// Certbot / Let's Encrypt TLS Management Functions
+// ========================================================================
+
+function setCertbotBusy(busy) {
+    const buttons = document.querySelectorAll('.certbot-action-btn, #certbot-save-btn, #btn-mode-self-signed, #btn-mode-manual, #btn-mode-certbot');
+    buttons.forEach(btn => {
+        btn.disabled = Boolean(busy);
+    });
+}
+
+function setCertbotTerminalOutput(text) {
+    const out = document.getElementById('certbot-terminal-output');
+    if (out) {
+        out.textContent = text || '';
+        out.scrollTop = out.scrollHeight;
+    }
+}
+
+async function loadCertbotStatus() {
+    try {
+        const response = await fetch('/api/certbot/status', {
+            headers: { 'Accept': 'application/json' },
+        });
+        if (!response.ok) {
+            console.warn('⚠ Failed to load Certbot status:', response.status);
+            return;
+        }
+        const data = await response.json();
+        if (data.success) {
+            renderCertbotStatus(data);
+        }
+    } catch (error) {
+        console.error('✗ Error loading Certbot status:', error);
+    }
+}
+
+function renderCertbotStatus(data) {
+    const tlsMode = data.tls_mode || 'self-signed';
+
+    // Update mode badges across panels
+    const httpsModeBadge = document.getElementById('https-tls-mode-badge');
+    if (httpsModeBadge) {
+        httpsModeBadge.textContent = `Mode: ${tlsMode}`;
+    }
+    const certbotModeBadge = document.getElementById('certbot-mode-badge');
+    if (certbotModeBadge) {
+        certbotModeBadge.textContent = `TLS Mode: ${tlsMode}`;
+    }
+    const sslModeLabel = document.getElementById('ssl-panel-mode-label');
+    if (sslModeLabel) {
+        sslModeLabel.textContent = tlsMode;
+    }
+
+    // Container status badge
+    const containerBadge = document.getElementById('certbot-container-badge');
+    if (containerBadge && data.container) {
+        const running = Boolean(data.container.running);
+        containerBadge.className = running
+            ? 'badge bg-success-subtle text-success border border-success-subtle'
+            : 'badge bg-danger-subtle text-danger border border-danger-subtle';
+        containerBadge.textContent = `${data.container.name || 'pt-certbot'}: ${data.container.status || (running ? 'running' : 'stopped')}`;
+    }
+
+    // Mode switcher active state
+    const modeBtns = {
+        'self-signed': document.getElementById('btn-mode-self-signed'),
+        'manual': document.getElementById('btn-mode-manual'),
+        'certbot': document.getElementById('btn-mode-certbot'),
+    };
+    Object.entries(modeBtns).forEach(([mode, btn]) => {
+        if (!btn) return;
+        if (mode === tlsMode) {
+            btn.className = 'btn btn-sm btn-primary active';
+        } else {
+            btn.className = 'btn btn-sm btn-outline-secondary';
+        }
+    });
+
+    // Active certificate metadata card
+    const cert = data.certificate || {};
+    const sourceEl = document.getElementById('cert-status-source');
+    if (sourceEl) {
+        const sourceLabels = {
+            'self-signed': ['Self-Signed', 'badge bg-warning-subtle text-warning border border-warning-subtle'],
+            'manual': ['Manual Upload', 'badge bg-info-subtle text-info border border-info-subtle'],
+            'letsencrypt-staging': ["Let's Encrypt Staging", 'badge bg-warning-subtle text-warning border border-warning-subtle'],
+            'letsencrypt': ["Let's Encrypt Production", 'badge bg-success-subtle text-success border border-success-subtle'],
+        };
+        const [label, cls] = sourceLabels[cert.source] || [cert.source || 'Unknown', 'badge bg-secondary-subtle text-secondary border'];
+        sourceEl.className = cls;
+        sourceEl.textContent = label;
+    }
+
+    const daysEl = document.getElementById('cert-status-days');
+    if (daysEl) {
+        if (cert.exists && typeof cert.days_remaining === 'number') {
+            daysEl.textContent = `${cert.days_remaining} days left`;
+            if (cert.days_remaining <= 7) {
+                daysEl.className = 'badge bg-danger-subtle text-danger border border-danger-subtle';
+            } else if (cert.days_remaining <= 30) {
+                daysEl.className = 'badge bg-warning-subtle text-warning border border-warning-subtle';
+            } else {
+                daysEl.className = 'badge bg-success-subtle text-success border border-success-subtle';
+            }
+        } else {
+            daysEl.className = 'badge bg-secondary-subtle text-secondary border';
+            daysEl.textContent = cert.exists ? '-- days' : 'Missing';
+        }
+    }
+
+    const pairEl = document.getElementById('cert-status-pair-match');
+    if (pairEl) {
+        if (cert.exists && cert.pair_matched) {
+            pairEl.className = 'badge bg-success-subtle text-success border border-success-subtle';
+            pairEl.textContent = 'Pair: Matched';
+        } else {
+            pairEl.className = 'badge bg-danger-subtle text-danger border border-danger-subtle';
+            pairEl.textContent = cert.exists ? 'Pair: Mismatch' : 'Pair: Missing';
+        }
+    }
+
+    const subjEl = document.getElementById('cert-status-subject');
+    if (subjEl) subjEl.innerHTML = escapeHtml(cert.subject || '(none)');
+
+    const issEl = document.getElementById('cert-status-issuer');
+    if (issEl) issEl.innerHTML = escapeHtml(cert.issuer || '(none)');
+
+    const sansEl = document.getElementById('cert-status-sans');
+    if (sansEl) {
+        const sansText = Array.isArray(cert.sans) && cert.sans.length > 0 ? cert.sans.join(', ') : '(none)';
+        sansEl.innerHTML = escapeHtml(sansText);
+    }
+
+    const valEl = document.getElementById('cert-status-validity');
+    if (valEl) {
+        const valText = cert.exists ? `${cert.not_before || '?'} → ${cert.not_after || '?'}` : '--';
+        valEl.innerHTML = escapeHtml(valText);
+    }
+
+    const pathEl = document.getElementById('cert-status-path');
+    if (pathEl) pathEl.innerHTML = escapeHtml(data.ssl_cert_path || cert.path || '--');
+
+    const renewalEl = document.getElementById('cert-status-renewal');
+    if (renewalEl && data.renewal) {
+        const r = data.renewal;
+        const parts = [
+            r.next_check_note || '',
+            r.renewal_configs_present ? 'Renewal config present.' : 'No renewal config yet.',
+            r.last_run_status ? `Last run: ${r.last_run_status}` : '',
+        ].filter(Boolean);
+        renewalEl.innerHTML = escapeHtml(parts.join(' '));
+    }
+
+    // Populate Certbot config form
+    const cb = data.certbot || {};
+    const cbEnabled = document.getElementById('certbot-enabled');
+    if (cbEnabled) cbEnabled.checked = Boolean(cb.enabled);
+
+    const cbDomain = document.getElementById('certbot-domain');
+    if (cbDomain) cbDomain.value = cb.domain || '';
+
+    const cbExtra = document.getElementById('certbot-extra-domains');
+    if (cbExtra) cbExtra.value = cb.extra_domains || '';
+
+    const cbEmail = document.getElementById('certbot-email');
+    if (cbEmail) cbEmail.value = cb.email || '';
+
+    const cbChallenge = document.getElementById('certbot-challenge-type');
+    if (cbChallenge) cbChallenge.value = cb.challenge_type || 'http-01';
+
+    const cbStaging = document.getElementById('certbot-staging');
+    if (cbStaging) cbStaging.checked = Boolean(cb.staging);
+
+    const cbAutoRenew = document.getElementById('certbot-auto-renew');
+    if (cbAutoRenew) cbAutoRenew.checked = cb.auto_renew !== false;
+}
+
+async function saveCertbotConfig() {
+    const payload = {
+        enabled: document.getElementById('certbot-enabled').checked,
+        domain: document.getElementById('certbot-domain').value.trim(),
+        extra_domains: document.getElementById('certbot-extra-domains').value.trim(),
+        email: document.getElementById('certbot-email').value.trim(),
+        challenge_type: document.getElementById('certbot-challenge-type').value,
+        staging: document.getElementById('certbot-staging').checked,
+        auto_renew: document.getElementById('certbot-auto-renew').checked,
+    };
+
+    try {
+        setCertbotBusy(true);
+        showSpinner('Saving Certbot configuration...');
+        const response = await fetch('/api/certbot/config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        hideSpinner();
+        const data = await response.json();
+        if (response.ok && data.success) {
+            showAlert(data.message || 'Certbot configuration saved', 'success');
+            await loadCertbotStatus();
+            await loadConfiguration();
+        } else {
+            showAlert(data.message || 'Failed to save Certbot configuration', 'danger');
+        }
+    } catch (error) {
+        hideSpinner();
+        console.error('✗ Error saving Certbot config:', error);
+        showAlert('Error saving Certbot configuration: ' + error.message, 'danger');
+    } finally {
+        setCertbotBusy(false);
+    }
+}
+
+async function issueCertbot(dryRun = false) {
+    const staging = document.getElementById('certbot-staging').checked;
+    if (!dryRun && !confirm(`Issue a ${staging ? 'STAGING' : 'PRODUCTION'} Let's Encrypt certificate for the configured domain?`)) {
+        return;
+    }
+
+    try {
+        setCertbotBusy(true);
+        setCertbotTerminalOutput(`Running certbot certonly (${dryRun ? 'dry-run' : (staging ? 'staging' : 'production')})...`);
+        const response = await fetch('/api/certbot/issue', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                dry_run: Boolean(dryRun),
+                staging: Boolean(staging),
+            }),
+        });
+        const data = await response.json();
+        const output = data.output || [data.stdout, data.stderr, data.message].filter(Boolean).join('\n');
+        setCertbotTerminalOutput(output || 'Completed.');
+
+        if (response.status === 409) {
+            showAlert(data.message || 'Another certificate operation is currently in progress', 'warning');
+        } else if (response.ok && data.success) {
+            showAlert(data.message || 'Certbot operation completed', 'success');
+            if (!dryRun) {
+                await loadCertbotStatus();
+                await loadConfiguration();
+                await loadSSLInfo();
+            }
+        } else {
+            showAlert(data.message || 'Certbot issuance failed', 'danger');
+        }
+    } catch (error) {
+        console.error('✗ Error running Certbot issue:', error);
+        setCertbotTerminalOutput('Error: ' + error.message);
+        showAlert('Error running Certbot issue: ' + error.message, 'danger');
+    } finally {
+        setCertbotBusy(false);
+    }
+}
+
+async function renewCertbot(dryRun = false, forceRenewal = false) {
+    if (!dryRun && forceRenewal && !confirm('Force-renew all Let\'s Encrypt certificates now?')) {
+        return;
+    }
+
+    try {
+        setCertbotBusy(true);
+        setCertbotTerminalOutput(`Running certbot renew${dryRun ? ' --dry-run' : ''}${forceRenewal ? ' --force-renewal' : ''}...`);
+        const response = await fetch('/api/certbot/renew', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                dry_run: Boolean(dryRun),
+                force_renewal: Boolean(forceRenewal),
+            }),
+        });
+        const data = await response.json();
+        const output = data.output || [data.stdout, data.stderr, data.message].filter(Boolean).join('\n');
+        setCertbotTerminalOutput(output || 'Completed.');
+
+        if (response.status === 409) {
+            showAlert(data.message || 'Another certificate operation is currently in progress', 'warning');
+        } else if (response.ok && data.success) {
+            showAlert(data.message || 'Certbot renewal completed', 'success');
+            if (!dryRun) {
+                await loadCertbotStatus();
+                await loadConfiguration();
+            }
+        } else {
+            showAlert(data.message || 'Certbot renewal failed', 'danger');
+        }
+    } catch (error) {
+        console.error('✗ Error running Certbot renew:', error);
+        setCertbotTerminalOutput('Error: ' + error.message);
+        showAlert('Error running Certbot renew: ' + error.message, 'danger');
+    } finally {
+        setCertbotBusy(false);
+    }
+}
+
+async function switchTlsMode(mode) {
+    if (!confirm(`Switch active TLS mode to "${mode}" and reload Nginx?`)) {
+        return;
+    }
+
+    try {
+        setCertbotBusy(true);
+        showSpinner(`Switching TLS mode to ${mode}...`);
+        const response = await fetch('/api/certbot/switch-mode', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ tls_mode: mode }),
+        });
+        hideSpinner();
+        const data = await response.json();
+
+        if (response.status === 409) {
+            showAlert(data.message || 'Another certificate operation is currently in progress', 'warning');
+        } else if (response.ok && data.success) {
+            showAlert(data.message || `Switched TLS mode to ${mode}`, 'success');
+            await loadCertbotStatus();
+            await loadConfiguration();
+            await loadSSLInfo();
+        } else {
+            showAlert(data.message || `Failed to switch TLS mode to ${mode}`, 'danger');
+        }
+    } catch (error) {
+        hideSpinner();
+        console.error('✗ Error switching TLS mode:', error);
+        showAlert('Error switching TLS mode: ' + error.message, 'danger');
+    } finally {
+        setCertbotBusy(false);
+    }
 }

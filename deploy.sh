@@ -11,9 +11,53 @@ set -e
 cd "$(dirname "$0")"
 WORKDIR="$(pwd)"
 
-# Load environment configuration from .env if it exists
+# Safe .env loader (no shell execution via source)
+load_env_file() {
+    local env_file="$1"
+    local line key val
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%$'\r'}"
+        [[ -z "${line//[[:space:]]/}" || "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*export[[:space:]]+(.*)$ ]] && line="${BASH_REMATCH[1]}"
+        [[ "$line" != *=* ]] && continue
+        key="${line%%=*}"
+        val="${line#*=}"
+        key="${key//[[:space:]]/}"
+        [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+        if [[ "$val" =~ ^\"(.*)\"$ ]]; then
+            val="${BASH_REMATCH[1]}"
+        elif [[ "$val" =~ ^\'(.*)\'$ ]]; then
+            val="${BASH_REMATCH[1]}"
+        fi
+        case "$key" in
+            PRODUCTION_MODE|PUBLIC_IP|ENABLE_HTTPS|TLS_MODE|SERVER_NAME|\
+            SSL_CERT_PATH|SSL_KEY_PATH|\
+            CERTBOT_ENABLED|CERTBOT_DOMAIN|CERTBOT_EXTRA_DOMAINS|CERTBOT_EMAIL|\
+            CERTBOT_CHALLENGE_TYPE|CERTBOT_STAGING|CERTBOT_AUTO_RENEW|CERTBOT_WEBROOT|\
+            NGINX_GEOIP_ALLOW|NGINX_GEOIP_BLOCK|GEOIP_ALLOW_COUNTRIES|GEOIP_BLOCK_COUNTRIES|\
+            NGINX_TRUSTED_IPS_OVERRIDE|\
+            NGINX_RATE_LIMIT_ENABLE|NGINX_RATE_LIMIT_RATE|NGINX_RATE_LIMIT_BURST|NGINX_RATE_LIMIT_ZONE_SIZE|\
+            PTADMIN_PASSWORD|DB_HOST|DB_USER|DB_PASSWORD|DB_NAME|NUM_PT|SHARED_HOST_PATH|STANDALONE_SSL)
+                printf -v "$key" '%s' "$val"
+                ;;
+        esac
+    done < "$env_file"
+}
+
+# Pre-create .env if missing so Docker bind mounts never create a directory
+if [ ! -f "$WORKDIR/.env" ]; then
+    if [ -f "$WORKDIR/.env.example" ]; then
+        cp "$WORKDIR/.env.example" "$WORKDIR/.env"
+        echo -e "\e[36mℹ️  Created .env from .env.example\e[0m"
+    else
+        touch "$WORKDIR/.env"
+        echo -e "\e[36mℹ️  Created empty .env\e[0m"
+    fi
+fi
+
+# Load environment configuration from .env safely
 if [ -f "$WORKDIR/.env" ]; then
-    source "$WORKDIR/.env"
+    load_env_file "$WORKDIR/.env"
     echo -e "\e[36mℹ️  Configuration loaded from .env\e[0m"
 fi
 
@@ -26,8 +70,8 @@ PTfile="CiscoPacketTracer.deb"
 
 # SSL/HTTPS Configuration (from .env or defaults)
 ENABLE_HTTPS=${ENABLE_HTTPS:-false}
-SSL_CERT_PATH=${SSL_CERT_PATH:-/etc/ssl/certs/server.crt}
-SSL_KEY_PATH=${SSL_KEY_PATH:-/etc/ssl/private/server.key}
+SSL_CERT_PATH=${SSL_CERT_PATH:-/etc/ssl/ptweb/server.crt}
+SSL_KEY_PATH=${SSL_KEY_PATH:-/etc/ssl/ptweb/server.key}
 
 # GeoIP Configuration (from .env or defaults)
 NGINX_GEOIP_ALLOW=${NGINX_GEOIP_ALLOW:-false}
@@ -74,7 +118,7 @@ fi
 echo -e "\e[36m  Trusted IPs for GeoIP bypass: $NGINX_TRUSTED_IPS\e[0m"
 
 # Determine nginx port and setup based on HTTPS
-if [ "$ENABLE_HTTPS" = "true" ]; then
+if [ "$ENABLE_HTTPS" = "true" ] || [ "$ENABLE_HTTPS" = "1" ]; then
     nginxport=443
     echo -e "\e[36mℹ️  HTTPS mode enabled (port 443)\e[0m"
 else
@@ -85,7 +129,7 @@ fi
 # Handle recreate argument
 if [[ "${1:-}" == "recreate" ]]; then
     echo -e "\e[33m=== Recreate Mode: Cleaning up PacketTracer containers and volumes ===\e[0m"
-    docker ps -a --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|ptvnc.*)$' | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -a --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|pt-certbot|ptvnc.*)$' | xargs -r docker rm -f 2>/dev/null || true
     docker volume rm mariadb_data dbdump pt_opt 2>/dev/null || true
     docker network rm ptnet pt-stack 2>/dev/null || true
     echo -e "\e[32m✓ Cleanup complete\e[0m"
@@ -130,13 +174,11 @@ docker build -t ptvnc ptweb-vnc/
 rm -f "ptweb-vnc/CiscoPacketTracer.deb"
 echo -e "\e[32m✓ ptvnc image built successfully\e[0m"
 
-# Build pt-nginx Docker image if it doesn't exist
-if ! docker image inspect pt-nginx:latest &>/dev/null; then
-    echo "Building pt-nginx image..."
-    docker build -t pt-nginx ptweb-vnc/pt-nginx/
-else
-    echo "pt-nginx image already exists, skipping build"
-fi
+# Always build pt-nginx and pt-certbot images (Docker layer cache keeps no-op builds fast)
+echo "Building pt-nginx image..."
+docker build -t pt-nginx ptweb-vnc/pt-nginx/
+echo "Building pt-certbot image..."
+docker build -t pt-certbot ptweb-vnc/pt-certbot/
 echo ""
 
 # Step 0.5: Download and setup GeoIP database (if GeoIP filtering is enabled)
@@ -145,7 +187,7 @@ GEOIP_DIR="${WORKDIR}/geoip"
 GEOIP_FILE="${GEOIP_DIR}/GeoIP.dat"
 
 # Check if GeoIP filtering is enabled
-if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
+if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_ALLOW" = "1" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "1" ]; then
     echo -e "\e[36m  GeoIP filtering is enabled, checking database...\e[0m"
     
     # Create geoip directory
@@ -217,6 +259,15 @@ echo -e "\033[36m  ✓ Guacamole IP: $GUACAMOLE_IP\033[0m"
 
 # Nginx configuration generation is now handled by generate-nginx-conf.sh
 # which dynamically generates both nginx.conf and ptweb.conf based on .env settings
+
+# Ensure host SSL and Certbot directories exist before generating Nginx config
+mkdir -p "${WORKDIR}/ssl" \
+         "${WORKDIR}/certbot/conf" \
+         "${WORKDIR}/certbot/www/.well-known/acme-challenge"
+
+if [ "$ENABLE_HTTPS" = "true" ] || [ "$ENABLE_HTTPS" = "1" ]; then
+    bash "${WORKDIR}/generate-ssl-cert.sh" --if-missing
+fi
 
 # Generate nginx configs with dynamic GeoIP maps and location blocks
 echo -e "\033[32m  Generating dynamic nginx configuration...\033[0m"
@@ -317,51 +368,47 @@ echo -e "\033[32m  Regenerating nginx configurations...\033[0m"
 bash "${WORKDIR}/ptweb-vnc/pt-nginx/generate-nginx-conf.sh"
 echo -e "\033[32m  ✓ Regenerated nginx.conf and ptweb.conf\033[0m"
 
-# Mount SSL certificates if HTTPS is enabled
-SSL_MOUNTS=""
-if [ "$ENABLE_HTTPS" = "true" ]; then
-    # Extract directory paths from certificate and key paths
-    SSL_CERT_DIR=$(dirname "$SSL_CERT_PATH")
-    SSL_KEY_DIR=$(dirname "$SSL_KEY_PATH")
-    
-    # Mount certificate files if they exist on host
-    if [ -f "./ssl/server.crt" ]; then
-        SSL_MOUNTS="$SSL_MOUNTS --mount type=bind,source=\"$(pwd)/ssl/server.crt\",target=$SSL_CERT_PATH,readonly"
-    fi
-    if [ -f "./ssl/server.key" ]; then
-        SSL_MOUNTS="$SSL_MOUNTS --mount type=bind,source=\"$(pwd)/ssl/server.key\",target=$SSL_KEY_PATH,readonly"
-    fi
-    echo -e "\033[36m  ✓ HTTPS enabled: Mounting SSL certificates\033[0m"
-fi
-
 # Mount GeoIP database if GeoIP filtering is enabled
-GEOIP_MOUNTS=""
-if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ]; then
+GEOIP_ARGS=()
+if [ "$NGINX_GEOIP_ALLOW" = "true" ] || [ "$NGINX_GEOIP_ALLOW" = "1" ] || [ "$NGINX_GEOIP_BLOCK" = "true" ] || [ "$NGINX_GEOIP_BLOCK" = "1" ]; then
     GEOIP_FILE="${WORKDIR}/geoip/GeoIP.dat"
     if [ -f "$GEOIP_FILE" ]; then
-        GEOIP_MOUNTS="--mount type=bind,source=\"$GEOIP_FILE\",target=/usr/share/GeoIP/GeoIP.dat,readonly"
+        GEOIP_ARGS+=(--mount "type=bind,source=${GEOIP_FILE},target=/usr/share/GeoIP/GeoIP.dat,readonly")
         echo -e "\033[36m  ✓ GeoIP filtering enabled: Mounting GeoIP database\033[0m"
     else
         echo -e "\033[33m  ⚠ GeoIP filtering enabled but database not found at: $GEOIP_FILE\033[0m"
     fi
 fi
 
-# Run nginx with appropriate port and SSL mounts on ptnet network
-eval "docker run --restart always --name pt-nginx1 \
+# Run nginx with directory mounts and unconditional ports 80/443/5000 on ptnet network
+docker run --restart always --name pt-nginx1 \
   --network ptnet \
-  --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/nginx.conf\",target=/etc/nginx/nginx.conf,readonly \
-  --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/www\",target=/usr/share/nginx/html,readonly \
-  --mount type=bind,source=\"${WORKDIR}/ptweb-vnc/pt-nginx/conf\",target=/etc/nginx/conf.d,readonly \
-  --mount type=bind,source=\"${WORKDIR}/shared\",target=/shared,readonly,bind-propagation=rprivate \
-  $SSL_MOUNTS \
-  $GEOIP_MOUNTS \
+  --mount "type=bind,source=${WORKDIR}/ptweb-vnc/pt-nginx/nginx.conf,target=/etc/nginx/nginx.conf,readonly" \
+  --mount "type=bind,source=${WORKDIR}/ptweb-vnc/pt-nginx/www,target=/usr/share/nginx/html,readonly" \
+  --mount "type=bind,source=${WORKDIR}/ptweb-vnc/pt-nginx/conf,target=/etc/nginx/conf.d,readonly" \
+  --mount "type=bind,source=${WORKDIR}/shared,target=/shared,readonly,bind-propagation=rprivate" \
+  --mount "type=bind,source=${WORKDIR}/ssl,target=/etc/ssl/ptweb,readonly" \
+  --mount "type=bind,source=${WORKDIR}/certbot/conf,target=/etc/letsencrypt,readonly" \
+  --mount "type=bind,source=${WORKDIR}/certbot/www,target=/var/www/certbot,readonly" \
+  "${GEOIP_ARGS[@]}" \
   -p 80:80 \
-  $([ "$ENABLE_HTTPS" = "true" ] && echo "-p 443:443") \
+  -p 443:443 \
   -p 5000:5000 \
-  -d pt-nginx"
+  -d pt-nginx
 
 sleep 3
 echo -e "\e[32m✓ Nginx started on ptnet network\e[0m"
+
+# Step 5.5: Start Certbot automated renewal service
+echo -e "\e[32mStep 5.5. Start Certbot renewal service\e[0m"
+docker run -d --name pt-certbot \
+  --restart unless-stopped \
+  --network ptnet \
+  --mount "type=bind,source=${WORKDIR}/certbot/conf,target=/etc/letsencrypt" \
+  --mount "type=bind,source=${WORKDIR}/certbot/www,target=/var/www/certbot" \
+  --mount "type=bind,source=${WORKDIR}/.env,target=/app/.env,readonly" \
+  pt-certbot
+echo -e "\e[32m✓ Certbot started on ptnet network\e[0m"
 
 # Step 6: Generate dynamic connections
 echo -e "\e[32mStep 6. Generating dynamic Guacamole connections\e[0m"
