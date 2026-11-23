@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 LABEL maintainer="Jozef Janitor"
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -6,21 +6,21 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install runtime packages including TurboVNC/VirtualGL support
 # TurboVNC: High-performance VNC server optimized for 3D rendering
 # VirtualGL: GPU-accelerated 3D rendering over network
-# libfuse2: Required for AppImage execution (PacketTracer uses AppImage format)
+# libfuse2t64: Required for AppImage execution (PacketTracer uses AppImage format)
 RUN apt-get update && \
-    apt-get -y update && apt-get -y install --no-install-recommends \
+    apt-get -y install --no-install-recommends \
       util-linux xvfb x11-xserver-utils xauth autocutsel expect sudo xdg-utils dbus-x11 xfce4 \
       dialog gtk-update-icon-cache \
-      libpulse0 libnss3 libnspr4 libharfbuzz0b libxss1 libasound2 libxslt1.1 \
+      libpulse0 libnss3 libnspr4 libharfbuzz0b libxss1 libasound2t64 libxslt1.1 \
       libxcb-xinerama0 libxcb-xinerama0-dev libxcb-cursor0 \
       libxcb-keysyms1 libxcb-xfixes0 libuuid1 libxcb-util1 libxkbcommon0 libxkbcommon-x11-0 \
       libice6 libsm6 libxrender1 libxcb-sync1 libxcb-shape0 libxcb-render0 libxcb-render-util0 libxcb-randr0 libxcb-shm0 libxcb-image0 libxcb-icccm4 libx11-xcb1 \
       libfreetype6 libgl1 libglx-mesa0 \
-      libqt6gui6 libqt6widgets6 libqt6core6 libqt6dbus6 libqt6network6 libqt6networkauth6 libqt6webenginecore6 libqt6webenginewidgets6 libqt6qml6 libqt6xml6 libqt6concurrent6 libqt6opengl6 qt6-qpa-plugins \
-      libegl1-mesa libgles2-mesa libxinerama1 libxrandr2 libglib2.0-0 libopengl0 \
+      libqt6gui6t64 libqt6widgets6t64 libqt6core6t64 libqt6dbus6t64 libqt6network6t64 libqt6networkauth6 libqt6webenginecore6 libqt6webenginewidgets6 libqt6qml6 libqt6xml6t64 libqt6concurrent6t64 libqt6opengl6t64 qt6-qpa-plugins \
+      libegl1 libgles2 libxinerama1 libxrandr2 libglib2.0-0t64 libopengl0 \
       libglvnd0 libglvnd-dev libosmesa6 libosmesa6-dev mesa-utils \
       fonts-dejavu-core xfonts-base xfonts-100dpi xfonts-75dpi \
-      wget ca-certificates pkg-config libxv1 libxvmc1 libfuse2 \
+      wget ca-certificates pkg-config libxv1 libxvmc1 libfuse2t64 libzstd1 libpcre2-dev \
       librsvg2-common libglu1-mesa humanity-icon-theme adwaita-icon-theme \
     && rm -rf /var/lib/apt/lists/*
 
@@ -47,7 +47,7 @@ RUN cd /tmp && \
 
 WORKDIR /
 
-RUN useradd -m -s /bin/bash ptuser
+RUN userdel -r ubuntu 2>/dev/null || true && useradd -m -u 1000 -s /bin/bash ptuser
 
 COPY customizations/ /
 
