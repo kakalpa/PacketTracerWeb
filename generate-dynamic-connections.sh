@@ -58,6 +58,8 @@ echo "Admin entity ID: $ptadmin_id"
 # NOTE: Using VNC protocol with guacd proxy (port 4822)
 for instance_num in $ptvnc_containers; do
     connection_name="pt$(printf "%02d" $instance_num)"
+    vnc_pass=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "ptvnc$instance_num" 2>/dev/null | awk -F= '$1=="VNC_PASS"{print $2; exit}' | tr -dc 'A-Za-z0-9' || true)
+    vnc_pass=${vnc_pass:-Cisco123}
     
     cat >> /tmp/dynamic_connections.sql << EOFCONN
 -- Create legacy connection: $connection_name -> ptvnc$instance_num (VNC via guacd)
@@ -91,7 +93,7 @@ SELECT c.connection_id, 'username', 'ptuser' FROM \`guacamole_connection\` c WHE
 ON DUPLICATE KEY UPDATE \`parameter_value\` = VALUES(\`parameter_value\`);
 
 INSERT INTO \`guacamole_connection_parameter\` (\`connection_id\`, \`parameter_name\`, \`parameter_value\`)
-SELECT c.connection_id, 'password', 'Cisco123' FROM \`guacamole_connection\` c WHERE c.connection_name = '$connection_name'
+SELECT c.connection_id, 'password', '$vnc_pass' FROM \`guacamole_connection\` c WHERE c.connection_name = '$connection_name'
 ON DUPLICATE KEY UPDATE \`parameter_value\` = VALUES(\`parameter_value\`);
 
 EOFCONN

@@ -21,7 +21,7 @@ RUN apt-get update && \
       libglvnd0 libglvnd-dev libosmesa6 libosmesa6-dev mesa-utils \
       fonts-dejavu-core xfonts-base xfonts-100dpi xfonts-75dpi \
       wget ca-certificates pkg-config libxv1 libxvmc1 libfuse2t64 libzstd1 libpcre2-dev \
-      librsvg2-common libglu1-mesa humanity-icon-theme adwaita-icon-theme \
+      librsvg2-common libglu1-mesa humanity-icon-theme adwaita-icon-theme gvfs libglib2.0-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and install TurboVNC from GitHub release (pinned to 3.3; 3.3.1+ adds hard systemd dependency)

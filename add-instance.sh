@@ -89,21 +89,31 @@ for ((i=0; i<instances_to_add; i++)); do
     mkdir -p "$INSTANCE_DIR"
     chmod 777 "$INSTANCE_DIR"
 
+    # Ensure isolated internal VNC network exists and pt-guacd is attached
+    docker network create --internal pt-vncnet 2>/dev/null || true
+    docker network connect pt-vncnet pt-guacd 2>/dev/null || true
+
+    # Generate unique 8-character VNC password per container
+    INSTANCE_VNC_PASS=$(openssl rand -base64 12 2>/dev/null | tr -dc 'A-Za-z0-9' | head -c 8 || true)
+    INSTANCE_VNC_PASS=${INSTANCE_VNC_PASS:-Cisco123}
+
     echo "Creating $container_name..."
     docker run -d \
       --name $container_name --restart unless-stopped \
-      --cpus=0.5 -m 2G --ulimit nproc=2048 --ulimit nofile=1024 \
-      --network ptnet \
+      --cpus=0.5 -m 2G --pids-limit 512 --ulimit nproc=2048 --ulimit nofile=1024 \
+      --security-opt no-new-privileges:true \
+      --network pt-vncnet \
       -v "${WORKDIR}/${PTfile}:/PacketTracer.deb:ro" \
       -v pt_opt:/opt/pt \
       --dns=127.0.0.1 \
+      -e "VNC_PASS=${INSTANCE_VNC_PASS}" \
       --mount type=bind,source="${INSTANCE_DIR}",target=/shared,bind-propagation=rprivate \
       --mount type=bind,source="${WORKDIR}/shared/common",target=/shared_common,readonly,bind-propagation=rprivate \
       -e PT_DEB_PATH=/PacketTracer.deb \
       ptvnc
     
     sleep 2
-    echo "  ✓ $container_name created and connected to ptnet network"
+    echo "  ✓ $container_name created and connected to isolated pt-vncnet network"
 done
 
 echo "✅ Containers started"
@@ -122,7 +132,8 @@ for ((i=0; i<instances_to_add; i++)); do
         docker exec $container_name rm -rf /shared/shared 2>/dev/null || true
         docker exec $container_name rm -rf /home/ptuser/pt/saves 2>/dev/null || true
         docker exec $container_name ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
-        docker exec $container_name ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
+        docker exec $container_name ln -sfn /shared_common /home/ptuser/Course_Materials 2>/dev/null || true
+        docker exec $container_name rm -f /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
         if [ -f ptweb-vnc/libptsavehook.so ]; then
             docker cp ptweb-vnc/libptsavehook.so $container_name:/usr/local/lib/libptsavehook.so 2>/dev/null || true
         fi

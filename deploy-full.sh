@@ -113,9 +113,9 @@ mkdir -p "$ROOT_DIR/ssl" \
          "$ROOT_DIR/certbot/conf" \
          "$ROOT_DIR/certbot/www/.well-known/acme-challenge"
 
-# Connect all containers to pt-stack network for inter-container communication
-echo "Connecting containers to pt-stack network..."
-for container in guacamole-mariadb pt-guacd pt-guacamole pt-nginx1 pt-certbot ptvnc1 ptvnc2; do
+# Connect core service containers to pt-stack network (ptvnc* instances stay isolated on internal pt-vncnet)
+echo "Connecting core containers to pt-stack network..."
+for container in guacamole-mariadb pt-guacd pt-guacamole pt-nginx1 pt-certbot; do
   if docker ps -a --format '{{.Names}}' | grep -q "^${container}$"; then
     docker network connect pt-stack "$container" 2>/dev/null || echo "  (already connected: $container)"
   fi

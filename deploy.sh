@@ -131,7 +131,7 @@ if [[ "${1:-}" == "recreate" ]]; then
     echo -e "\e[33m=== Recreate Mode: Cleaning up PacketTracer containers and volumes ===\e[0m"
     docker ps -a --format "{{.Names}}" | grep -E '^(guacamole-mariadb|pt-guacd|pt-guacamole|pt-nginx1|pt-management|pt-certbot|ptvnc.*)$' | xargs -r docker rm -f 2>/dev/null || true
     docker volume rm mariadb_data dbdump pt_opt 2>/dev/null || true
-    docker network rm ptnet pt-stack 2>/dev/null || true
+    docker network rm ptnet pt-stack pt-vncnet 2>/dev/null || true
     echo -e "\e[32m✓ Cleanup complete\e[0m"
     echo ""
 fi
@@ -221,9 +221,10 @@ else
 fi
 echo ""
 
-# Step 0.8: Create bridge network for containers
-echo -e "\e[32mStep 0.8. Creating bridge network 'ptnet'\e[0m"
+# Step 0.8: Create bridge networks (ptnet for core services, internal pt-vncnet for isolated VNC instances)
+echo -e "\e[32mStep 0.8. Creating bridge networks 'ptnet' and 'pt-vncnet' (internal)\e[0m"
 docker network create ptnet 2>/dev/null || echo "Network ptnet already exists"
+docker network create --internal pt-vncnet 2>/dev/null || echo "Network pt-vncnet already exists"
 echo ""
 
 # Step 1: Start MariaDB
@@ -287,11 +288,17 @@ for ((i=1; i<=$numofPT; i++)); do
     mkdir -p "$INSTANCE_DIR"
     chmod 777 "$INSTANCE_DIR"
 
+    # Generate unique 8-character VNC password per container (prevents student-to-student VNC access)
+    INSTANCE_VNC_PASS=$(openssl rand -base64 12 2>/dev/null | tr -dc 'A-Za-z0-9' | head -c 8 || true)
+    INSTANCE_VNC_PASS=${INSTANCE_VNC_PASS:-Cisco123}
+
     docker run -d \
       --name ptvnc$i --restart unless-stopped \
-      --network ptnet \
-      --cpus=0.5 -m 2G --ulimit nproc=2048 --ulimit nofile=1024 \
+      --network pt-vncnet \
+      --cpus=0.5 -m 2G --pids-limit 512 --ulimit nproc=2048 --ulimit nofile=1024 \
+      --security-opt no-new-privileges:true \
       --dns=127.0.0.1 \
+      -e "VNC_PASS=${INSTANCE_VNC_PASS}" \
       -v pt_opt:/opt/pt \
       --mount type=bind,source="${INSTANCE_DIR}",target=/shared,bind-propagation=rprivate \
       --mount type=bind,source="${WORKDIR}/shared/common",target=/shared_common,readonly,bind-propagation=rprivate \
@@ -308,7 +315,8 @@ for ((i=1; i<=$numofPT; i++)); do
     docker exec ptvnc$i rm -rf /shared/shared 2>/dev/null || true
     docker exec ptvnc$i rm -rf /home/ptuser/pt/saves 2>/dev/null || true
     docker exec ptvnc$i ln -sfn /shared /home/ptuser/pt/saves 2>/dev/null || true
-    docker exec ptvnc$i ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
+    docker exec ptvnc$i ln -sfn /shared_common /home/ptuser/Course_Materials 2>/dev/null || true
+    docker exec ptvnc$i rm -f /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
     if [ -f ptweb-vnc/libptsavehook.so ]; then
         docker cp ptweb-vnc/libptsavehook.so ptvnc$i:/usr/local/lib/libptsavehook.so 2>/dev/null || true
     fi
@@ -335,6 +343,7 @@ echo -e "\e[32mStep 4. Start Guacamole services\e[0m"
 docker run --name pt-guacd --restart always \
   --network ptnet \
   -d guacamole/guacd:latest
+docker network connect pt-vncnet pt-guacd 2>/dev/null || true
 sleep 20
 
 # Get guacd IP for Guacamole configuration

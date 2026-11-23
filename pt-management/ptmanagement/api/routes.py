@@ -2,6 +2,8 @@
 
 import logging
 import os
+import secrets
+import string
 import subprocess
 from functools import wraps
 from flask import Blueprint, request, jsonify, session
@@ -193,24 +195,34 @@ def create_api_blueprint():
                             except OSError:
                                 pass
 
+                            # Ensure isolated internal VNC network exists and pt-guacd is attached
+                            subprocess.run(['docker', 'network', 'create', '--internal', 'pt-vncnet'], capture_output=True, text=True, timeout=10)
+                            subprocess.run(['docker', 'network', 'connect', 'pt-vncnet', 'pt-guacd'], capture_output=True, text=True, timeout=10)
+
+                            # Unique 8-char VNC password per container (prevents student-to-student VNC access)
+                            instance_vnc_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+
                             # Create the container using docker CLI with isolated instance storage mount
                             cmd = [
                                 'docker', 'run', '-d',
                                 '--name', container_name,
                                 '--restart', 'unless-stopped',
-                                '--cpus', '0.1',
+                                '--cpus', '0.5',
                                 '-m', '1G',
+                                '--pids-limit', '512',
                                 '--ulimit', 'nproc=2048',
                                 '--ulimit', 'nofile=1024',
-                                '--network', 'ptnet',
+                                '--security-opt', 'no-new-privileges:true',
+                                '--network', 'pt-vncnet',
                                 '--dns=127.0.0.1',
+                                '-e', f'VNC_PASS={instance_vnc_pass}',
                                 '-v', f'{pt_deb}:/PacketTracer.deb:ro',
                                 '-v', 'pt_opt:/opt/pt',
                                 f'--mount=type=bind,source={instance_storage_path},target=/shared,bind-propagation=rprivate',
                                 '-e', 'PT_DEB_PATH=/PacketTracer.deb',
                                 'ptvnc'
                             ]
-                            logger.info(f"Docker command: {' '.join(cmd)}")
+                            logger.info(f"Docker command: docker run -d --name {container_name} ... --network pt-vncnet ptvnc")
                             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                             
                             if result.returncode == 0:
@@ -222,7 +234,7 @@ def create_api_blueprint():
                                     symlink_cmd = [
                                         'docker', 'exec', container_name,
                                         'bash', '-c',
-                                        'mkdir -p /home/ptuser/Desktop /home/ptuser/pt && ln -sfn /shared /home/ptuser/Desktop/shared && ln -sfn /shared /home/ptuser/Desktop/Personal_Saves && rm -rf /home/ptuser/pt/saves /shared/shared && ln -sfn /shared /home/ptuser/pt/saves && ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials && chmod 777 /shared && chown ptuser:ptuser /shared && chown -R ptuser:ptuser /home/ptuser/Desktop && chown -h ptuser:ptuser /home/ptuser/Desktop/* && chmod 755 /home/ptuser/Desktop'
+                                        'mkdir -p /home/ptuser/Desktop /home/ptuser/pt && ln -sfn /shared /home/ptuser/Desktop/shared && ln -sfn /shared /home/ptuser/Desktop/Personal_Saves && rm -rf /home/ptuser/pt/saves /shared/shared /home/ptuser/Desktop/Course_Materials && ln -sfn /shared /home/ptuser/pt/saves && ln -sfn /shared_common /home/ptuser/Course_Materials && chmod 777 /shared && chown ptuser:ptuser /shared && chown -R ptuser:ptuser /home/ptuser/Desktop && chown -h ptuser:ptuser /home/ptuser/Desktop/* && chmod 755 /home/ptuser/Desktop'
                                     ]
                                     symlink_result = subprocess.run(symlink_cmd, capture_output=True, text=True, timeout=10)
                                     if symlink_result.returncode == 0:
@@ -249,7 +261,7 @@ def create_api_blueprint():
                                     
                                     connection_name = f"pt{connection_num:02d}"
                                     try:
-                                        connection_id = create_vnc_connection(connection_name, container_name, vnc_port=5901)
+                                        connection_id = create_vnc_connection(connection_name, container_name, vnc_port=5901, password=instance_vnc_pass)
                                         if connection_id:
                                             # Assign connection to user (use connection_id, not connection_name!)
                                             if assign_connection_to_user(username, connection_id):
@@ -528,28 +540,27 @@ def create_api_blueprint():
             
             # Optional parameters
             image = data.get('image', 'ptvnc')
-            environment = data.get('environment', {})
-            # NOTE: Do NOT expose VNC ports to host - Guacamole connects via Docker internal network
+            environment = dict(data.get('environment', {}) or {})
+            # NOTE: Do NOT expose VNC ports to host - Guacamole connects via isolated internal pt-vncnet network
             # This allows unlimited containers without port conflicts (multiple containers can use 5901 internally)
             ports = {}  # Force empty ports - VNC is not exposed to host
-            
+            instance_vnc_pass = data.get('password') or ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+            environment['VNC_PASS'] = instance_vnc_pass
+
+            # Ensure isolated internal VNC network exists and pt-guacd is attached
+            try:
+                subprocess.run(['docker', 'network', 'create', '--internal', 'pt-vncnet'], capture_output=True, text=True, timeout=10)
+                subprocess.run(['docker', 'network', 'connect', 'pt-vncnet', 'pt-guacd'], capture_output=True, text=True, timeout=10)
+            except Exception as net_prep_err:
+                logger.warning(f"⚠ Error ensuring pt-vncnet: {net_prep_err}")
+
             logger.info(f"Creating container {container_name}...")
-            
-            # Use docker_mgr to create the container
+
+            # Use docker_mgr to create the container (attached directly to isolated pt-vncnet)
             result = docker_mgr.create_container(image, container_name, environment, ports)
-            
+
             if result:
-                logger.info(f"✓ Successfully created container {container_name}")
-                # Connect container to pt-stack network for Guacamole access
-                try:
-                    net_cmd = ['docker', 'network', 'connect', 'pt-stack', container_name]
-                    net_result = subprocess.run(net_cmd, capture_output=True, text=True, timeout=10)
-                    if net_result.returncode == 0:
-                        logger.info(f"✓ Connected {container_name} to pt-stack network")
-                    else:
-                        logger.warning(f"⚠ Failed to connect {container_name} to pt-stack: {net_result.stderr}")
-                except Exception as e:
-                    logger.warning(f"⚠ Error connecting to network: {e}")
+                logger.info(f"✓ Successfully created container {container_name} on isolated pt-vncnet network")
                 
                 # Create symlink to /shared on Desktop for easy access
                 # Also fix /shared permissions to be writable by ptuser
@@ -558,7 +569,8 @@ def create_api_blueprint():
                     docker_mgr.exec_in_container(container_name, ['ln', '-sfn', '/shared', '/home/ptuser/Desktop/shared'])
                     docker_mgr.exec_in_container(container_name, ['ln', '-sfn', '/shared', '/home/ptuser/Desktop/Personal_Saves'])
                     docker_mgr.exec_in_container(container_name, ['rm', '-rf', '/shared/shared'])
-                    docker_mgr.exec_in_container(container_name, ['ln', '-sfn', '/shared_common', '/home/ptuser/Desktop/Course_Materials'])
+                    docker_mgr.exec_in_container(container_name, ['ln', '-sfn', '/shared_common', '/home/ptuser/Course_Materials'])
+                    docker_mgr.exec_in_container(container_name, ['rm', '-f', '/home/ptuser/Desktop/Course_Materials'])
                     docker_mgr.exec_in_container(container_name, ['chmod', '777', '/shared'])
                     docker_mgr.exec_in_container(container_name, ['chown', 'ptuser:ptuser', '/shared'])
                     docker_mgr.exec_in_container(container_name, ['chown', '-R', 'ptuser:ptuser', '/home/ptuser/Desktop'])
@@ -583,7 +595,7 @@ def create_api_blueprint():
                         connection_name = f'pt{suffix}'
                     
                     vnc_port = data.get('vnc_port', 5901)
-                    password = data.get('password', 'Cisco123')
+                    password = instance_vnc_pass
                     
                     logger.info(f"Auto-registering container {container_name} as {connection_name}...")
                     connection_id = create_vnc_connection(connection_name, container_name, vnc_port, password)

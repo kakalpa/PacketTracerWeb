@@ -17,17 +17,16 @@ rm -Rf /tmp/.X*
 mkdir -p /home/ptuser/.vnc
 chown -R ptuser:ptuser /home/ptuser/.vnc
 
-if [ ! -f /home/ptuser/.vnc/passwd ]; then
-    if command -v /opt/TurboVNC/bin/vncpasswd &>/dev/null; then
-        printf '%s\n' "$VNC_PASS" | /opt/TurboVNC/bin/vncpasswd -f > /home/ptuser/.vnc/passwd || true
-    elif command -v vncpasswd &>/dev/null; then
-        printf '%s\n' "$VNC_PASS" | vncpasswd -f > /home/ptuser/.vnc/passwd || true
-    else
-        echo "Warning: vncpasswd not found, VNC will have no password"
-    fi
-    chown ptuser:ptuser /home/ptuser/.vnc/passwd || true
-    chmod 600 /home/ptuser/.vnc/passwd || true
+# Always refresh VNC password file from VNC_PASS for VncAuth enforcement
+if command -v /opt/TurboVNC/bin/vncpasswd &>/dev/null; then
+    printf '%s\n' "$VNC_PASS" | /opt/TurboVNC/bin/vncpasswd -f > /home/ptuser/.vnc/passwd || true
+elif command -v vncpasswd &>/dev/null; then
+    printf '%s\n' "$VNC_PASS" | vncpasswd -f > /home/ptuser/.vnc/passwd || true
+else
+    echo "Warning: vncpasswd not found, VNC password file could not be generated"
 fi
+chown ptuser:ptuser /home/ptuser/.vnc/passwd 2>/dev/null || true
+chmod 600 /home/ptuser/.vnc/passwd 2>/dev/null || true
 
 # Setup X authority
 touch /home/ptuser/.Xauthority
@@ -61,17 +60,30 @@ if [ -d /shared ]; then
     rm -f /home/ptuser/Desktop/Saved_Files 2>/dev/null || true
 fi
 if [ -d /shared_common ]; then
-    ln -sfn /shared_common /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
+    ln -sfn /shared_common /home/ptuser/Course_Materials 2>/dev/null || true
+    rm -f /home/ptuser/Desktop/Course_Materials 2>/dev/null || true
+    cat << 'EOFCM' > /home/ptuser/Desktop/Course_Materials.desktop
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Course Materials
+Comment=Read-Only Course Materials
+Exec=thunar /home/ptuser/Course_Materials
+Icon=/usr/share/icons/Humanity/categories/48/applications-libraries.svg
+Terminal=false
+StartupNotify=true
+EOFCM
+    chmod +x /home/ptuser/Desktop/Course_Materials.desktop 2>/dev/null || true
 fi
 
 # Ensure Qt and GTK file dialog default paths and bookmarks
 if [ ! -f /home/ptuser/.config/QtProject.conf ]; then
 cat << 'EOF' > /home/ptuser/.config/QtProject.conf
 [FileDialog]
-history=file:///home/ptuser/Desktop/Personal_Saves, file:///home/ptuser/Desktop/Course_Materials
+history=file:///home/ptuser/Desktop/Personal_Saves, file:///home/ptuser/Course_Materials
 lastVisited=file:///home/ptuser/Desktop/Personal_Saves
 qtVersion=6.8.7
-shortcuts=file:///home/ptuser/Desktop/Personal_Saves, file:///home/ptuser/Desktop/Course_Materials, file:///home/ptuser
+shortcuts=file:///home/ptuser/Desktop/Personal_Saves, file:///home/ptuser/Course_Materials, file:///home/ptuser
 sidebarWidth=120
 viewMode=Detail
 EOF
@@ -80,7 +92,7 @@ fi
 if [ ! -f /home/ptuser/.config/gtk-3.0/bookmarks ]; then
 cat << 'EOF' > /home/ptuser/.config/gtk-3.0/bookmarks
 file:///home/ptuser/Desktop/Personal_Saves Personal_Saves
-file:///home/ptuser/Desktop/Course_Materials Course_Materials
+file:///home/ptuser/Course_Materials Course_Materials
 EOF
 fi
 
@@ -140,7 +152,8 @@ if command -v x11vnc &>/dev/null; then
               -geometry ${VNC_GEOMETRY} \
               -depth ${VNC_DEPTH} \
               -rfbport ${VNC_PORT} \
-              -securitytypes none \
+              -securitytypes vnc \
+              -rfbauth /home/ptuser/.vnc/passwd \
               -alwaysshared \
               >/tmp/turbovnc.log 2>&1
         fi
@@ -153,17 +166,40 @@ else
       -geometry ${VNC_GEOMETRY} \
       -depth ${VNC_DEPTH} \
       -rfbport ${VNC_PORT} \
-      -securitytypes none \
+      -securitytypes vnc \
+      -rfbauth /home/ptuser/.vnc/passwd \
       -alwaysshared \
       >/tmp/turbovnc.log 2>&1
     sleep 2
     echo "✓ TurboVNC server started on port ${VNC_PORT}"
 fi
 
+# Mark Desktop .desktop launchers as trusted in XFCE 4.18 immediately once xfconfd is up
+if command -v gio &>/dev/null; then
+    for _i in 1 2 3 4 5 6 7 8 9 10; do
+        XFCONFD_PID=$(pgrep -u ptuser xfconfd 2>/dev/null | head -n 1 || true)
+        [ -n "$XFCONFD_PID" ] && break
+        sleep 1
+    done
+    if [ -n "${XFCONFD_PID:-}" ] && [ -r "/proc/${XFCONFD_PID}/environ" ]; then
+        DBUS_ADDR=$(tr '\0' '\n' < "/proc/${XFCONFD_PID}/environ" | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2- || true)
+        if [ -n "$DBUS_ADDR" ]; then
+            for desktop_file in /home/ptuser/Desktop/*.desktop; do
+                if [ -f "$desktop_file" ]; then
+                    chmod +x "$desktop_file" 2>/dev/null || true
+                    CHECKSUM=$(sha256sum "$desktop_file" | awk '{print $1}')
+                    DISPLAY=:2 DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDR" gio set -t string "$desktop_file" metadata::xfce-exe-checksum "$CHECKSUM" 2>/dev/null || true
+                fi
+            done
+            DISPLAY=:2 DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDR" xfdesktop --reload >/dev/null 2>&1 &
+        fi
+    fi
+fi
+
 # Launch PacketTracer with VirtualGL if available
 # PacketTracer binary will be injected at runtime via /opt/pt mount
 # Launch within the TurboVNC session using DISPLAY=:2
-sleep 10  # Give desktop time to fully start and stabilize
+sleep 5  # Give desktop time to fully start and stabilize
 
 # Check if PacketTracer binary exists
 if [ ! -f /opt/pt/squashfs-root/AppRun ]; then

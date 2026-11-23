@@ -330,10 +330,11 @@ class DockerManager:
                         "Name": "unless-stopped"
                     },
                     "PortBindings": {},
-                    "Memory": 536870912,  # 512MB in bytes
+                    "Memory": 1073741824,  # 1GB in bytes
+                    "PidsLimit": 512,  # Prevent fork-bomb DoS against host
+                    "SecurityOpt": ["no-new-privileges:true"],  # Block privilege escalation via setuid
                     "Binds": [],  # For volume mounts
-                    # Don't specify NetworkMode here - use bridge (default)
-                    # Container will be connected to pt-stack separately after creation
+                    "NetworkMode": "pt-vncnet",  # Isolated internal VNC network (no MariaDB/pt-management/internet)
                     "Dns": ["127.0.0.1"]  # Block external DNS to prevent internet access (Packet Tracer sign-in bypass)
                 },
                 "Volumes": {

@@ -23,7 +23,7 @@ echo ""
 echo -e "${YELLOW}⚠️  WARNING: This will permanently remove PacketTracer resources:${NC}"
 echo "  • Containers: guacamole-mariadb, pt-guacd, pt-guacamole, pt-nginx1, pt-management, pt-certbot, ptvnc*"
 echo "  • Volumes:    mariadb_data, dbdump, pt_opt"
-echo "  • Networks:   ptnet, pt-stack"
+echo "  • Networks:   ptnet, pt-stack, pt-vncnet"
 echo "  • Images:     pt-nginx, pt-management, pt-certbot, ptvnc"
 echo ""
 echo -e "${GREEN}✓ Other containers, images, and volumes on your host will NOT be touched.${NC}"
@@ -71,8 +71,8 @@ echo ""
 
 # Step 3: Remove project networks
 echo -e "${BLUE}[3/5] Removing PacketTracer networks...${NC}"
-docker network rm ptnet pt-stack 2>/dev/null || true
-echo -e "${GREEN}✓ Cleaned up project networks (ptnet, pt-stack)${NC}"
+docker network rm ptnet pt-stack pt-vncnet 2>/dev/null || true
+echo -e "${GREEN}✓ Cleaned up project networks (ptnet, pt-stack, pt-vncnet)${NC}"
 echo ""
 
 # Step 4: Remove project volumes

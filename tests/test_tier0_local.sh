@@ -250,11 +250,11 @@ COMMON_PKT="course-material-$(date +%s).pkt"
 COMMON_DATA="COURSE_MATERIAL_DATA_$(date +%s)"
 echo "$COMMON_DATA" > "shared/common/$COMMON_PKT"
 
-VIS_COMMON_1=$(docker exec ptvnc1 test -f "/home/ptuser/Desktop/Course_Materials/$COMMON_PKT" && echo "YES" || echo "NO")
-assert_eq "Course material is visible on ptvnc1 Desktop (Course_Materials)" "$VIS_COMMON_1" "YES"
+VIS_COMMON_1=$(docker exec ptvnc1 test -f "/home/ptuser/Course_Materials/$COMMON_PKT" && echo "YES" || echo "NO")
+assert_eq "Course material is visible on ptvnc1 (Course_Materials)" "$VIS_COMMON_1" "YES"
 
-VIS_COMMON_2=$(docker exec ptvnc2 test -f "/home/ptuser/Desktop/Course_Materials/$COMMON_PKT" && echo "YES" || echo "NO")
-assert_eq "Course material is visible on ptvnc2 Desktop (Course_Materials)" "$VIS_COMMON_2" "YES"
+VIS_COMMON_2=$(docker exec ptvnc2 test -f "/home/ptuser/Course_Materials/$COMMON_PKT" && echo "YES" || echo "NO")
+assert_eq "Course material is visible on ptvnc2 (Course_Materials)" "$VIS_COMMON_2" "YES"
 
 RO_TEST=$(docker exec ptvnc1 rm -f "/shared_common/$COMMON_PKT" 2>&1 || true)
 assert_contains "Course materials are read-only in student session" "$RO_TEST" "Read-only file system"
