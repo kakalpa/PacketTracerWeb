@@ -1196,58 +1196,254 @@ class EnvConfigManager:
             logger.error(f"✗ Failed to connect to Guacamole database: {e}")
             return None
     
+    @staticmethod
+    def _parse_docker_timestamp(ts_str: str) -> Optional[datetime]:
+        """Parse Docker RFC3339Nano timestamp (UTC) into a timezone-aware datetime."""
+        if not ts_str:
+            return None
+        try:
+            s = ts_str.strip()
+            if s.endswith('Z'):
+                s = s[:-1] + '+00:00'
+            # Truncate nanoseconds to microseconds for Python <3.11 / strict fromisoformat
+            m = re.match(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(.*)$', s)
+            if not m:
+                return None
+            base, frac, tz = m.groups()
+            if frac:
+                frac = frac[:6].ljust(6, '0')
+                s = f"{base}.{frac}{tz or '+00:00'}"
+            else:
+                s = f"{base}{tz or '+00:00'}"
+            return datetime.fromisoformat(s)
+        except Exception:
+            return None
+
+    def _get_guacamole_active_bans(self) -> list:
+        """
+        Parse active in-memory brute-force bans from pt-guacamole's
+        guacamole-auth-ban (InMemoryAuthenticationFailureTracker) logs.
+        """
+        try:
+            import docker
+            from datetime import timezone, timedelta
+
+            client = docker.from_env()
+            try:
+                container = client.containers.get('pt-guacamole')
+            except Exception:
+                return []
+
+            if container.status != 'running':
+                return []
+
+            attrs = container.attrs or {}
+            env_list = (attrs.get('Config') or {}).get('Env') or []
+            env_map = {}
+            for item in env_list:
+                if '=' in item:
+                    k, v = item.split('=', 1)
+                    env_map[k] = v
+
+            if env_map.get('BAN_ENABLED', 'true').lower() == 'false':
+                return []
+
+            try:
+                ban_duration = int(env_map.get('BAN_ADDRESS_DURATION', '300'))
+            except ValueError:
+                ban_duration = 300
+            try:
+                max_attempts = int(env_map.get('BAN_MAX_INVALID_ATTEMPTS', '5'))
+            except ValueError:
+                max_attempts = 5
+
+            now = datetime.now(timezone.utc)
+            started_at = self._parse_docker_timestamp(
+                (attrs.get('State') or {}).get('StartedAt', '')
+            )
+            window_start = now - timedelta(seconds=ban_duration + 120)
+            since_dt = max(started_at, window_start) if started_at else window_start
+
+            raw_logs = container.logs(
+                since=since_dt,
+                timestamps=True,
+                stdout=True,
+                stderr=True,
+            ).decode('utf-8', errors='replace')
+
+            fail_re = re.compile(
+                r'Authentication has failed for address "([^"]+)" \(current total failures: (\d+)/(\d+)\)'
+            )
+            block_re = re.compile(
+                r'Blocking authentication attempt from address "([^"]+)" due to number of authentication failures'
+            )
+            event_fail_re = re.compile(
+                r'Authentication attempt from (?:\[([^\]]+)\]|(\S+)) for user "([^"]+)" failed'
+            )
+            event_ok_re = re.compile(
+                r'User "([^"]+)" successfully authenticated from (?:\[([^\]]+)\]|([^\s.]+(?:\.[^\s.]+)*))'
+            )
+
+            # Track state per banned IP address
+            ip_state = {}
+            # Recent username per IP (from EventLoggingListener)
+            ip_users = {}
+
+            for line in raw_logs.splitlines():
+                if not line.strip():
+                    continue
+                parts = line.split(' ', 1)
+                if len(parts) < 2:
+                    continue
+                ts = self._parse_docker_timestamp(parts[0])
+                if not ts:
+                    continue
+                msg = parts[1]
+
+                m_ok = event_ok_re.search(msg)
+                if m_ok:
+                    ip_raw = m_ok.group(2) or m_ok.group(3) or ''
+                    ips = [p.strip().rstrip('.') for p in ip_raw.split(',') if p.strip()]
+                    for ip in ips:
+                        ip_state.pop(ip, None)
+                    continue
+
+                m_ev = event_fail_re.search(msg)
+                if m_ev:
+                    ip_raw = m_ev.group(1) or m_ev.group(2) or ''
+                    ips = [p.strip() for p in ip_raw.split(',') if p.strip()]
+                    uname = m_ev.group(3)
+                    for ip in ips:
+                        ip_users[ip] = uname
+                        if ip in ip_state:
+                            ip_state[ip]['username'] = uname
+                    continue
+
+                m_fail = fail_re.search(msg)
+                if m_fail:
+                    ip = m_fail.group(1)
+                    count = int(m_fail.group(2))
+                    cap = int(m_fail.group(3))
+                    st = ip_state.setdefault(ip, {
+                        'ip': ip,
+                        'username': ip_users.get(ip, ''),
+                        'count': 0,
+                        'max': cap,
+                        'last_fail': ts,
+                        'blocked': False,
+                    })
+                    st['count'] = count
+                    st['max'] = cap
+                    st['last_fail'] = ts
+                    if count >= cap:
+                        st['blocked'] = True
+                    continue
+
+                m_blk = block_re.search(msg)
+                if m_blk:
+                    ip = m_blk.group(1)
+                    st = ip_state.get(ip)
+                    if st is None:
+                        ip_state[ip] = {
+                            'ip': ip,
+                            'username': ip_users.get(ip, ''),
+                            'count': max_attempts,
+                            'max': max_attempts,
+                            'last_fail': ts,
+                            'blocked': True,
+                        }
+                    else:
+                        st['blocked'] = True
+
+            active_bans = []
+            for ip, st in ip_state.items():
+                if not st.get('blocked'):
+                    continue
+                expires_at = st['last_fail'] + timedelta(seconds=ban_duration)
+                if expires_at <= now:
+                    continue
+                uname = st.get('username') or ip_users.get(ip) or ip
+                active_bans.append({
+                    'user_id': f'guac-ban:{ip}',
+                    'username': uname,
+                    'ip_address': ip,
+                    'failed_attempts': st['count'],
+                    'max_attempts': st['max'],
+                    'last_failed_login': st['last_fail'].isoformat(),
+                    'locked_until': expires_at.isoformat(),
+                    'locked': 1,
+                    'reason': f'Guacamole brute-force ban (IP {ip})',
+                    'source': 'guacamole_ban',
+                    'updated_at': st['last_fail'].isoformat(),
+                })
+
+            active_bans.sort(key=lambda r: r['last_failed_login'], reverse=True)
+            return active_bans
+        except Exception as e:
+            logger.warning(f"Could not read Guacamole active bans: {e}")
+            return []
+
+    def clear_guacamole_bans(self) -> Tuple[bool, str]:
+        """Clear Guacamole's in-memory auth bans by restarting pt-guacamole."""
+        try:
+            import docker
+            client = docker.from_env()
+            container = client.containers.get('pt-guacamole')
+            container.restart(timeout=15)
+            logger.info("✓ Restarted pt-guacamole to clear in-memory authentication bans")
+            return True, "Guacamole restarted and all in-memory IP bans cleared"
+        except Exception as e:
+            logger.error(f"✗ Failed to restart pt-guacamole to clear bans: {e}")
+            return False, str(e)
+
     def get_locked_users(self) -> list:
         """
-        Get all locked out users
+        Get all locked out users (both live Guacamole in-memory bans and DB lockouts)
         
         Returns:
             List of dictionaries with user lockout information
         """
+        results = self._get_guacamole_active_bans()
+
         try:
             conn = self.get_db_connection()
-            if not conn:
-                return []
-            
-            cursor = conn.cursor(dictionary=True)
-            
-            query = """
-                SELECT 
-                    u.user_id,
-                    e.name as username,
-                    ul.failed_attempts,
-                    ul.last_failed_login,
-                    ul.locked_until,
-                    ul.locked,
-                    ul.reason,
-                    ul.updated_at
-                FROM guacamole_user_lockout ul
-                JOIN guacamole_user u ON ul.user_id = u.user_id
-                JOIN guacamole_entity e ON u.entity_id = e.entity_id
-                WHERE ul.locked = 1 OR (ul.locked_until IS NOT NULL AND ul.locked_until > NOW())
-                ORDER BY ul.updated_at DESC
-            """
-            
-            cursor.execute(query)
-            results = cursor.fetchall()
-            
-            cursor.close()
-            conn.close()
-            
-            # Convert datetime objects to strings for JSON serialization
-            for row in results:
-                if row.get('last_failed_login'):
-                    row['last_failed_login'] = row['last_failed_login'].isoformat()
-                if row.get('locked_until'):
-                    row['locked_until'] = row['locked_until'].isoformat()
-                if row.get('updated_at'):
-                    row['updated_at'] = row['updated_at'].isoformat()
-            
-            logger.info(f"✓ Retrieved {len(results)} locked users")
-            return results
-        
+            if conn:
+                cursor = conn.cursor(dictionary=True)
+                query = """
+                    SELECT 
+                        u.user_id,
+                        e.name as username,
+                        ul.failed_attempts,
+                        ul.last_failed_login,
+                        ul.locked_until,
+                        ul.locked,
+                        ul.reason,
+                        ul.updated_at
+                    FROM guacamole_user_lockout ul
+                    JOIN guacamole_user u ON ul.user_id = u.user_id
+                    JOIN guacamole_entity e ON u.entity_id = e.entity_id
+                    WHERE ul.locked = 1 OR (ul.locked_until IS NOT NULL AND ul.locked_until > NOW())
+                    ORDER BY ul.updated_at DESC
+                """
+                cursor.execute(query)
+                db_rows = cursor.fetchall()
+                cursor.close()
+                conn.close()
+
+                for row in db_rows:
+                    if row.get('last_failed_login'):
+                        row['last_failed_login'] = row['last_failed_login'].isoformat()
+                    if row.get('locked_until'):
+                        row['locked_until'] = row['locked_until'].isoformat()
+                    if row.get('updated_at'):
+                        row['updated_at'] = row['updated_at'].isoformat()
+                    row['source'] = 'database'
+                    results.append(row)
         except Exception as e:
-            logger.error(f"✗ Error getting locked users: {e}")
-            return []
+            logger.error(f"✗ Error getting DB locked users: {e}")
+
+        logger.info(f"✓ Retrieved {len(results)} locked users")
+        return results
     
     def unlock_user(self, user_id: int) -> Tuple[bool, str]:
         """

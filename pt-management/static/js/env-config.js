@@ -1197,17 +1197,23 @@ function displayLockedUsers(users) {
             ? new Date(user.last_failed_login).toLocaleString()
             : '-';
         
+        const isGuacBan = user.source === 'guacamole_ban';
         const isCurrentlyLocked = user.locked === 1;
-        const status = isCurrentlyLocked 
-            ? '<span class="badge bg-danger">Locked</span>'
-            : '<span class="badge bg-warning">Temporary</span>';
+        const status = isGuacBan
+            ? '<span class="badge bg-danger">Guacamole Ban</span>'
+            : (isCurrentlyLocked
+                ? '<span class="badge bg-danger">Locked</span>'
+                : '<span class="badge bg-warning">Temporary</span>');
+        const ipBadge = user.ip_address
+            ? ` <span class="badge bg-secondary ms-1 font-monospace">${escapeHtml(user.ip_address)}</span>`
+            : '';
         
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
-                <input type="checkbox" class="user-checkbox" value="${escapeHtml(user.user_id)}">
+                <input type="checkbox" class="user-checkbox" value="${escapeHtml(user.user_id)}" ${isGuacBan ? 'disabled title="Use Unlock to clear Guacamole in-memory bans"' : ''}>
             </td>
-            <td><strong>${escapeHtml(user.username)}</strong></td>
+            <td><strong>${escapeHtml(user.username)}</strong>${ipBadge}</td>
             <td>${escapeHtml(user.failed_attempts || 0)}</td>
             <td><small>${escapeHtml(lastFailed)}</small></td>
             <td><small>${escapeHtml(lockedUntil)}</small></td>
@@ -1219,10 +1225,43 @@ function displayLockedUsers(users) {
             </td>
         `;
         tr.querySelector('.js-unlock-user').addEventListener('click', () => {
-            unlockUser(user.user_id, user.username);
+            if (isGuacBan) {
+                clearGuacamoleBans(user.username, user.ip_address);
+            } else {
+                unlockUser(user.user_id, user.username);
+            }
         });
         tbody.appendChild(tr);
     }
+}
+
+/**
+ * Clear Guacamole in-memory brute-force bans (restarts pt-guacamole)
+ */
+function clearGuacamoleBans(username, ipAddress) {
+    const target = ipAddress ? `"${username}" (IP ${ipAddress})` : `"${username}"`;
+    if (!confirm(`Unlock ${target}?\n\nGuacamole stores login bans in memory, so this will briefly restart the Guacamole service (~5 seconds) to clear active bans.`)) return;
+
+    fetch('/api/env/users/clear-guacamole-bans', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`✓ ${data.message}`, 'success');
+            loadLockedUsers();
+        } else {
+            showAlert(`✗ Failed to clear Guacamole bans: ${data.message}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('✗ Error clearing Guacamole bans:', error);
+        showAlert(`Error: ${error.message}`, 'danger');
+    });
 }
 
 /**

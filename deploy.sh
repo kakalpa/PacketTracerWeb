@@ -358,6 +358,8 @@ docker run --name pt-guacamole --restart always \
   -e MYSQL_PASSWORD=${dbpass} \
   -e GUACAMOLE_GUACD_HOSTNAME=pt-guacd \
   -e GUACAMOLE_GUACD_PORT=4822 \
+  -e REMOTE_IP_VALVE_ENABLED=true \
+  -e PROXY_ALLOWED_IPS_REGEX='172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|127\.0\.0\.1' \
   -d guacamole/guacamole
 
 # Step 5: Start Nginx

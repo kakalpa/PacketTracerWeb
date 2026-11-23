@@ -498,6 +498,17 @@ def create_env_config_blueprint(manager=None):
             logger.error(f"✗ Error unlocking users: {e}")
             return jsonify({'success': False, 'message': str(e)}), 500
     
+    @env_api.route('/users/clear-guacamole-bans', methods=['POST'])
+    @require_admin
+    def clear_guacamole_bans():
+        """Clear Guacamole's in-memory brute-force bans by restarting pt-guacamole."""
+        try:
+            success, msg = mgr.clear_guacamole_bans()
+            return jsonify({'success': success, 'message': msg}), 200 if success else 500
+        except Exception as e:
+            logger.error(f"✗ Error clearing Guacamole bans: {e}")
+            return jsonify({'success': False, 'message': str(e)}), 500
+
     @env_api.route('/users/reset-attempts', methods=['POST'])
     @require_admin
     def reset_failed_attempts():
