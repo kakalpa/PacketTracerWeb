@@ -8,8 +8,7 @@
     <script>
         (function() {
             const saved = localStorage.getItem('pt_theme');
-            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const theme = saved || (prefersDark ? 'dark' : 'light');
+            const theme = saved || 'dark';
             document.documentElement.setAttribute('data-bs-theme', theme);
         })();
     </script>
@@ -261,7 +260,7 @@
     const API_PREFIX = '/api/student/files';
 
     function toggleTheme() {
-        const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+        const current = document.documentElement.getAttribute('data-bs-theme') || 'dark';
         const next = current === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-bs-theme', next);
         localStorage.setItem('pt_theme', next);
@@ -454,7 +453,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+        const current = document.documentElement.getAttribute('data-bs-theme') || 'dark';
         updateThemeIcon(current);
         checkSession();
     });

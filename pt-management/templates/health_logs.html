@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Health & Logs - PacketTracer Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 d-flex align-items-center gap-2">
+            <i class="bi bi-heart-pulse text-primary"></i> Health & Service Logs
+        </h4>
+        <p class="text-muted small mb-0">Run end-to-end deployment verification checks and monitor live service logs.</p>
+    </div>
+</div>
+
+<!-- Deployment Health Check Card -->
+<div class="card-custom">
+    <div class="card-header-custom">
+        <h5 class="card-header-title">
+            <i class="bi bi-shield-check text-primary"></i> System Health Check
+        </h5>
+        <div class="d-flex align-items-center gap-2">
+            <span id="health-run-meta" class="small text-muted d-none"></span>
+            <button id="health-run-btn" class="btn btn-sm btn-success d-flex align-items-center gap-1" onclick="runHealthCheck(event)">
+                <i class="bi bi-play-circle"></i> Run Verification Tests
+            </button>
+        </div>
+    </div>
+    <div class="card-body-custom">
+        <div id="health-check-results" style="display: none;">
+            <!-- KPI Summary Row -->
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-md-3">
+                    <div class="p-3 bg-body-tertiary rounded text-center border">
+                        <div class="fs-3 fw-bold text-success" id="health-tests-passed">0</div>
+                        <small class="text-muted text-uppercase fw-semibold">Passed</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-3 bg-body-tertiary rounded text-center border">
+                        <div class="fs-3 fw-bold text-danger" id="health-tests-failed">0</div>
+                        <small class="text-muted text-uppercase fw-semibold">Failed</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-3 bg-body-tertiary rounded text-center border">
+                        <div class="fs-3 fw-bold text-primary" id="health-pass-rate">0%</div>
+                        <small class="text-muted text-uppercase fw-semibold">Pass Rate</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-3 bg-body-tertiary rounded text-center border">
+                        <div class="fs-4 fw-bold mb-1">
+                            <span id="health-status-badge" class="badge bg-secondary">Running</span>
+                        </div>
+                        <small class="text-muted text-uppercase fw-semibold">Overall Status</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pass-rate Progress Bar -->
+            <div class="progress mb-3" style="height: 8px;">
+                <div id="health-progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+            </div>
+
+            <!-- Filter & Controls Toolbar -->
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Filter checks">
+                    <button type="button" class="btn btn-primary active" data-health-filter="all" onclick="setHealthFilter('all', this)">
+                        All <span class="badge bg-light text-dark ms-1" id="health-filter-all-count">0</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" data-health-filter="fail" onclick="setHealthFilter('fail', this)">
+                        Failed <span class="badge bg-danger ms-1" id="health-filter-fail-count">0</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-success" data-health-filter="pass" onclick="setHealthFilter('pass', this)">
+                        Passed <span class="badge bg-success ms-1" id="health-filter-pass-count">0</span>
+                    </button>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="input-group input-group-sm" style="width: 220px;">
+                        <span class="input-group-text bg-body-tertiary"><i class="bi bi-search"></i></span>
+                        <input type="text" id="health-search-input" class="form-control" placeholder="Search checks..." oninput="renderHealthCheckSections()">
+                    </div>
+                    <button type="button" id="health-toggle-all-btn" class="btn btn-sm btn-outline-secondary" onclick="toggleAllHealthSections()">
+                        <i class="bi bi-arrows-expand"></i> Expand All
+                    </button>
+                    <button type="button" id="health-raw-toggle-btn" class="btn btn-sm btn-outline-secondary" onclick="toggleRawHealthLog()">
+                        <i class="bi bi-terminal"></i> Raw Log
+                    </button>
+                </div>
+            </div>
+
+            <!-- Structured Section Accordion -->
+            <div id="health-check-sections" class="accordion"></div>
+
+            <!-- Optional Raw Console Log (Collapsed by Default) -->
+            <div id="health-check-raw-wrap" class="mt-3" style="display: none;">
+                <label class="form-label small fw-semibold text-muted mb-1">Raw Verification Log:</label>
+                <div id="health-check-output" class="console-terminal" style="max-height: 360px; font-size: 0.75rem;">
+                    <div class="text-center text-muted">Running health check...</div>
+                </div>
+            </div>
+        </div>
+        <div id="health-check-idle" class="empty-state py-4">
+            <i class="bi bi-shield-check empty-state-icon"></i>
+            <div class="empty-state-title">Automated Health Verification</div>
+            <div class="empty-state-subtitle">Click "Run Verification Tests" to validate containers, databases, storage shares, rate limits, and GeoIP routing.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Logs & Diagnostics Card (Collapsible) -->
+<div class="card-custom">
+    <div class="card-header-custom">
+        <button class="btn btn-link text-decoration-none p-0 card-header-title text-start" type="button" data-bs-toggle="collapse" data-bs-target="#service-logs-collapse" aria-expanded="false" aria-controls="service-logs-collapse" onclick="toggleServiceLogsChevron(this)">
+            <i class="bi bi-terminal text-primary"></i>
+            <span>Container & Service Logs</span>
+            <i id="service-logs-chevron" class="bi bi-chevron-down small text-muted ms-1"></i>
+        </button>
+        <div class="toolbar-group">
+            <div class="d-flex align-items-center gap-2">
+                <label for="logLines" class="small text-muted mb-0">Lines:</label>
+                <select class="form-select form-select-sm" id="logLines" style="width: 110px;" onchange="refreshLogs()">
+                    <option value="50">50 lines</option>
+                    <option value="100" selected>100 lines</option>
+                    <option value="200">200 lines</option>
+                    <option value="500">500 lines</option>
+                </select>
+            </div>
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
+                <label class="form-check-label small text-muted" for="autoRefresh">Auto-refresh (5s)</label>
+            </div>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" onclick="refreshLogs()" title="Refresh Logs">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+                <button class="btn btn-outline-secondary" onclick="clearLogs()" title="Clear Display">
+                    <i class="bi bi-trash"></i> Clear
+                </button>
+            </div>
+            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#service-logs-collapse" aria-expanded="false" aria-controls="service-logs-collapse" id="service-logs-toggle-btn">
+                <i class="bi bi-chevron-down"></i> Show
+            </button>
+        </div>
+    </div>
+    <div id="service-logs-collapse" class="collapse">
+        <div class="card-body-custom">
+            <div id="logs-container" class="console-terminal">
+                <div class="text-center text-muted py-4">Loading logs...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const collapseEl = document.getElementById('service-logs-collapse');
+    const toggleBtn = document.getElementById('service-logs-toggle-btn');
+    const chevron = document.getElementById('service-logs-chevron');
+    if (collapseEl) {
+        collapseEl.addEventListener('shown.bs.collapse', () => {
+            if (toggleBtn) toggleBtn.innerHTML = '<i class="bi bi-chevron-up"></i> Hide';
+            if (chevron) chevron.className = 'bi bi-chevron-up small text-muted ms-1';
+            refreshLogs();
+        });
+        collapseEl.addEventListener('hidden.bs.collapse', () => {
+            if (toggleBtn) toggleBtn.innerHTML = '<i class="bi bi-chevron-down"></i> Show';
+            if (chevron) chevron.className = 'bi bi-chevron-down small text-muted ms-1';
+        });
+    }
+});
+function toggleServiceLogsChevron() {}
+</script>
+{% endblock %}

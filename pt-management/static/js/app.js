@@ -898,39 +898,222 @@ async function loadSystemTelemetry() {
     }
 }
 
+let healthCheckSections = [];
+let healthCheckFilter = 'all';
+let healthSectionsExpanded = false;
+
+function getHealthSectionIcon(title) {
+    const t = (title || '').toLowerCase();
+    if (t.includes('container')) return 'bi-box-seam';
+    if (t.includes('database') || t.includes('schema')) return 'bi-database';
+    if (t.includes('shared') || t.includes('symlink') || t.includes('permission')) return 'bi-folder2-open';
+    if (t.includes('web') || t.includes('endpoint')) return 'bi-globe';
+    if (t.includes('download') || t.includes('isolation')) return 'bi-shield-lock';
+    if (t.includes('network')) return 'bi-diagram-3';
+    if (t.includes('rate limit')) return 'bi-speedometer2';
+    if (t.includes('geoip')) return 'bi-geo-alt';
+    if (t.includes('packet tracer') || t.includes('pt_opt')) return 'bi-hdd-network';
+    return 'bi-check2-square';
+}
+
+function escapeHealthHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function setHealthFilter(filter, btnEl) {
+    healthCheckFilter = filter;
+    document.querySelectorAll('[data-health-filter]').forEach(btn => {
+        const f = btn.getAttribute('data-health-filter');
+        btn.classList.remove('active', 'btn-primary', 'btn-danger', 'btn-success');
+        if (f === 'all') btn.classList.add(f === filter ? 'btn-primary' : 'btn-outline-primary');
+        if (f === 'fail') btn.classList.add(f === filter ? 'btn-danger' : 'btn-outline-danger');
+        if (f === 'pass') btn.classList.add(f === filter ? 'btn-success' : 'btn-outline-success');
+        if (f === filter) btn.classList.add('active');
+    });
+    renderHealthCheckSections();
+}
+
+function toggleAllHealthSections() {
+    healthSectionsExpanded = !healthSectionsExpanded;
+    const btn = document.getElementById('health-toggle-all-btn');
+    if (btn) {
+        btn.innerHTML = healthSectionsExpanded
+            ? '<i class="bi bi-arrows-collapse"></i> Collapse All'
+            : '<i class="bi bi-arrows-expand"></i> Expand All';
+    }
+    document.querySelectorAll('#health-check-sections .accordion-collapse').forEach(el => {
+        const inst = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+        if (healthSectionsExpanded) inst.show();
+        else inst.hide();
+    });
+}
+
+function toggleRawHealthLog() {
+    const wrap = document.getElementById('health-check-raw-wrap');
+    const btn = document.getElementById('health-raw-toggle-btn');
+    if (!wrap) return;
+    const visible = wrap.style.display !== 'none';
+    wrap.style.display = visible ? 'none' : 'block';
+    if (btn) {
+        btn.classList.toggle('btn-secondary', !visible);
+        btn.classList.toggle('btn-outline-secondary', visible);
+    }
+}
+
+function renderHealthCheckSections() {
+    const container = document.getElementById('health-check-sections');
+    if (!container) return;
+
+    const search = (document.getElementById('health-search-input')?.value || '').trim().toLowerCase();
+
+    if (!healthCheckSections || healthCheckSections.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-3 small">No structured sections parsed. Open <strong>Raw Log</strong> to inspect output.</div>';
+        return;
+    }
+
+    const htmlParts = [];
+    healthCheckSections.forEach((sec, idx) => {
+        const filteredTests = (sec.tests || []).filter(t => {
+            if (healthCheckFilter !== 'all' && t.status !== healthCheckFilter) return false;
+            if (search && !t.name.toLowerCase().includes(search) && !(sec.title || '').toLowerCase().includes(search)) {
+                return false;
+            }
+            return true;
+        });
+
+        if (filteredTests.length === 0) return;
+
+        const hasFail = sec.failed > 0;
+        const shouldOpen = hasFail || healthSectionsExpanded || search.length > 0 || healthCheckFilter === 'fail';
+        const collapseId = `health-sec-collapse-${sec.id}-${idx}`;
+        const icon = getHealthSectionIcon(sec.title);
+        const total = sec.passed + sec.failed;
+        const badgeClass = hasFail ? 'bg-danger' : 'bg-success';
+        const badgeText = hasFail ? `${sec.failed} Failed / ${total}` : `${sec.passed}/${total} Passed`;
+
+        const rowsHtml = filteredTests.map(t => {
+            const isPass = t.status === 'pass';
+            const statusIcon = isPass
+                ? '<i class="bi bi-check-circle-fill text-success me-2"></i>'
+                : '<i class="bi bi-x-circle-fill text-danger me-2"></i>';
+            const pill = isPass
+                ? '<span class="badge bg-success-subtle text-success border border-success-subtle">PASS</span>'
+                : '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">FAIL</span>';
+            return `
+                <div class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom small ${isPass ? '' : 'bg-danger-subtle bg-opacity-25'}">
+                    <div class="d-flex align-items-center">
+                        ${statusIcon}
+                        <span>${escapeHealthHtml(t.name)}</span>
+                    </div>
+                    ${pill}
+                </div>
+            `;
+        }).join('');
+
+        htmlParts.push(`
+            <div class="accordion-item border mb-2 rounded overflow-hidden">
+                <h2 class="accordion-header">
+                    <button class="accordion-button ${shouldOpen ? '' : 'collapsed'} py-2 px-3" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                        <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                            <span class="fw-semibold d-flex align-items-center gap-2">
+                                <i class="bi ${icon} ${hasFail ? 'text-danger' : 'text-primary'}"></i>
+                                <span>${escapeHealthHtml(sec.title)}</span>
+                            </span>
+                            <span class="badge ${badgeClass} rounded-pill">${badgeText}</span>
+                        </div>
+                    </button>
+                </h2>
+                <div id="${collapseId}" class="accordion-collapse collapse ${shouldOpen ? 'show' : ''}">
+                    <div class="accordion-body p-0">
+                        ${rowsHtml}
+                    </div>
+                </div>
+            </div>
+        `);
+    });
+
+    if (htmlParts.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-4 border rounded bg-body-tertiary">
+                <i class="bi bi-funnel fs-4 d-block mb-1"></i>
+                No checks match the current filter${search ? ` ("${escapeHealthHtml(search)}")` : ''}.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = htmlParts.join('');
+}
+
 /**
- * Run health check and display results
+ * Run health check and display structured + raw results
  */
-async function runHealthCheck() {
+async function runHealthCheck(evt) {
     const resultsDiv = document.getElementById('health-check-results');
     const idleDiv = document.getElementById('health-check-idle');
+    const sectionsDiv = document.getElementById('health-check-sections');
     const outputDiv = document.getElementById('health-check-output');
     const passedDiv = document.getElementById('health-tests-passed');
     const failedDiv = document.getElementById('health-tests-failed');
+    const passRateDiv = document.getElementById('health-pass-rate');
+    const progressBar = document.getElementById('health-progress-bar');
     const statusBadge = document.getElementById('health-status-badge');
-    const runBtn = event.target.closest('button');
-    
-    // Show results area and hide idle message
+    const runMeta = document.getElementById('health-run-meta');
+    const runBtn = document.getElementById('health-run-btn') || evt?.target?.closest('button');
+
     resultsDiv.style.display = 'block';
     idleDiv.style.display = 'none';
-    outputDiv.innerHTML = '<div class="text-center text-muted">Running health check... (this may take a minute)</div>';
-    runBtn.disabled = true;
-    runBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Running...';
-    
+    sectionsDiv.innerHTML = `
+        <div class="text-center py-4 text-muted">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+            Running comprehensive system checks (containers, DB, storage, endpoints, rate limits, GeoIP)...
+        </div>
+    `;
+    outputDiv.innerHTML = '<div class="text-center text-muted">Running health check...</div>';
+    if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Running...';
+    }
+
     try {
         const result = await apiRequest('/health-check', 'POST');
-        
+
         if (!result || !result.success) {
-            outputDiv.innerHTML = `<div class="text-danger">Error: ${result?.error || 'Unknown error'}</div>`;
+            sectionsDiv.innerHTML = `<div class="alert alert-danger mb-0">Error: ${escapeHealthHtml(result?.error || 'Unknown error')}</div>`;
+            outputDiv.innerHTML = `<div class="text-danger">Error: ${escapeHealthHtml(result?.error || 'Unknown error')}</div>`;
             return;
         }
-        
-        // Update summary stats
-        passedDiv.textContent = result.tests_passed;
-        failedDiv.textContent = result.tests_failed;
-        
-        // Update status badge
-        statusBadge.textContent = result.overall_status.toUpperCase();
+
+        const passed = result.tests_passed ?? 0;
+        const failed = result.tests_failed ?? 0;
+        const total = result.total_tests ?? (passed + failed);
+        const passRate = result.pass_rate ?? (total > 0 ? Math.round((passed / total) * 1000) / 10 : 0);
+
+        passedDiv.textContent = passed;
+        failedDiv.textContent = failed;
+        if (passRateDiv) passRateDiv.textContent = `${passRate}%`;
+
+        document.getElementById('health-filter-all-count').textContent = total;
+        document.getElementById('health-filter-fail-count').textContent = failed;
+        document.getElementById('health-filter-pass-count').textContent = passed;
+
+        if (progressBar) {
+            progressBar.style.width = `${passRate}%`;
+            progressBar.className = `progress-bar ${failed === 0 ? 'bg-success' : failed < 5 ? 'bg-warning' : 'bg-danger'}`;
+        }
+
+        if (runMeta) {
+            const dur = result.duration_seconds !== undefined ? `${result.duration_seconds}s` : '';
+            runMeta.textContent = dur ? `Completed in ${dur} · ${new Date().toLocaleTimeString()}` : `Completed at ${new Date().toLocaleTimeString()}`;
+            runMeta.classList.remove('d-none');
+        }
+
+        statusBadge.textContent = (result.overall_status || 'unknown').toUpperCase();
         if (result.overall_status === 'healthy') {
             statusBadge.className = 'badge bg-success';
         } else if (result.overall_status === 'degraded') {
@@ -938,57 +1121,71 @@ async function runHealthCheck() {
         } else {
             statusBadge.className = 'badge bg-danger';
         }
-        
-        // Display full output with proper ANSI color decoding and formatting
-        outputDiv.innerHTML = ansiToHtml(result.output);
+
+        healthCheckSections = Array.isArray(result.sections) ? result.sections : [];
+        healthSectionsExpanded = false;
+        const toggleBtn = document.getElementById('health-toggle-all-btn');
+        if (toggleBtn) toggleBtn.innerHTML = '<i class="bi bi-arrows-expand"></i> Expand All';
+
+        // Reset filter to 'fail' automatically if there are failures, otherwise 'all'
+        const defaultFilter = failed > 0 ? 'fail' : 'all';
+        setHealthFilter(defaultFilter);
+
+        outputDiv.innerHTML = ansiToHtml(result.output || '');
     } catch (error) {
         console.error('Health check error:', error);
-        outputDiv.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
+        sectionsDiv.innerHTML = `<div class="alert alert-danger mb-0">Error: ${escapeHealthHtml(error.message)}</div>`;
+        outputDiv.innerHTML = `<div class="text-danger">Error: ${escapeHealthHtml(error.message)}</div>`;
     } finally {
-        runBtn.disabled = false;
-        runBtn.innerHTML = '<i class="bi bi-play-circle"></i> Run Tests';
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<i class="bi bi-play-circle"></i> Run Verification Tests';
+        }
     }
 }
 
 /**
- * Refresh all data
+ * Refresh all data for whichever sections exist on the current page
  */
 async function refreshAll() {
-    await loadStats();
-    await loadSystemTelemetry();
-    await loadUsers();
-    await loadContainers();
-    await refreshLogs();
+    if (document.getElementById('stat-total-users') || document.getElementById('containers-tbody')) {
+        await loadStats();
+        await loadSystemTelemetry();
+        await loadUsers();
+        await loadContainers();
+    }
+    if (document.getElementById('logs-container')) {
+        await refreshLogs();
+    }
 }
 
 // Load data on page ready
 document.addEventListener('DOMContentLoaded', () => {
     refreshAll();
-    
-    // Refresh every 10 seconds
-    setInterval(refreshAll, 10000);
-    
-    // Setup auto-refresh for logs
+
+    // Refresh dashboard data every 10 seconds when on dashboard
+    if (document.getElementById('stat-total-users') || document.getElementById('containers-tbody')) {
+        setInterval(refreshAll, 10000);
+    }
+
+    // Setup auto-refresh for logs when on Health & Logs page
     let logsRefreshInterval = null;
     const autoRefreshCheckbox = document.getElementById('autoRefresh');
-    
-    if (autoRefreshCheckbox) {
+
+    if (autoRefreshCheckbox && document.getElementById('logs-container')) {
         autoRefreshCheckbox.addEventListener('change', (e) => {
             if (e.target.checked) {
-                // Start auto-refresh
                 logsRefreshInterval = setInterval(() => {
                     refreshLogs();
                 }, 5000);
             } else {
-                // Stop auto-refresh
                 if (logsRefreshInterval) {
                     clearInterval(logsRefreshInterval);
                     logsRefreshInterval = null;
                 }
             }
         });
-        
-        // Start auto-refresh by default
+
         logsRefreshInterval = setInterval(() => {
             refreshLogs();
         }, 5000);

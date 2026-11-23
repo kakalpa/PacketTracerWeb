@@ -1290,23 +1290,22 @@ def create_api_blueprint():
     @api.route('/health-check', methods=['GET', 'POST'])
     @require_auth
     def run_health_check():
-        """Run the comprehensive health check script and return results"""
+        """Run the comprehensive health check script and return structured + raw results"""
         try:
-            import os
-            import subprocess
-            import socket
-            
+            import re
+            import time
+
             # Get the project root from environment variable (default to /project for Docker)
             project_root = os.getenv('PROJECT_ROOT', '/project')
             health_check_path = os.path.join(project_root, 'health_check.sh')
             workdir = project_root
-            
+
             if not os.path.exists(health_check_path):
                 logger.error(f"health_check.sh not found at {health_check_path}")
                 return jsonify({'error': f'health_check.sh not found at {health_check_path}'}), 404
-            
+
+            start_ts = time.monotonic()
             # Run the health check script
-            # The script will use docker commands which are available on the host
             try:
                 result = subprocess.run(
                     ['bash', health_check_path],
@@ -1315,26 +1314,78 @@ def create_api_blueprint():
                     text=True,
                     timeout=300  # 5 minute timeout
                 )
-                
                 output = result.stdout + result.stderr
             except Exception as e:
                 logger.error(f"Failed to run health_check.sh: {e}")
                 output = f"Error running health check: {str(e)}"
-            
+            duration_seconds = round(time.monotonic() - start_ts, 2)
+
+            # Parse ANSI-stripped output into structured sections & individual checks
+            clean_output = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', output)
+            sections = []
+            current_section = None
+            section_re = re.compile(r'^SECTION\s+(\d+):\s*(.+?)\s*$')
+            test_re = re.compile(r'^Testing:\s*(.+?)\.\.\.\s*(✅\s*PASS|❌\s*FAIL)(.*)$')
+
+            for raw_line in clean_output.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                sec_match = section_re.match(line)
+                if sec_match:
+                    current_section = {
+                        'id': int(sec_match.group(1)),
+                        'title': sec_match.group(2).strip(),
+                        'passed': 0,
+                        'failed': 0,
+                        'tests': [],
+                    }
+                    sections.append(current_section)
+                    continue
+                test_match = test_re.match(line)
+                if test_match:
+                    if current_section is None:
+                        current_section = {
+                            'id': 0,
+                            'title': 'General Checks',
+                            'passed': 0,
+                            'failed': 0,
+                            'tests': [],
+                        }
+                        sections.append(current_section)
+                    name = test_match.group(1).strip()
+                    status = 'pass' if 'PASS' in test_match.group(2) else 'fail'
+                    detail = test_match.group(3).strip()
+                    current_section['tests'].append({
+                        'name': name,
+                        'status': status,
+                        'detail': detail,
+                    })
+                    if status == 'pass':
+                        current_section['passed'] += 1
+                    else:
+                        current_section['failed'] += 1
+
             # Parse the output to extract pass/fail counts
             tests_passed = output.count('✅ PASS')
             tests_failed = output.count('❌ FAIL')
-            
+            total_tests = tests_passed + tests_failed
+            pass_rate = round((tests_passed / total_tests) * 100, 1) if total_tests > 0 else 0.0
+
             # Determine overall status
             overall_status = 'healthy' if tests_failed == 0 else 'degraded' if tests_failed < 5 else 'unhealthy'
-            
-            logger.info(f"Health check: {tests_passed} passed, {tests_failed} failed, status={overall_status}")
-            
+
+            logger.info(f"Health check: {tests_passed} passed, {tests_failed} failed, status={overall_status} ({duration_seconds}s)")
+
             return jsonify({
                 'success': True,
                 'output': output,
+                'sections': sections,
                 'tests_passed': tests_passed,
                 'tests_failed': tests_failed,
+                'total_tests': total_tests,
+                'pass_rate': pass_rate,
+                'duration_seconds': duration_seconds,
                 'overall_status': overall_status,
                 'exit_code': result.returncode if 'result' in locals() else -1
             }), 200

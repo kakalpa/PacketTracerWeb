@@ -112,7 +112,7 @@ def create_app():
     @app.before_request
     def check_authentication():
         """Check if user is authenticated for protected routes"""
-        protected_routes = ['/dashboard', '/settings', '/files', '/api/']
+        protected_routes = ['/dashboard', '/settings', '/files', '/health-logs', '/api/']
         
         if any(request.path.startswith(route) for route in protected_routes):
             # Exclude student download API from admin session requirement (it handles its own auth)
@@ -150,6 +150,11 @@ def create_app():
     def file_manager():
         """File manager page for managing /shared folder"""
         return render_template('file_manager.html', username=session.get('user'))
+
+    @app.route('/health-logs')
+    def health_logs():
+        """Health checks and service logs page"""
+        return render_template('health_logs.html', username=session.get('user'))
     
     @app.route('/my-files')
     @app.route('/my-files/')
